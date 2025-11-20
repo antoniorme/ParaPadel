@@ -1,0 +1,5 @@
+{
+  "name": "PadelPro Tournament Manager",
+  "description": "A comprehensive management tool for 16-pair mini padel tournaments, handling registration, payments, court scheduling, timer logic, and automated bracket generation.",
+  "requestFramePermissions": []
+}
