@@ -1,8 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-
-// NOTA: Supabase desactivado temporalmente para entrar directo al Dashboard.
-// import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
 interface AuthContextType {
   session: Session | null;
@@ -24,34 +22,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // --- BYPASS: SIMULAR LOGIN INMEDIATO ---
-    const mockUser = {
-      id: 'dev-bypass-user',
-      aud: 'authenticated',
-      role: 'authenticated',
-      email: 'admin@padel.local',
-      app_metadata: { provider: 'email' },
-      user_metadata: {},
-      created_at: new Date().toISOString(),
-    } as unknown as User;
+    // 1. Obtener sesión inicial
+    const initSession = async () => {
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            setSession(session);
+            setUser(session?.user ?? null);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    };
+    initSession();
 
-    const mockSession = {
-      access_token: 'mock-token',
-      token_type: 'bearer',
-      expires_in: 3600,
-      refresh_token: 'mock-refresh',
-      user: mockUser
-    } as unknown as Session;
+    // 2. Escuchar cambios de auth (login/logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
 
-    setUser(mockUser);
-    setSession(mockSession);
-    setLoading(false);
-    
+    return () => subscription.unsubscribe();
   }, []);
 
   const signOut = async () => {
-    // Al cerrar sesión, simplemente recargamos para volver a simular el login
-    window.location.reload();
+    await supabase.auth.signOut();
+    setUser(null);
+    setSession(null);
   };
 
   return (

@@ -1,9 +1,10 @@
+
 import React, { useState } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { Trophy, Grid, GitMerge, ArrowLeft, Edit2 } from 'lucide-react';
 
 const Results: React.FC = () => {
-  const { state, dispatch } = useTournament();
+  const { state, updateScoreDB } = useTournament();
   const [tab, setTab] = useState<'groups' | 'bracket'>('groups');
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   
@@ -73,7 +74,7 @@ const Results: React.FC = () => {
                 alert("El partido no puede terminar en empate.");
                 return;
             }
-          dispatch({ type: 'UPDATE_SCORE', payload: { matchId: editMatchId, scoreA: valA, scoreB: valB } });
+          updateScoreDB(editMatchId, valA, valB);
           setEditMatchId(null);
       }
   };

@@ -1,15 +1,15 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ClubData, PastTournament, TournamentState } from '../types';
+import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 
-const HISTORY_KEY = 'padelpro_history_v1';
 const CLUB_KEY = 'padelpro_club_v1';
 
 interface HistoryContextType {
     clubData: ClubData;
     updateClubData: (data: ClubData) => void;
     pastTournaments: PastTournament[];
-    archiveTournament: (finalState: TournamentState) => void;
+    archiveTournament: (finalState: TournamentState) => void; 
 }
 
 const defaultClubData: ClubData = {
@@ -29,63 +29,43 @@ const HistoryContext = createContext<HistoryContextType>({
 export const HistoryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [clubData, setClubData] = useState<ClubData>(defaultClubData);
     const [pastTournaments, setPastTournaments] = useState<PastTournament[]>([]);
+    const { user } = useAuth();
 
-    // Load on Mount
     useEffect(() => {
         const savedClub = localStorage.getItem(CLUB_KEY);
-        if (savedClub) {
-            try {
-                setClubData(JSON.parse(savedClub));
-            } catch (e) {
-                console.error(e);
+        if (savedClub) try { setClubData(JSON.parse(savedClub)); } catch (e) {}
+
+        const loadHistory = async () => {
+            if (user) {
+                // Fetch finished tournaments from DB
+                const { data } = await supabase
+                    .from('tournaments')
+                    .select('*')
+                    .eq('user_id', user.id)
+                    .eq('status', 'finished')
+                    .order('created_at', { ascending: false });
+                
+                if (data) {
+                    const history: PastTournament[] = data.map(t => ({
+                        id: t.id,
+                        date: t.created_at,
+                        winnerMain: 'Consultar', // Requiere lógica adicional
+                        winnerConsolation: 'Consultar',
+                        playerCount: 32 // Placeholder
+                    }));
+                    setPastTournaments(history);
+                }
             }
-        }
-        
-        const savedHistory = localStorage.getItem(HISTORY_KEY);
-        if (savedHistory) {
-            try {
-                setPastTournaments(JSON.parse(savedHistory));
-            } catch (e) {
-                 console.error(e);
-            }
-        }
-    }, []);
+        };
+        loadHistory();
+    }, [user]);
 
     const updateClubData = (data: ClubData) => {
         setClubData(data);
         localStorage.setItem(CLUB_KEY, JSON.stringify(data));
     };
 
-    const archiveTournament = (finalState: TournamentState) => {
-        // Find Winner
-        const finalMain = finalState.matches.find(m => m.id === 'final-m');
-        const finalConsolation = finalState.matches.find(m => m.id === 'final-c');
-        
-        let winnerMainName = 'Desconocido';
-        if (finalMain && finalMain.scoreA !== null && finalMain.scoreB !== null) {
-            const winnerId = finalMain.scoreA > finalMain.scoreB ? finalMain.pairAId : finalMain.pairBId;
-            winnerMainName = finalState.pairs.find(p => p.id === winnerId)?.name || 'Desconocido';
-        }
-
-        let winnerConsolationName = 'Desconocido';
-        if (finalConsolation && finalConsolation.scoreA !== null && finalConsolation.scoreB !== null) {
-            const winnerId = finalConsolation.scoreA > finalConsolation.scoreB ? finalConsolation.pairAId : finalConsolation.pairBId;
-            winnerConsolationName = finalState.pairs.find(p => p.id === winnerId)?.name || 'Desconocido';
-        }
-
-        const record: PastTournament = {
-            id: `hist-${Date.now()}`,
-            date: finalState.startDate || new Date().toISOString(),
-            winnerMain: winnerMainName,
-            winnerConsolation: winnerConsolationName,
-            playerCount: finalState.players.length,
-            data: finalState
-        };
-
-        const updatedHistory = [record, ...pastTournaments];
-        setPastTournaments(updatedHistory);
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
-    };
+    const archiveTournament = () => {}; 
 
     return (
         <HistoryContext.Provider value={{ clubData, updateClubData, pastTournaments, archiveTournament }}>

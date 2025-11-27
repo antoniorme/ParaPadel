@@ -9,7 +9,7 @@ import { TournamentState } from '../types';
 const PlayerProfile: React.FC = () => {
   const { playerId } = useParams<{ playerId: string }>();
   const navigate = useNavigate();
-  const { state, dispatch } = useTournament();
+  const { state, updatePlayerInDB } = useTournament();
   const { pastTournaments } = useHistory();
   
   const [isEditing, setIsEditing] = useState(false);
@@ -94,7 +94,7 @@ const PlayerProfile: React.FC = () => {
 
       // 1. Process Past Tournaments
       pastTournaments.forEach(pt => {
-          processTournamentData(pt.data, pt.date);
+          if (pt.data) processTournamentData(pt.data, pt.date);
       });
 
       // 2. Process Current Tournament
@@ -111,7 +111,7 @@ const PlayerProfile: React.FC = () => {
   if (!player) return <div className="p-6 text-center">Jugador no encontrado</div>;
 
   const handleSave = () => {
-      dispatch({ type: 'UPDATE_PLAYER', payload: editForm });
+      updatePlayerInDB(editForm);
       setIsEditing(false);
   };
 

@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { DollarSign, Droplets, Circle, Users, Check } from 'lucide-react';
@@ -64,7 +65,7 @@ const CheckIn: React.FC = () => {
                         {pairsOnCourt.length > 0 ? pairsOnCourt.map((pair, idx) => {
                             const p1 = getPlayer(pair.player1Id);
                             const p2 = getPlayer(pair.player2Id);
-                            const allPaid = p1?.paid && p2?.paid;
+                            const allPaid = pair.paidP1 && pair.paidP2;
                             
                             return (
                                 <div key={pair.id} className={`bg-white rounded-xl p-5 shadow-sm border-2 ${allPaid ? 'border-emerald-400 bg-emerald-50/30' : 'border-slate-100'}`}>
@@ -83,21 +84,21 @@ const CheckIn: React.FC = () => {
                                      {/* Players & Payment Buttons */}
                                      <div className="space-y-4">
                                          <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg">
-                                             <span className={`text-lg font-bold ${p1?.paid ? 'text-slate-800' : 'text-rose-500'}`}>{p1?.name}</span>
+                                             <span className={`text-lg font-bold ${pair.paidP1 ? 'text-slate-800' : 'text-rose-500'}`}>{p1?.name}</span>
                                              <button 
                                                 onClick={() => p1 && dispatch({type: 'TOGGLE_PAID', payload: p1.id})} 
-                                                className={`w-12 h-12 flex items-center justify-center rounded-lg shadow-sm transition-all border ${p1?.paid ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-white text-slate-300 border-slate-200 hover:border-emerald-400 hover:text-emerald-400'}`}
+                                                className={`w-12 h-12 flex items-center justify-center rounded-lg shadow-sm transition-all border ${pair.paidP1 ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-white text-slate-300 border-slate-200 hover:border-emerald-400 hover:text-emerald-400'}`}
                                              >
-                                                 {p1?.paid ? <Check size={24} strokeWidth={4} /> : <DollarSign size={24}/>}
+                                                 {pair.paidP1 ? <Check size={24} strokeWidth={4} /> : <DollarSign size={24}/>}
                                              </button>
                                          </div>
                                          <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg">
-                                             <span className={`text-lg font-bold ${p2?.paid ? 'text-slate-800' : 'text-rose-500'}`}>{p2?.name}</span>
+                                             <span className={`text-lg font-bold ${pair.paidP2 ? 'text-slate-800' : 'text-rose-500'}`}>{p2?.name}</span>
                                              <button 
                                                 onClick={() => p2 && dispatch({type: 'TOGGLE_PAID', payload: p2.id})} 
-                                                className={`w-12 h-12 flex items-center justify-center rounded-lg shadow-sm transition-all border ${p2?.paid ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-white text-slate-300 border-slate-200 hover:border-emerald-400 hover:text-emerald-400'}`}
+                                                className={`w-12 h-12 flex items-center justify-center rounded-lg shadow-sm transition-all border ${pair.paidP2 ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-white text-slate-300 border-slate-200 hover:border-emerald-400 hover:text-emerald-400'}`}
                                              >
-                                                 {p2?.paid ? <Check size={24} strokeWidth={4} /> : <DollarSign size={24}/>}
+                                                 {pair.paidP2 ? <Check size={24} strokeWidth={4} /> : <DollarSign size={24}/>}
                                              </button>
                                          </div>
                                      </div>

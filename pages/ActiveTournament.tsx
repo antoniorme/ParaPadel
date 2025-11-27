@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { Clock, Play, Square, ChevronRight, Edit2 } from 'lucide-react';
@@ -5,7 +6,7 @@ import { Clock, Play, Square, ChevronRight, Edit2 } from 'lucide-react';
 const MATCH_DURATION = 18 * 60;
 
 const ActiveTournament: React.FC = () => {
-  const { state, dispatch } = useTournament();
+  const { state, updateScoreDB, nextRoundDB, startTournamentDB } = useTournament();
   const [timeLeft, setTimeLeft] = useState(MATCH_DURATION);
   const [timerActive, setTimerActive] = useState(false);
   
@@ -55,10 +56,7 @@ const ActiveTournament: React.FC = () => {
             return;
         }
 
-        dispatch({
-            type: 'UPDATE_SCORE',
-            payload: { matchId: selectedMatchId, scoreA: valA, scoreB: valB }
-        });
+        updateScoreDB(selectedMatchId, valA, valB);
         setSelectedMatchId(null); setScoreA(''); setScoreB('');
     }
   };
@@ -76,7 +74,7 @@ const ActiveTournament: React.FC = () => {
       if(window.confirm('¿Pasar a la siguiente ronda?')) {
         setTimerActive(false);
         setTimeLeft(MATCH_DURATION);
-        dispatch({ type: 'NEXT_ROUND' });
+        nextRoundDB();
       }
   };
 
@@ -84,7 +82,7 @@ const ActiveTournament: React.FC = () => {
       return (
           <div className="flex flex-col items-center justify-center h-64 text-slate-400 p-6 text-center">
               <p className="mb-4 text-lg">El torneo no ha comenzado.</p>
-              <button onClick={() => dispatch({ type: 'START_TOURNAMENT' })} className="text-blue-600 font-bold">Empezar Ahora</button>
+              <button onClick={() => startTournamentDB()} className="text-blue-600 font-bold">Empezar Ahora</button>
           </div>
       )
   }

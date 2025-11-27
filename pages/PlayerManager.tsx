@@ -6,7 +6,7 @@ import { Player } from '../types';
 import { useNavigate } from 'react-router-dom';
 
 const PlayerManager: React.FC = () => {
-  const { state, dispatch } = useTournament();
+  const { state, updatePlayerInDB } = useTournament();
   const navigate = useNavigate();
   const [filterCat, setFilterCat] = useState('all');
   const [search, setSearch] = useState('');
@@ -21,7 +21,7 @@ const PlayerManager: React.FC = () => {
 
   const handleSave = () => {
       if (editingPlayer) {
-          dispatch({ type: 'UPDATE_PLAYER', payload: editingPlayer });
+          updatePlayerInDB(editingPlayer);
           setEditingPlayer(null);
       }
   };
