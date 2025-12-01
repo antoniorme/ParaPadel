@@ -1,12 +1,11 @@
-
 import React from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { useHistory } from '../store/HistoryContext';
-import { Users, PlayCircle, CheckCircle, Clock, Database, Trash2, Archive } from 'lucide-react';
+import { Users, PlayCircle, CheckCircle, Clock, Database, Trash2, Archive, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const Dashboard: React.FC = () => {
-  const { state, dispatch } = useTournament();
+  const { state, dispatch, loadData } = useTournament();
   const { archiveTournament } = useHistory();
   const navigate = useNavigate();
 
@@ -46,6 +45,12 @@ const Dashboard: React.FC = () => {
       }
       dispatch({ type: 'LOAD_DEMO_DATA' });
   };
+
+  // Panic Button: Force Reload from DB
+  const handleForceReload = () => {
+      loadData();
+      alert("Datos recargados desde la nube.");
+  }
 
   const ActivityIcon = (status: string) => {
     switch(status) {
@@ -94,7 +99,7 @@ const Dashboard: React.FC = () => {
         />
       </div>
       
-      {/* Actions (Registration, CheckIn, Active) - Same as before */}
+      {/* Actions */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
         <h3 className="text-lg font-bold text-slate-800 mb-6">Acciones Rápidas</h3>
         <div className="flex flex-col gap-4">
@@ -145,13 +150,22 @@ const Dashboard: React.FC = () => {
                    </button>
                )}
                
-               <button 
-                onClick={handleReset}
-                className="flex items-center justify-center gap-2 px-4 py-4 bg-white hover:bg-red-50 text-red-600 rounded-xl text-sm border border-red-200 shadow-sm font-bold"
-               >
-                   <Trash2 size={18} />
-                   Resetear Torneo Completo
-               </button>
+               <div className="flex gap-2">
+                   <button 
+                    onClick={handleReset}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-4 bg-white hover:bg-red-50 text-red-600 rounded-xl text-sm border border-red-200 shadow-sm font-bold"
+                   >
+                       <Trash2 size={18} />
+                       Resetear Torneo
+                   </button>
+                   <button 
+                    onClick={handleForceReload}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-4 bg-white hover:bg-blue-50 text-blue-600 rounded-xl text-sm border border-blue-200 shadow-sm font-bold"
+                   >
+                       <RefreshCw size={18} />
+                       Recargar Datos
+                   </button>
+               </div>
           </div>
       </div>
     </div>
