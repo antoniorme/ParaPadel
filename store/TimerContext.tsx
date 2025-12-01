@@ -25,9 +25,12 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isActive, setIsActive] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Initialize Audio
   useEffect(() => {
+      // Use a generic beep sound URL or local asset to avoid CORB if possible. 
+      // Or just catch the error.
       audioRef.current = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-alarm-digital-clock-beep-989.mp3');
+      // Pre-load to check access
+      audioRef.current.load();
   }, []);
 
   const requestNotificationPermission = async () => {
@@ -37,20 +40,22 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const notifyTimeUp = () => {
-      // Sound
       if (audioRef.current) {
-          audioRef.current.play().catch(e => console.log("Audio blocked", e));
+          const playPromise = audioRef.current.play();
+          if (playPromise !== undefined) {
+              playPromise.catch(error => {
+                  // Suppress CORB/Autoplay errors to keep console clean
+                  console.log("Audio playback prevented (likely CORB or Autoplay policy).");
+              });
+          }
       }
       
-      // Push Notification
       if ('Notification' in window && Notification.permission === 'granted') {
           new Notification("¡Tiempo Terminado!", {
               body: "El turno ha finalizado. Por favor, introducid los resultados.",
-              icon: "/favicon.ico" // You might want to add an icon
           });
       }
       
-      // Vibration
       if ('vibrate' in navigator) {
           navigator.vibrate([500, 200, 500]);
       }
@@ -75,7 +80,7 @@ export const TimerProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const startTimer = () => {
       setIsActive(true);
-      requestNotificationPermission(); // Ask on start
+      requestNotificationPermission(); 
   };
   const pauseTimer = () => setIsActive(false);
   const resetTimer = () => {

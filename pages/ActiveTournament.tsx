@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { useTimer } from '../store/TimerContext';
 import { Square, ChevronRight, Edit2, Info, User, Play, AlertTriangle, X } from 'lucide-react';
+import { Player } from '../types';
 
 const ActiveTournament: React.FC = () => {
   const { state, updateScoreDB, nextRoundDB, startTournamentDB, formatPlayerName } = useTournament();
   const { resetTimer, startTimer } = useTimer();
   
+  // --- STATE ---
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [scoreA, setScoreA] = useState('');
   const [scoreB, setScoreB] = useState('');
@@ -15,28 +17,45 @@ const ActiveTournament: React.FC = () => {
   const [selectedPairId, setSelectedPairId] = useState<string | null>(null);
   const [showRoundConfirm, setShowRoundConfirm] = useState(false);
 
+  // --- DATA FILTERING ---
   const currentMatches = state.matches.filter(m => m.round === state.currentRound);
   currentMatches.sort((a, b) => a.courtId - b.courtId);
 
+  const totalMatches = currentMatches.length;
+  const finishedMatches = currentMatches.filter(m => m.isFinished).length;
+  const allMatchesFinished = totalMatches > 0 && totalMatches === finishedMatches;
+
+  // --- HELPERS ---
   const getPairName = (id: string) => {
     const pair = state.pairs.find(p => p.id === id);
     if (!pair) return 'Unknown';
     const p1 = state.players.find(p => p.id === pair.player1Id);
     const p2 = state.players.find(p => p.id === pair.player2Id);
-    return `${formatPlayerName(p1)} & ${formatPlayerName(p2)}`;
+    // Safe formatter usage
+    const name1 = formatPlayerName ? formatPlayerName(p1) : (p1?.name || 'P1');
+    const name2 = formatPlayerName ? formatPlayerName(p2) : (p2?.name || 'P2');
+    return `${name1} & ${name2}`;
   };
 
   const findNextMatchInfo = (pairId: string, currentRound: number) => {
       const nextRound = currentRound + 1;
       const nextMatch = state.matches.find(m => m.round === nextRound && (m.pairAId === pairId || m.pairBId === pairId));
       if (nextMatch) return `Pista ${nextMatch.courtId}`;
-      if (nextRound <= 4) return "Descansa";
-      return "Pendiente";
+      if (nextRound <= 4) return "Descansa"; // Logic for group phase
+      return "Pendiente"; // Logic for playoffs
   };
 
   const getPairMatches = (pairId: string) => {
       const matches = state.matches.filter(m => m.pairAId === pairId || m.pairBId === pairId);
       return matches.sort((a, b) => a.round - b.round);
+  };
+
+  // --- HANDLERS ---
+
+  const handleStart = async () => {
+      await startTournamentDB();
+      resetTimer(); 
+      startTimer();
   };
 
   const handleSaveScore = () => {
@@ -47,6 +66,7 @@ const ActiveTournament: React.FC = () => {
 
         updateScoreDB(selectedMatchId, valA, valB);
         
+        // Prepare info for "Next Match" modal
         const match = state.matches.find(m => m.id === selectedMatchId);
         if (match) {
             const info = {
@@ -71,6 +91,7 @@ const ActiveTournament: React.FC = () => {
 
   const handleCloseInfoModal = () => {
       setNextMatchInfo(null);
+      // Auto-advance logic: Find next unfinished match
       if (lastEditedMatchId) {
           const currentIndex = currentMatches.findIndex(m => m.id === lastEditedMatchId);
           if (currentIndex !== -1 && currentIndex < currentMatches.length - 1) {
@@ -82,30 +103,26 @@ const ActiveTournament: React.FC = () => {
       }
   };
 
-  const totalMatches = currentMatches.length;
-  const finishedMatches = currentMatches.filter(m => m.isFinished).length;
-  const allMatchesFinished = totalMatches > 0 && totalMatches === finishedMatches;
-
   const handleNextRoundClick = () => {
-      if (!allMatchesFinished) return alert("Todos los partidos deben finalizar antes de avanzar.");
+      if (!allMatchesFinished) {
+          return alert(`Faltan resultados. Solo ${finishedMatches}/${totalMatches} partidos finalizados.`);
+      }
       setShowRoundConfirm(true);
   };
 
   const confirmNextRound = async () => {
       setShowRoundConfirm(false);
       try {
+          console.log("Avanzando ronda...");
           resetTimer(); 
           await nextRoundDB();
       } catch (e: any) {
-          alert(`Error: ${e.message || e}`);
+          console.error("Error advancing round:", e);
+          alert(`Error al avanzar: ${e.message || e}`);
       }
   };
 
-  const handleStart = async () => {
-      await startTournamentDB();
-      resetTimer(); 
-      startTimer();
-  }
+  // --- RENDER HELPERS ---
 
   const PairDetailContent = ({ pairId }: { pairId: string }) => {
       const matches = getPairMatches(pairId);
@@ -119,7 +136,6 @@ const ActiveTournament: React.FC = () => {
                   <h3 className="text-xl font-black text-slate-900">{pairName}</h3>
                   <p className="text-slate-500 text-xs uppercase font-bold">Calendario de Partidos</p>
               </div>
-
               <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                   {matches.map(m => {
                       const isPairA = m.pairAId === pairId;
@@ -150,6 +166,7 @@ const ActiveTournament: React.FC = () => {
       );
   };
 
+  // --- VIEW: SETUP (BEFORE START) ---
   if (state.status === 'setup') {
       const canStart = state.pairs.filter(p => !p.isReserve).length === 16;
       return (
@@ -160,7 +177,7 @@ const ActiveTournament: React.FC = () => {
               <div>
                   <h2 className="text-2xl font-bold text-slate-800 mb-2">Torneo Listo</h2>
                   <p className="text-slate-500 max-w-xs mx-auto">
-                      Hay {state.pairs.length} parejas registradas. {canStart ? 'Todo listo.' : 'Necesitas 16 parejas.'}
+                      Hay {state.pairs.length} parejas registradas. {canStart ? 'Todo listo.' : 'Necesitas 16 parejas titulares.'}
                   </p>
               </div>
               <button 
@@ -174,8 +191,10 @@ const ActiveTournament: React.FC = () => {
       )
   }
 
+  // --- VIEW: ACTIVE TOURNAMENT ---
   return (
     <div className="space-y-6 pb-20">
+      {/* Header */}
       <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 pb-4 -mx-6 px-6 pt-4 shadow-sm">
         <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-slate-900">Ronda {state.currentRound}</h2>
@@ -185,6 +204,7 @@ const ActiveTournament: React.FC = () => {
         </div>
       </div>
 
+      {/* Matches List */}
       <div className="space-y-4">
         {currentMatches.length === 0 ? (
             <div className="text-center py-10 text-slate-400 italic">Cargando partidos...</div>
@@ -234,6 +254,7 @@ const ActiveTournament: React.FC = () => {
         )}
       </div>
 
+      {/* Next Round Button */}
       {currentMatches.length > 0 && (
           <div className="fixed bottom-20 left-0 right-0 p-6 z-50 flex justify-center">
               <button 
@@ -246,6 +267,7 @@ const ActiveTournament: React.FC = () => {
           </div>
       )}
 
+      {/* Score Input Modal */}
       {selectedMatchId && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-end md:items-center justify-center sm:p-4">
               <div className="bg-white rounded-t-3xl md:rounded-3xl p-8 w-full max-w-sm animate-slide-up shadow-2xl">
@@ -263,34 +285,51 @@ const ActiveTournament: React.FC = () => {
           </div>
       )}
 
+      {/* Next Match Info Modal */}
       {nextMatchInfo && (
           <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[70] flex items-center justify-center p-6" onClick={handleCloseInfoModal}>
               <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-slide-up text-center" onClick={e => e.stopPropagation()}>
                   <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600"><Info size={24} /></div>
                   <h3 className="text-xl font-black text-slate-900 mb-2">Próximo Partido</h3>
-                  <p className="text-slate-500 text-sm mb-6">Información para los jugadores</p>
-                  
-                  <div className="space-y-4">
-                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                          <div className="font-bold text-slate-800 text-lg mb-1">{nextMatchInfo.pA}</div>
-                          <div className="text-emerald-600 font-black uppercase tracking-wide">{nextMatchInfo.nextCourtA}</div>
-                      </div>
-                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                          <div className="font-bold text-slate-800 text-lg mb-1">{nextMatchInfo.pB}</div>
-                          <div className="text-emerald-600 font-black uppercase tracking-wide">{nextMatchInfo.nextCourtB}</div>
-                      </div>
+                  <div className="space-y-4 mt-6">
+                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100"><div className="font-bold text-slate-800 text-lg mb-1">{nextMatchInfo.pA}</div><div className="text-emerald-600 font-black uppercase tracking-wide">{nextMatchInfo.nextCourtA}</div></div>
+                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100"><div className="font-bold text-slate-800 text-lg mb-1">{nextMatchInfo.pB}</div><div className="text-emerald-600 font-black uppercase tracking-wide">{nextMatchInfo.nextCourtB}</div></div>
                   </div>
-
-                  <button 
-                    onClick={handleCloseInfoModal}
-                    className="w-full mt-6 py-4 bg-slate-900 text-white rounded-xl font-bold shadow-lg"
-                  >
-                      Entendido
-                  </button>
+                  <button onClick={handleCloseInfoModal} className="w-full mt-6 py-4 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Entendido</button>
               </div>
           </div>
       )}
 
+      {/* Confirmation Modal (Replaces window.confirm) */}
+      {showRoundConfirm && (
+          <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[80] flex items-center justify-center p-6">
+              <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                  <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6 text-orange-600">
+                      <AlertTriangle size={32} />
+                  </div>
+                  <h3 className="text-2xl font-black text-slate-900 mb-2">¿Avanzar Ronda?</h3>
+                  <p className="text-slate-500 text-base mb-8 leading-relaxed">
+                      Se cerrará la ronda actual. Asegúrate de que todos los resultados son correctos.
+                  </p>
+                  <div className="grid grid-cols-1 gap-3">
+                      <button 
+                        onClick={confirmNextRound}
+                        className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold text-lg shadow-lg hover:bg-emerald-700 transition-colors"
+                      >
+                          Sí, Avanzar
+                      </button>
+                      <button 
+                        onClick={() => setShowRoundConfirm(false)}
+                        className="w-full py-4 bg-slate-100 text-slate-600 rounded-xl font-bold text-lg hover:bg-slate-200 transition-colors"
+                      >
+                          Cancelar
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Pair Detail Modal */}
       {selectedPairId && (
           <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[70] flex items-center justify-center p-6" onClick={() => setSelectedPairId(null)}>
               <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-slide-up" onClick={e => e.stopPropagation()}>
