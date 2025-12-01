@@ -1,11 +1,10 @@
-
 import React, { useMemo } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { DollarSign, Droplets, Circle, Users, Check } from 'lucide-react';
-import { Pair } from '../types';
+import { Pair, Player } from '../types';
 
 const CheckIn: React.FC = () => {
-  const { state, dispatch } = useTournament();
+  const { state, dispatch, formatPlayerName } = useTournament(); // Use global helper
 
   const getPlayer = (id: string) => state.players.find(p => p.id === id);
 
@@ -84,7 +83,7 @@ const CheckIn: React.FC = () => {
                                      {/* Players & Payment Buttons */}
                                      <div className="space-y-4">
                                          <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg">
-                                             <span className={`text-lg font-bold ${pair.paidP1 ? 'text-slate-800' : 'text-rose-500'}`}>{p1?.name}</span>
+                                             <span className={`text-lg font-bold ${pair.paidP1 ? 'text-slate-800' : 'text-rose-500'}`}>{formatPlayerName(p1)}</span>
                                              <button 
                                                 onClick={() => p1 && dispatch({type: 'TOGGLE_PAID', payload: p1.id})} 
                                                 className={`w-12 h-12 flex items-center justify-center rounded-lg shadow-sm transition-all border ${pair.paidP1 ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-white text-slate-300 border-slate-200 hover:border-emerald-400 hover:text-emerald-400'}`}
@@ -93,7 +92,7 @@ const CheckIn: React.FC = () => {
                                              </button>
                                          </div>
                                          <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg">
-                                             <span className={`text-lg font-bold ${pair.paidP2 ? 'text-slate-800' : 'text-rose-500'}`}>{p2?.name}</span>
+                                             <span className={`text-lg font-bold ${pair.paidP2 ? 'text-slate-800' : 'text-rose-500'}`}>{formatPlayerName(p2)}</span>
                                              <button 
                                                 onClick={() => p2 && dispatch({type: 'TOGGLE_PAID', payload: p2.id})} 
                                                 className={`w-12 h-12 flex items-center justify-center rounded-lg shadow-sm transition-all border ${pair.paidP2 ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-white text-slate-300 border-slate-200 hover:border-emerald-400 hover:text-emerald-400'}`}
@@ -126,8 +125,8 @@ const CheckIn: React.FC = () => {
                       return (
                           <div key={pair.id} className="bg-white p-4 rounded-xl border border-slate-200 flex justify-between items-center shadow-sm">
                                <div>
-                                   <div className="text-lg font-bold text-slate-700">{p1?.name}</div>
-                                   <div className="text-lg font-bold text-slate-700">& {p2?.name}</div>
+                                   <div className="text-lg font-bold text-slate-700">{formatPlayerName(p1)}</div>
+                                   <div className="text-lg font-bold text-slate-700">& {formatPlayerName(p2)}</div>
                                </div>
                                <button 
                                     onClick={() => dispatch({ type: 'TOGGLE_WATER', payload: pair.id })}

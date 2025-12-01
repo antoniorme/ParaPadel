@@ -1,33 +1,29 @@
 import React, { useState } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { useTimer } from '../store/TimerContext';
-import { Square, ChevronRight, Edit2, Info, User, Play } from 'lucide-react';
+import { Square, ChevronRight, Edit2, Info, User, Play, AlertTriangle, X } from 'lucide-react';
 
 const ActiveTournament: React.FC = () => {
-  const { state, updateScoreDB, nextRoundDB, startTournamentDB } = useTournament();
+  const { state, updateScoreDB, nextRoundDB, startTournamentDB, formatPlayerName } = useTournament();
   const { resetTimer, startTimer } = useTimer();
   
-  // State for logic
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [scoreA, setScoreA] = useState('');
   const [scoreB, setScoreB] = useState('');
   const [nextMatchInfo, setNextMatchInfo] = useState<{ pA: string, nextCourtA: string, pB: string, nextCourtB: string } | null>(null);
   const [lastEditedMatchId, setLastEditedMatchId] = useState<string | null>(null);
   const [selectedPairId, setSelectedPairId] = useState<string | null>(null);
+  const [showRoundConfirm, setShowRoundConfirm] = useState(false);
 
-  // Filter matches for current round
   const currentMatches = state.matches.filter(m => m.round === state.currentRound);
   currentMatches.sort((a, b) => a.courtId - b.courtId);
 
-  // Helpers
   const getPairName = (id: string) => {
     const pair = state.pairs.find(p => p.id === id);
     if (!pair) return 'Unknown';
     const p1 = state.players.find(p => p.id === pair.player1Id);
     const p2 = state.players.find(p => p.id === pair.player2Id);
-    const n1 = p1?.nickname || p1?.name.split(' ')[0] || '';
-    const n2 = p2?.nickname || p2?.name.split(' ')[0] || '';
-    return `${n1} & ${n2}`;
+    return `${formatPlayerName(p1)} & ${formatPlayerName(p2)}`;
   };
 
   const findNextMatchInfo = (pairId: string, currentRound: number) => {
@@ -43,7 +39,6 @@ const ActiveTournament: React.FC = () => {
       return matches.sort((a, b) => a.round - b.round);
   };
 
-  // Handlers
   const handleSaveScore = () => {
     if (selectedMatchId && scoreA !== '' && scoreB !== '') {
         const valA = parseInt(scoreA);
@@ -76,7 +71,6 @@ const ActiveTournament: React.FC = () => {
 
   const handleCloseInfoModal = () => {
       setNextMatchInfo(null);
-      // Auto-advance logic
       if (lastEditedMatchId) {
           const currentIndex = currentMatches.findIndex(m => m.id === lastEditedMatchId);
           if (currentIndex !== -1 && currentIndex < currentMatches.length - 1) {
@@ -88,13 +82,22 @@ const ActiveTournament: React.FC = () => {
       }
   };
 
-  const allMatchesFinished = currentMatches.length > 0 && currentMatches.every(m => m.isFinished);
+  const totalMatches = currentMatches.length;
+  const finishedMatches = currentMatches.filter(m => m.isFinished).length;
+  const allMatchesFinished = totalMatches > 0 && totalMatches === finishedMatches;
 
-  const handleNextRound = () => {
-      if (!allMatchesFinished) return alert("Faltan resultados por introducir.");
-      if(window.confirm('¿Pasar a la siguiente ronda?')) {
-        resetTimer(); 
-        nextRoundDB();
+  const handleNextRoundClick = () => {
+      if (!allMatchesFinished) return alert("Todos los partidos deben finalizar antes de avanzar.");
+      setShowRoundConfirm(true);
+  };
+
+  const confirmNextRound = async () => {
+      setShowRoundConfirm(false);
+      try {
+          resetTimer(); 
+          await nextRoundDB();
+      } catch (e: any) {
+          alert(`Error: ${e.message || e}`);
       }
   };
 
@@ -104,11 +107,9 @@ const ActiveTournament: React.FC = () => {
       startTimer();
   }
 
-  // Helper component for Pair Detail Modal content
   const PairDetailContent = ({ pairId }: { pairId: string }) => {
       const matches = getPairMatches(pairId);
       const pairName = getPairName(pairId);
-
       return (
           <div className="space-y-4">
               <div className="text-center mb-6">
@@ -126,11 +127,9 @@ const ActiveTournament: React.FC = () => {
                       const opponentName = getPairName(opponentId);
                       const myScore = isPairA ? m.scoreA : m.scoreB;
                       const oppScore = isPairA ? m.scoreB : m.scoreA;
-                      
                       const resultClass = !m.isFinished ? 'bg-slate-50 border-slate-200' :
                                           (myScore || 0) > (oppScore || 0) ? 'bg-emerald-50 border-emerald-200' : 
                                           'bg-rose-50 border-rose-200';
-
                       return (
                           <div key={m.id} className={`p-3 rounded-xl border ${resultClass} flex justify-between items-center`}>
                               <div>
@@ -151,8 +150,8 @@ const ActiveTournament: React.FC = () => {
       );
   };
 
-  // --- VIEW: SETUP ---
   if (state.status === 'setup') {
+      const canStart = state.pairs.filter(p => !p.isReserve).length === 16;
       return (
           <div className="flex flex-col items-center justify-center h-[60vh] p-6 text-center space-y-6">
               <div className="bg-slate-100 p-6 rounded-full">
@@ -161,12 +160,13 @@ const ActiveTournament: React.FC = () => {
               <div>
                   <h2 className="text-2xl font-bold text-slate-800 mb-2">Torneo Listo</h2>
                   <p className="text-slate-500 max-w-xs mx-auto">
-                      Hay {state.pairs.length} parejas registradas. Cuando estés listo, pulsa el botón para generar los cruces.
+                      Hay {state.pairs.length} parejas registradas. {canStart ? 'Todo listo.' : 'Necesitas 16 parejas.'}
                   </p>
               </div>
               <button 
                 onClick={handleStart} 
-                className="px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-lg shadow-lg shadow-emerald-200 transition-all active:scale-95 flex items-center gap-2"
+                disabled={!canStart}
+                className={`px-8 py-4 rounded-xl font-bold text-lg shadow-lg flex items-center gap-2 transition-all ${canStart ? 'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95 shadow-emerald-200' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
               >
                   <Play size={20} fill="currentColor" /> EMPEZAR TORNEO
               </button>
@@ -174,10 +174,8 @@ const ActiveTournament: React.FC = () => {
       )
   }
 
-  // --- VIEW: ACTIVE ---
   return (
     <div className="space-y-6 pb-20">
-      {/* Simple Header */}
       <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 pb-4 -mx-6 px-6 pt-4 shadow-sm">
         <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-slate-900">Ronda {state.currentRound}</h2>
@@ -187,7 +185,6 @@ const ActiveTournament: React.FC = () => {
         </div>
       </div>
 
-      {/* Matches List */}
       <div className="space-y-4">
         {currentMatches.length === 0 ? (
             <div className="text-center py-10 text-slate-400 italic">Cargando partidos...</div>
@@ -224,7 +221,10 @@ const ActiveTournament: React.FC = () => {
                         </div>
 
                         {!match.isFinished && (
-                            <button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className="w-full mt-6 py-4 bg-blue-600 active:bg-blue-700 rounded-xl text-base font-bold text-white shadow-md">
+                            <button 
+                                onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)}
+                                className="w-full mt-6 py-4 bg-blue-600 active:bg-blue-700 rounded-xl text-base font-bold text-white shadow-md touch-manipulation"
+                            >
                                 Introducir Resultado
                             </button>
                         )}
@@ -234,15 +234,18 @@ const ActiveTournament: React.FC = () => {
         )}
       </div>
 
-      {allMatchesFinished && currentMatches.length > 0 && (
+      {currentMatches.length > 0 && (
           <div className="fixed bottom-20 left-0 right-0 p-6 z-50 flex justify-center">
-              <button onClick={handleNextRound} className="flex items-center gap-3 bg-emerald-600 hover:bg-emerald-700 text-white px-10 py-5 rounded-full shadow-2xl text-xl font-bold animate-bounce">
+              <button 
+                onClick={handleNextRoundClick}
+                disabled={!allMatchesFinished}
+                className={`flex items-center gap-3 px-10 py-5 rounded-full shadow-2xl text-xl font-bold transition-all ${allMatchesFinished ? 'bg-emerald-600 hover:bg-emerald-700 text-white animate-bounce' : 'bg-slate-300 text-slate-500 cursor-not-allowed'}`}
+              >
                 Siguiente Ronda <ChevronRight />
               </button>
           </div>
       )}
 
-      {/* Score Modal */}
       {selectedMatchId && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-end md:items-center justify-center sm:p-4">
               <div className="bg-white rounded-t-3xl md:rounded-3xl p-8 w-full max-w-sm animate-slide-up shadow-2xl">
@@ -260,32 +263,39 @@ const ActiveTournament: React.FC = () => {
           </div>
       )}
 
-      {/* Info Modal */}
       {nextMatchInfo && (
           <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[70] flex items-center justify-center p-6" onClick={handleCloseInfoModal}>
               <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-slide-up text-center" onClick={e => e.stopPropagation()}>
                   <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600"><Info size={24} /></div>
                   <h3 className="text-xl font-black text-slate-900 mb-2">Próximo Partido</h3>
-                  <div className="space-y-4 mt-6">
-                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100"><div className="font-bold text-slate-800 text-lg mb-1">{nextMatchInfo.pA}</div><div className="text-emerald-600 font-black uppercase tracking-wide">{nextMatchInfo.nextCourtA}</div></div>
-                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100"><div className="font-bold text-slate-800 text-lg mb-1">{nextMatchInfo.pB}</div><div className="text-emerald-600 font-black uppercase tracking-wide">{nextMatchInfo.nextCourtB}</div></div>
+                  <p className="text-slate-500 text-sm mb-6">Información para los jugadores</p>
+                  
+                  <div className="space-y-4">
+                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                          <div className="font-bold text-slate-800 text-lg mb-1">{nextMatchInfo.pA}</div>
+                          <div className="text-emerald-600 font-black uppercase tracking-wide">{nextMatchInfo.nextCourtA}</div>
+                      </div>
+                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                          <div className="font-bold text-slate-800 text-lg mb-1">{nextMatchInfo.pB}</div>
+                          <div className="text-emerald-600 font-black uppercase tracking-wide">{nextMatchInfo.nextCourtB}</div>
+                      </div>
                   </div>
-                  <button onClick={handleCloseInfoModal} className="w-full mt-6 py-4 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Entendido</button>
+
+                  <button 
+                    onClick={handleCloseInfoModal}
+                    className="w-full mt-6 py-4 bg-slate-900 text-white rounded-xl font-bold shadow-lg"
+                  >
+                      Entendido
+                  </button>
               </div>
           </div>
       )}
 
-      {/* Detail Modal */}
       {selectedPairId && (
           <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[70] flex items-center justify-center p-6" onClick={() => setSelectedPairId(null)}>
               <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-slide-up" onClick={e => e.stopPropagation()}>
                   <PairDetailContent pairId={selectedPairId} />
-                  <button 
-                    onClick={() => setSelectedPairId(null)}
-                    className="w-full mt-6 py-4 bg-slate-100 text-slate-600 rounded-xl font-bold"
-                  >
-                      Cerrar
-                  </button>
+                  <button onClick={() => setSelectedPairId(null)} className="w-full mt-6 py-4 bg-slate-100 text-slate-600 rounded-xl font-bold">Cerrar</button>
               </div>
           </div>
       )}

@@ -1,26 +1,33 @@
-
-
 export interface Player {
-  id: string; // UUID from DB
+  id: string; // UUID
   user_id?: string;
   name: string;
   nickname?: string;
   email?: string;
   phone?: string;
-  categories?: string[]; 
+  categories?: string[]; // Categorías declaradas
+  
+  // ADVANCED ELO SYSTEM
+  global_rating?: number; // Rating transversal (amortiguado)
+  category_ratings?: Record<string, number>; // Mapa: { "3ª CAT": 1450, "4ª CAT": 1500 }
+  main_category?: string; // Categoría "casa"
+  
+  // Legacy / Visual
+  manual_rating?: number; 
+  rankingPoints?: number; // Valor visual final calculado
+  
   created_at?: string;
 }
 
 export interface Pair {
-  id: string; // UUID from DB
+  id: string; 
   tournament_id?: string;
-  player1Id: string; // References Player ID
-  player2Id: string; // References Player ID
+  player1Id: string; 
+  player2Id: string; 
   name: string; 
   waterReceived: boolean;
   paidP1: boolean;
   paidP2: boolean;
-  // Computed stats on frontend
   stats: {
     played: number;
     won: number;
@@ -31,7 +38,7 @@ export interface Pair {
 }
 
 export interface Match {
-  id: string; // UUID from DB
+  id: string; 
   tournament_id?: string;
   round: number; 
   phase: 'group' | 'qf' | 'sf' | 'final'; 
@@ -42,6 +49,7 @@ export interface Match {
   scoreA: number | null;
   scoreB: number | null;
   isFinished: boolean;
+  elo_processed?: boolean; 
 }
 
 export interface Group {
@@ -50,16 +58,16 @@ export interface Group {
 }
 
 export interface TournamentState {
-  id?: string; // Database ID of the tournament
+  id?: string; 
   status: 'setup' | 'checkin' | 'active' | 'finished';
   currentRound: number; 
-  players: Player[]; // Loaded from DB
-  pairs: Pair[]; // Loaded from DB
-  matches: Match[]; // Loaded from DB
-  groups: Group[]; // Computed
+  players: Player[]; 
+  pairs: Pair[]; 
+  matches: Match[]; 
+  groups: Group[]; 
   courts: { id: number; ballsGiven: boolean }[];
   startDate?: string;
-  loading: boolean; // UI loading state
+  loading: boolean; 
 }
 
 export interface ClubData {
@@ -75,7 +83,7 @@ export interface PastTournament {
     winnerMain?: string; 
     winnerConsolation?: string; 
     playerCount: number;
-    data?: TournamentState;
+    data: TournamentState; 
 }
 
 export type TournamentAction =

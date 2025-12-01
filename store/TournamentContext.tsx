@@ -2,10 +2,14 @@ import React, { createContext, useContext, useReducer, useEffect, useCallback } 
 import { TournamentState, TournamentAction, Player, Pair, Match, Group } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+// FIX: Use relative path instead of alias
+import { getMatchRating, calculateEloDelta, calculateDisplayRanking, BASE_ELO_BY_CATEGORY } from '../utils/Elo'; 
 
 const GROUP_NAMES = ['A', 'B', 'C', 'D'];
 const STORAGE_KEY = 'padelpro_local_db_v3'; 
 export const TOURNAMENT_CATEGORIES = ['Iniciación', '5ª CAT', '4ª CAT', '3ª CAT', '2ª CAT', '1ª CAT'];
+
+// ... (rest of the file content remains exactly the same)
 
 // --- Logic Helpers ---
 
@@ -15,7 +19,6 @@ const generateGroupsHelper = (pairs: Pair[], isNewTournament: boolean = false): 
   if (isNewTournament) {
       activePairs = [...activePairs].sort(() => 0.5 - Math.random());
   }
-  // Maintain order if reloading existing data
   
   activePairs = activePairs.slice(0, 16);
 
@@ -44,19 +47,15 @@ const generateGroupMatchesHelper = (groups: Group[]): Partial<Match>[] => {
       }).filter(Boolean) as Partial<Match>[];
   };
   
-  // R1
   matches.push(...createMatches('A', 1, [[0,1], [2,3]], 1));
   matches.push(...createMatches('B', 1, [[0,1], [2,3]], 3));
   matches.push(...createMatches('C', 1, [[0,1], [2,3]], 5));
-  // R2
   matches.push(...createMatches('A', 2, [[0,2], [1,3]], 1));
   matches.push(...createMatches('B', 2, [[0,2], [1,3]], 3));
   matches.push(...createMatches('D', 2, [[0,1], [2,3]], 5));
-  // R3
   matches.push(...createMatches('A', 3, [[0,3], [1,2]], 1));
   matches.push(...createMatches('C', 3, [[0,2], [1,3]], 3));
   matches.push(...createMatches('D', 3, [[0,2], [1,3]], 5));
-  // R4
   matches.push(...createMatches('B', 4, [[0,3], [1,2]], 1));
   matches.push(...createMatches('C', 4, [[0,3], [1,2]], 3));
   matches.push(...createMatches('D', 4, [[0,3], [1,2]], 5));
@@ -96,6 +95,11 @@ const getRankedPairsForGroup = (pairs: Pair[], groups: Group[], groupId: string)
     });
 };
 
+const inferMatchCategory = (players: Player[]): string => {
+    const p = players[0];
+    return p?.main_category || p?.categories?.[0] || '4ª CAT';
+};
+
 const initialState: TournamentState = {
   status: 'setup',
   currentRound: 0,
@@ -120,6 +124,7 @@ interface TournamentContextType {
     nextRoundDB: () => Promise<void>;
     deletePairDB: (pairId: string) => Promise<void>;
     archiveAndResetDB: () => Promise<void>;
+    formatPlayerName: (p?: Player) => string;
 }
 
 const TournamentContext = createContext<TournamentContextType>({
@@ -134,7 +139,8 @@ const TournamentContext = createContext<TournamentContextType>({
     updateScoreDB: async () => {},
     nextRoundDB: async () => {},
     deletePairDB: async () => {},
-    archiveAndResetDB: async () => {}
+    archiveAndResetDB: async () => {},
+    formatPlayerName: () => ''
 });
 
 const reducer = (state: TournamentState, action: TournamentAction): TournamentState => {
@@ -146,7 +152,7 @@ const reducer = (state: TournamentState, action: TournamentAction): TournamentSt
         case 'TOGGLE_WATER': return { ...state, pairs: state.pairs.map(p => p.id === action.payload ? { ...p, waterReceived: !p.waterReceived } : p) };
         case 'TOGGLE_PAID': return { ...state, pairs: state.pairs.map(p => { if (p.player1Id === action.payload) return { ...p, paidP1: !p.paidP1 }; if (p.player2Id === action.payload) return { ...p, paidP2: !p.paidP2 }; return p; }) };
         case 'LOAD_DEMO_DATA':
-             const demoPlayers: Player[] = Array.from({ length: 32 }, (_, i) => ({ id: `demo-p-${i}`, name: `Jugador ${i+1}`, categories: ['4ª CAT'], user_id: 'dev' }));
+             const demoPlayers: Player[] = Array.from({ length: 32 }, (_, i) => ({ id: `demo-p-${i}`, name: `Jugador ${i+1}`, categories: ['4ª CAT'], user_id: 'dev', global_rating: 1200, main_category: '4ª CAT', category_ratings: { '4ª CAT': 1200 } }));
              const demoPairs: Pair[] = [];
              for(let i=0; i<16; i++) { demoPairs.push({ id: `pair-${i}`, player1Id: demoPlayers[i*2].id, player2Id: demoPlayers[i*2+1].id, name: 'Pareja', waterReceived: false, paidP1: false, paidP2: false, stats: {played:0, won:0, gameDiff:0}, isReserve: false }); }
              return { ...state, players: demoPlayers, pairs: demoPairs, status: 'setup' };
@@ -162,7 +168,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         if (!user) return;
         dispatch({ type: 'SET_LOADING', payload: true });
 
-        // OFFLINE
         if (isOfflineMode) {
             const localData = localStorage.getItem(STORAGE_KEY);
             if (localData) {
@@ -174,11 +179,9 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             return;
         }
 
-        // ONLINE
         try {
             const { data: players } = await supabase.from('players').select('*').eq('user_id', user.id).order('name');
             const { data: tournaments } = await supabase.from('tournaments').select('*').eq('user_id', user.id).neq('status', 'finished').limit(1);
-            
             const activeTournament = tournaments?.[0];
 
             if (!activeTournament) {
@@ -188,30 +191,24 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 const { data: matches } = await supabase.from('matches').select('*').eq('tournament_id', activeTournament.id);
                 
                 let mappedPairs: Pair[] = (pairs || []).map(p => ({
-                    id: p.id, tournament_id: p.tournament_id,
-                    player1Id: p.player1_id, player2Id: p.player2_id,
-                    name: p.name || 'Pareja', waterReceived: p.water_received,
-                    paidP1: p.paid_p1, paidP2: p.paid_p2,
+                    id: p.id, tournament_id: p.tournament_id, player1Id: p.player1_id, player2Id: p.player2_id,
+                    name: p.name || 'Pareja', waterReceived: p.water_received, paidP1: p.paid_p1, paidP2: p.paid_p2,
                     stats: { played: 0, won: 0, gameDiff: 0 }, isReserve: false 
                 }));
 
                 const mappedMatches: Match[] = (matches || []).map(m => ({
                     id: m.id, round: m.round, phase: 'group', bracket: m.bracket as any,
                     courtId: m.court_id, pairAId: m.pair_a_id, pairBId: m.pair_b_id,
-                    scoreA: m.score_a, scoreB: m.score_b, isFinished: m.is_finished
+                    scoreA: m.score_a, scoreB: m.score_b, isFinished: m.is_finished,
+                    elo_processed: (m as any).elo_processed
                 }));
 
                 mappedPairs = recalculateStats(mappedPairs, mappedMatches);
                 const groups = generateGroupsHelper(mappedPairs, false);
 
                 dispatch({ type: 'SET_STATE', payload: {
-                    id: activeTournament.id,
-                    status: activeTournament.status as any,
-                    currentRound: activeTournament.current_round || 0,
-                    players: players || [],
-                    pairs: mappedPairs,
-                    matches: mappedMatches,
-                    groups: groups
+                    id: activeTournament.id, status: activeTournament.status as any, currentRound: activeTournament.current_round || 0,
+                    players: players || [], pairs: mappedPairs, matches: mappedMatches, groups: groups
                 }});
             }
         } catch (e) {
@@ -229,15 +226,29 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
     }, [state, isOfflineMode]);
 
-    // Actions
     const addPlayerToDB = async (p: Partial<Player>): Promise<string | null> => {
+        const newP = { 
+            ...p, 
+            global_rating: 1200, 
+            category_ratings: {}, 
+            main_category: p.categories?.[0] || 'Iniciación', 
+            matches_played: 0 
+        };
+
         if (isOfflineMode) {
             const newId = `local-${Date.now()}`;
-            const newP = { ...p, id: newId, user_id: 'dev' } as Player;
-            dispatch({ type: 'SET_STATE', payload: { players: [...state.players, newP] } });
+            dispatch({ type: 'SET_STATE', payload: { players: [...state.players, { ...newP, id: newId } as Player] } });
             return newId;
         }
-        const { data, error } = await supabase.from('players').insert({ user_id: user!.id, name: p.name, nickname: p.nickname, email: p.email, phone: p.phone, categories: p.categories }).select().single();
+        
+        const { data, error } = await supabase.from('players').insert({ 
+            user_id: user!.id, 
+            name: p.name, nickname: p.nickname, email: p.email, phone: p.phone, categories: p.categories,
+            global_rating: 1200,
+            main_category: newP.main_category,
+            category_ratings: {}
+        }).select().single();
+        
         if(error || !data) return null;
         loadData();
         return data.id;
@@ -250,21 +261,19 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
              return;
         }
         if(!p.id) return;
-        await supabase.from('players').update({ name: p.name, nickname: p.nickname, email: p.email, phone: p.phone, categories: p.categories }).eq('id', p.id);
+        await supabase.from('players').update({ 
+            name: p.name, nickname: p.nickname, email: p.email, phone: p.phone, categories: p.categories,
+            manual_rating: p.manual_rating 
+        }).eq('id', p.id);
         loadData();
     }
 
     const createPairInDB = async (p1: string, p2: string) => {
         if (isOfflineMode) {
-            const newPair = { 
-                id: `pair-${Date.now()}`, player1Id: p1, player2Id: p2, name: 'Pareja',
-                waterReceived: false, paidP1: false, paidP2: false, 
-                stats: { played: 0, won: 0, gameDiff: 0 }, isReserve: false 
-            };
+            const newPair = { id: `pair-${Date.now()}`, player1Id: p1, player2Id: p2, name: 'Pareja', waterReceived: false, paidP1: false, paidP2: false, stats: { played: 0, won: 0, gameDiff: 0 }, isReserve: false };
             dispatch({ type: 'SET_STATE', payload: { pairs: [...state.pairs, newPair] } });
             return;
         }
-        
         let tId = state.id;
         if (!tId) {
             const { data } = await supabase.from('tournaments').insert({ user_id: user!.id, status: 'setup', current_round: 0 }).select().single();
@@ -301,7 +310,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             alert(`Se necesitan 16 parejas titulares. Tienes ${activePairs.length}.`);
             return;
         }
-
         const groups = generateGroupsHelper(state.pairs, true);
         const matches = generateGroupMatchesHelper(groups);
 
@@ -310,16 +318,12 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             dispatch({ type: 'SET_STATE', payload: { status: 'active', currentRound: 1, groups, matches: localMatches } });
             return;
         }
-
         if (!state.id) return;
         
         const dbMatches = matches.map(m => ({
-            tournament_id: state.id,
-            round: m.round, court_id: m.courtId,
-            pair_a_id: m.pairAId, pair_b_id: m.pairBId,
-            is_finished: false
+            tournament_id: state.id, round: m.round, court_id: m.courtId,
+            pair_a_id: m.pairAId, pair_b_id: m.pairBId, is_finished: false
         }));
-        
         const { error } = await supabase.from('matches').insert(dbMatches);
         if (!error) {
             await supabase.from('tournaments').update({ status: 'active', current_round: 1 }).eq('id', state.id);
@@ -334,41 +338,89 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             dispatch({ type: 'SET_STATE', payload: { matches: newMatches, pairs: newPairs } });
             return;
         }
+
+        // 1. Update Match
         await supabase.from('matches').update({ score_a: sA, score_b: sB, is_finished: true }).eq('id', matchId);
         
+        // 2. Optimistic UI
         const newMatches = state.matches.map(m => m.id === matchId ? { ...m, scoreA: sA, scoreB: sB, isFinished: true } : m);
         const newPairs = recalculateStats(state.pairs, newMatches);
         dispatch({ type: 'SET_STATE', payload: { matches: newMatches, pairs: newPairs } });
+
+        // 3. ELO Calculation
+        const match = state.matches.find(m => m.id === matchId);
+        if (match && !match.elo_processed) {
+            const pairA = state.pairs.find(p => p.id === match.pairAId);
+            const pairB = state.pairs.find(p => p.id === match.pairBId);
+            if (pairA && pairB) {
+                const p1 = state.players.find(p => p.id === pairA.player1Id);
+                const p2 = state.players.find(p => p.id === pairA.player2Id);
+                const p3 = state.players.find(p => p.id === pairB.player1Id);
+                const p4 = state.players.find(p => p.id === pairB.player2Id);
+
+                if (p1 && p2 && p3 && p4) {
+                    const matchCategory = inferMatchCategory([p1, p2, p3, p4]);
+                    
+                    const r1 = getMatchRating(p1, matchCategory);
+                    const r2 = getMatchRating(p2, matchCategory);
+                    const r3 = getMatchRating(p3, matchCategory);
+                    const r4 = getMatchRating(p4, matchCategory);
+
+                    const avgEloA = (r1 + r2) / 2;
+                    const avgEloB = (r3 + r4) / 2;
+
+                    const delta = calculateEloDelta(avgEloA, avgEloB, sA, sB);
+
+                    const applyUpdate = async (p: Player, d: number) => {
+                        const newRatings = { ...p.category_ratings } || {};
+                        const currentCatRating = newRatings[matchCategory] || (p.global_rating || 1200);
+                        newRatings[matchCategory] = Math.round(currentCatRating + d);
+                        
+                        const newGlobal = Math.round((p.global_rating || 1200) + (d * 0.25)); 
+                        
+                        await supabase.from('players').update({
+                            global_rating: newGlobal,
+                            category_ratings: newRatings,
+                            matches_played: (p.matches_played || 0) + 1
+                        }).eq('id', p.id);
+                    };
+
+                    await Promise.all([
+                        applyUpdate(p1, delta),
+                        applyUpdate(p2, delta),
+                        applyUpdate(p3, -delta),
+                        applyUpdate(p4, -delta)
+                    ]);
+
+                    await supabase.from('matches').update({ elo_processed: true } as any).eq('id', matchId);
+                }
+            }
+        }
     };
 
     const nextRoundDB = async () => {
         const nextR = state.currentRound + 1;
         let playoffMatches: Partial<Match>[] = [];
 
-        // --- PLAYOFF LOGIC (R4 -> R5) ---
         if (state.currentRound === 4) {
-            const rankingsA = getRankedPairsForGroup(state.pairs, state.groups, 'A');
-            const rankingsB = getRankedPairsForGroup(state.pairs, state.groups, 'B');
-            const rankingsC = getRankedPairsForGroup(state.pairs, state.groups, 'C');
-            const rankingsD = getRankedPairsForGroup(state.pairs, state.groups, 'D');
+            const pairsWithStats = recalculateStats(state.pairs, state.matches);
+            const rankingsA = getRankedPairsForGroup(pairsWithStats, state.groups, 'A');
+            const rankingsB = getRankedPairsForGroup(pairsWithStats, state.groups, 'B');
+            const rankingsC = getRankedPairsForGroup(pairsWithStats, state.groups, 'C');
+            const rankingsD = getRankedPairsForGroup(pairsWithStats, state.groups, 'D');
+            const safeGet = (arr: Pair[], idx: number) => arr[idx] || arr[0] || state.pairs[0];
 
-            // Force Proceed even if data is incomplete in local test mode
-            const safeGet = (arr: any[], idx: number) => arr[idx] || arr[0] || state.pairs[0]; 
-
-            // QF MAIN
             playoffMatches.push({ round: 5, bracket: 'main', phase: 'qf', courtId: 1, pairAId: safeGet(rankingsA, 0).id, pairBId: safeGet(rankingsC, 1).id });
-            playoffMatches.push({ round: 5, bracket: 'main', phase: 'qf', courtId: 2, pairAId: rankingsC[0].id, pairBId: rankingsA[1].id });
-            playoffMatches.push({ round: 5, bracket: 'main', phase: 'qf', courtId: 3, pairAId: rankingsB[0].id, pairBId: rankingsD[1].id });
-            playoffMatches.push({ round: 5, bracket: 'main', phase: 'qf', courtId: 4, pairAId: rankingsD[0].id, pairBId: rankingsB[1].id });
+            playoffMatches.push({ round: 5, bracket: 'main', phase: 'qf', courtId: 2, pairAId: safeGet(rankingsC, 0).id, pairBId: safeGet(rankingsA, 1).id });
+            playoffMatches.push({ round: 5, bracket: 'main', phase: 'qf', courtId: 3, pairAId: safeGet(rankingsB, 0).id, pairBId: safeGet(rankingsD, 1).id });
+            playoffMatches.push({ round: 5, bracket: 'main', phase: 'qf', courtId: 4, pairAId: safeGet(rankingsD, 0).id, pairBId: safeGet(rankingsB, 1).id });
 
-            // QF CONSOLATION
-            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 5, pairAId: rankingsA[2].id, pairBId: rankingsC[3].id });
-            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 6, pairAId: rankingsC[2].id, pairBId: rankingsA[3].id });
-            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 1, pairAId: rankingsB[2].id, pairBId: rankingsD[3].id });
-            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 2, pairAId: rankingsD[2].id, pairBId: rankingsB[3].id });
+            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 5, pairAId: safeGet(rankingsA, 2).id, pairBId: safeGet(rankingsC, 3).id });
+            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 6, pairAId: safeGet(rankingsC, 2).id, pairBId: safeGet(rankingsA, 3).id });
+            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 1, pairAId: safeGet(rankingsB, 2).id, pairBId: safeGet(rankingsD, 3).id });
+            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 2, pairAId: safeGet(rankingsD, 2).id, pairBId: safeGet(rankingsB, 3).id });
         }
 
-        // --- OFFLINE ---
         if (isOfflineMode) {
             let newMatches = [...state.matches];
             if (playoffMatches.length > 0) {
@@ -381,7 +433,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             return;
         }
 
-        // --- ONLINE ---
         if (state.id) {
             if (playoffMatches.length > 0) {
                 const dbMatches = playoffMatches.map(m => ({
@@ -391,26 +442,30 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 await supabase.from('matches').insert(dbMatches);
             }
             await supabase.from('tournaments').update({ current_round: nextR }).eq('id', state.id);
-            loadData();
+            dispatch({ type: 'SET_STATE', payload: { currentRound: nextR } });
+            setTimeout(() => loadData(), 500); 
         }
     };
 
     const archiveAndResetDB = async () => {
-        if (isOfflineMode) {
-            dispatch({ type: 'RESET_LOCAL' });
-            return;
-        }
-        if (state.id) {
-            await supabase.from('tournaments').update({ status: 'finished' }).eq('id', state.id);
-            dispatch({ type: 'RESET_LOCAL' });
-            loadData(); 
-        }
+        if (isOfflineMode) { dispatch({ type: 'RESET_LOCAL' }); return; }
+        if (state.id) { await supabase.from('tournaments').update({ status: 'finished' }).eq('id', state.id); dispatch({ type: 'RESET_LOCAL' }); loadData(); }
+    };
+
+    const formatPlayerName = (p?: Player): string => {
+        if (!p) return '...';
+        if (p.nickname) return p.nickname;
+        const parts = p.name.split(' ');
+        const first = parts[0];
+        const lastInitial = parts.length > 1 ? parts[1].substring(0, 3) + '.' : '';
+        return `${first} ${lastInitial}`;
     };
 
     return (
         <TournamentContext.Provider value={{ 
             state, dispatch, loadData, addPlayerToDB, updatePlayerInDB, 
-            createPairInDB, updatePairDB, startTournamentDB, updateScoreDB, nextRoundDB, deletePairDB, archiveAndResetDB
+            createPairInDB, updatePairDB, startTournamentDB, updateScoreDB, 
+            nextRoundDB, deletePairDB, archiveAndResetDB, formatPlayerName 
         }}>
             {children}
         </TournamentContext.Provider>
