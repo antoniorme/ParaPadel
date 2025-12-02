@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTournament, GenerationMethod } from '../store/TournamentContext';
 import { useTimer } from '../store/TimerContext';
-import { Square, ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock, Shuffle } from 'lucide-react';
+import { ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock, Shuffle, Coffee } from 'lucide-react';
 import { Player } from '../types';
 import { useNavigate } from 'react-router-dom';
 
@@ -20,16 +20,36 @@ const ActiveTournament: React.FC = () => {
   const [showRoundConfirm, setShowRoundConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
-  // Logic Change: Generation Method State defaults to 'elo-balanced'
   const [generationMethod, setGenerationMethod] = useState<GenerationMethod>('elo-balanced');
 
   // --- DATA FILTERING ---
   const currentMatches = state.matches.filter(m => m.round === state.currentRound);
-  currentMatches.sort((a, b) => a.courtId - b.courtId);
+  
+  // SEGUIMIENTO DE USO DE PISTAS PARA DETECTAR DUPLICADOS
+  const courtUsage: Record<number, number> = {};
+
+  // Ordenar: Pistas 1-6 primero, Pista 0 al final.
+  // Si hay duplicados en pistas físicas, priorizamos cuadro principal.
+  const sortedMatches = [...currentMatches].sort((a, b) => {
+      // Pista 0 siempre al final
+      if (a.courtId === 0 && b.courtId !== 0) return 1;
+      if (a.courtId !== 0 && b.courtId === 0) return -1;
+      
+      // Si comparten pista física
+      if (a.courtId === b.courtId && a.courtId !== 0) {
+          // Prioridad: Main Bracket > Consolation
+          if (a.bracket === 'main' && b.bracket !== 'main') return -1;
+          if (b.bracket === 'main' && a.bracket !== 'main') return 1;
+      }
+      
+      return a.courtId - b.courtId;
+  });
 
   const totalMatches = currentMatches.length;
-  const finishedMatches = currentMatches.filter(m => m.isFinished).length;
-  const allMatchesFinished = totalMatches > 0 && totalMatches === finishedMatches;
+  // Solo consideramos finalizados los que tienen pista activa. Los descansos no bloquean, pero deben gestionarse.
+  const finishedMatches = currentMatches.filter(m => m.isFinished && m.courtId !== 0).length;
+  const activeMatchesCount = currentMatches.filter(m => m.courtId !== 0).length;
+  const allMatchesFinished = activeMatchesCount > 0 && activeMatchesCount === finishedMatches;
 
   // --- HELPERS ---
   const getPairName = (id: string) => {
@@ -37,7 +57,6 @@ const ActiveTournament: React.FC = () => {
     if (!pair) return 'Unknown';
     const p1 = state.players.find(p => p.id === pair.player1Id);
     const p2 = state.players.find(p => p.id === pair.player2Id);
-    // Safe formatter usage
     const name1 = formatPlayerName ? formatPlayerName(p1) : (p1?.name || 'P1');
     const name2 = formatPlayerName ? formatPlayerName(p2) : (p2?.name || 'P2');
     return `${name1} & ${name2}`;
@@ -47,8 +66,8 @@ const ActiveTournament: React.FC = () => {
       const nextRound = currentRound + 1;
       const nextMatch = state.matches.find(m => m.round === nextRound && (m.pairAId === pairId || m.pairBId === pairId));
       if (nextMatch) return `Pista ${nextMatch.courtId}`;
-      if (nextRound <= 4) return "Descansa"; // Logic for group phase
-      return "Pendiente"; // Logic for playoffs
+      if (nextRound <= 4) return "Descansa"; 
+      return "Pendiente"; 
   };
 
   const getPairMatches = (pairId: string) => {
@@ -65,10 +84,8 @@ const ActiveTournament: React.FC = () => {
   };
 
   // --- HANDLERS ---
-
   const handleStart = async () => {
       if (generationMethod === 'manual') {
-          // Redirect to Registration for manual setup as it requires the wizard UI
           navigate('/registration');
           return;
       }
@@ -89,7 +106,6 @@ const ActiveTournament: React.FC = () => {
 
         updateScoreDB(selectedMatchId, valA, valB);
         
-        // Prepare info for "Next Match" modal
         const match = state.matches.find(m => m.id === selectedMatchId);
         if (match) {
             const info = {
@@ -114,13 +130,13 @@ const ActiveTournament: React.FC = () => {
 
   const handleCloseInfoModal = () => {
       setNextMatchInfo(null);
-      // Auto-advance logic: Find next unfinished match
       if (lastEditedMatchId) {
-          const currentIndex = currentMatches.findIndex(m => m.id === lastEditedMatchId);
-          if (currentIndex !== -1 && currentIndex < currentMatches.length - 1) {
-              const nextMatch = currentMatches[currentIndex + 1];
-              if (!nextMatch.isFinished) {
-                  handleOpenScore(nextMatch.id, nextMatch.scoreA, nextMatch.scoreB);
+          const currentIndex = sortedMatches.findIndex(m => m.id === lastEditedMatchId);
+          if (currentIndex !== -1 && currentIndex < sortedMatches.length - 1) {
+              const nextMatch = sortedMatches[currentIndex + 1];
+              if (!nextMatch.isFinished && nextMatch.courtId !== 0) {
+                  // No abrir automáticamente si es descanso
+                  // handleOpenScore(nextMatch.id, nextMatch.scoreA, nextMatch.scoreB);
               }
           }
       }
@@ -128,7 +144,7 @@ const ActiveTournament: React.FC = () => {
 
   const handleNextRoundClick = () => {
       if (!allMatchesFinished) {
-          return alert(`Faltan resultados. Solo ${finishedMatches}/${totalMatches} partidos finalizados.`);
+          return alert(`Faltan resultados. Solo ${finishedMatches}/${activeMatchesCount} partidos activos finalizados.`);
       }
       setShowRoundConfirm(true);
   };
@@ -236,7 +252,6 @@ const ActiveTournament: React.FC = () => {
                   <Play size={24} fill="currentColor" /> EMPEZAR TORNEO
               </button>
 
-               {/* ERROR MESSAGE MODAL FOR SETUP */}
                {errorMessage && (
                   <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
                       <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
@@ -255,7 +270,7 @@ const ActiveTournament: React.FC = () => {
 
   // --- VIEW: ACTIVE TOURNAMENT ---
   return (
-    <div className="space-y-6 pb-32"> {/* Increased padding for floating button */}
+    <div className="space-y-6 pb-32">
       {/* Header */}
       <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 pb-4 -mx-6 px-6 pt-4 shadow-sm">
         <div className="flex items-center justify-between">
@@ -268,18 +283,35 @@ const ActiveTournament: React.FC = () => {
 
       {/* Matches List */}
       <div className="space-y-4">
-        {currentMatches.length === 0 ? (
+        {sortedMatches.length === 0 ? (
             <div className="text-center py-10 text-slate-400 italic">Cargando partidos...</div>
         ) : (
-            currentMatches.map(match => (
-                <div key={match.id} className={`relative bg-white rounded-2xl border ${match.isFinished ? 'border-emerald-200 bg-emerald-50/30' : 'border-slate-200 shadow-sm'} overflow-hidden`}>
-                    <div className="bg-slate-100 px-4 py-2 flex justify-between items-center border-b border-slate-200">
-                        <span className="font-bold text-slate-700 text-xs uppercase flex gap-2">
-                            {match.courtId === 0 ? <span className="text-orange-600">En Espera</span> : `Pista ${match.courtId}`}
+            sortedMatches.map(match => {
+                // LÓGICA DE DESCANSO:
+                // 1. Si courtId es 0
+                // 2. Si courtId > 0 pero YA SE HA USADO para otro partido en esta lista (Duplicado)
+                let isResting = match.courtId === 0;
+                
+                if (match.courtId > 0) {
+                    if (courtUsage[match.courtId]) {
+                        isResting = true; // Forzamos descanso si la pista ya está ocupada
+                    }
+                    courtUsage[match.courtId] = (courtUsage[match.courtId] || 0) + 1;
+                }
+
+                return (
+                <div key={match.id} className={`relative rounded-2xl border overflow-hidden ${isResting ? 'bg-slate-50 border-slate-200 opacity-80' : match.isFinished ? 'border-emerald-200 bg-emerald-50/30' : 'bg-white border-slate-200 shadow-sm'}`}>
+                    <div className={`${isResting ? 'bg-slate-200' : 'bg-slate-100'} px-4 py-2 flex justify-between items-center border-b border-slate-200`}>
+                        <span className={`font-bold text-xs uppercase flex gap-2 items-center ${isResting ? 'text-slate-500' : 'text-slate-700'}`}>
+                            {isResting ? (
+                                <span className="flex items-center gap-1"><Coffee size={14}/> DESCANSO</span>
+                            ) : (
+                                `Pista ${match.courtId}`
+                            )}
                             {getPhaseLabel(match) && <span className="text-slate-400">- {getPhaseLabel(match)}</span>}
                             {match.bracket === 'consolation' && <span className="text-blue-500">(Consolación)</span>}
                         </span>
-                        {match.isFinished && (
+                        {match.isFinished && !isResting && (
                              <button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className="p-1 text-slate-400 hover:text-blue-500">
                                  <Edit2 size={14} />
                              </button>
@@ -291,7 +323,7 @@ const ActiveTournament: React.FC = () => {
                             className="flex items-center justify-between mb-3 cursor-pointer hover:bg-slate-50 p-1 -mx-1 rounded transition-colors"
                             onClick={() => setSelectedPairId(match.pairAId)}
                         >
-                             <span className="text-lg text-slate-800 font-bold w-3/4 truncate flex items-center gap-2">
+                             <span className={`text-lg font-bold w-3/4 truncate flex items-center gap-2 ${isResting ? 'text-slate-500' : 'text-slate-800'}`}>
                                  {getPairName(match.pairAId)} <Info size={14} className="text-slate-300"/>
                              </span>
                              <span className="text-3xl font-black text-slate-900">{match.scoreA ?? '-'}</span>
@@ -300,13 +332,13 @@ const ActiveTournament: React.FC = () => {
                             className="flex items-center justify-between cursor-pointer hover:bg-slate-50 p-1 -mx-1 rounded transition-colors"
                             onClick={() => setSelectedPairId(match.pairBId)}
                         >
-                             <span className="text-lg text-slate-800 font-bold w-3/4 truncate flex items-center gap-2">
+                             <span className={`text-lg font-bold w-3/4 truncate flex items-center gap-2 ${isResting ? 'text-slate-500' : 'text-slate-800'}`}>
                                  {getPairName(match.pairBId)} <Info size={14} className="text-slate-300"/>
                              </span>
                              <span className="text-3xl font-black text-slate-900">{match.scoreB ?? '-'}</span>
                         </div>
 
-                        {!match.isFinished && (
+                        {!match.isFinished && !isResting && (
                             <button 
                                 onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)}
                                 className="w-full mt-6 py-4 bg-blue-600 active:bg-blue-700 rounded-xl text-base font-bold text-white shadow-md touch-manipulation"
@@ -314,110 +346,134 @@ const ActiveTournament: React.FC = () => {
                                 Introducir Resultado
                             </button>
                         )}
+                        {isResting && (
+                             <div className="w-full mt-4 py-2 bg-slate-100 rounded-lg text-center text-xs font-bold text-slate-400 uppercase">
+                                 En Espera de Pista
+                             </div>
+                        )}
                     </div>
                 </div>
-            ))
+                );
+            })
         )}
       </div>
 
-      {/* Spacer to ensure last item is visible above floating button */}
-      <div className="h-24"></div>
+      {/* Floating Action Button for Next Round */}
+      <div className="fixed bottom-20 right-4 md:right-8 z-30">
+        <button 
+            onClick={handleNextRoundClick}
+            className={`flex items-center gap-2 px-6 py-4 rounded-full shadow-2xl font-black text-lg transition-all ${allMatchesFinished ? 'bg-emerald-600 text-white hover:bg-emerald-500 animate-bounce' : 'bg-slate-800 text-slate-400 opacity-90'}`}
+        >
+            {state.currentRound >= 7 ? 'Finalizar Torneo' : 'Siguiente Ronda'} <ChevronRight size={24} />
+        </button>
+      </div>
 
-      {/* Next Round Button */}
-      {currentMatches.length > 0 && (
-          <div className="fixed bottom-20 left-0 right-0 p-6 z-50 flex justify-center">
-              <button 
-                onClick={handleNextRoundClick}
-                disabled={!allMatchesFinished}
-                className={`flex items-center gap-3 px-10 py-5 rounded-full shadow-2xl text-xl font-bold transition-all ${allMatchesFinished ? 'bg-emerald-600 hover:bg-emerald-700 text-white animate-bounce' : 'bg-slate-300 text-slate-500 cursor-not-allowed'}`}
-              >
-                Siguiente Ronda <ChevronRight />
-              </button>
-          </div>
-      )}
-
-      {/* Score Input Modal */}
+      {/* MODAL: INPUT SCORE */}
       {selectedMatchId && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-end md:items-center justify-center sm:p-4">
-              <div className="bg-white rounded-t-3xl md:rounded-3xl p-8 w-full max-w-sm animate-slide-up shadow-2xl">
-                  <h3 className="text-2xl font-bold text-slate-800 mb-8 text-center border-b border-slate-100 pb-4">Resultado Pista {currentMatches.find(m => m.id === selectedMatchId)?.courtId}</h3>
-                  <div className="flex items-center gap-6 mb-8">
-                      <div className="flex-1"><input type="number" inputMode="numeric" className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-4 text-4xl text-center font-black" value={scoreA} onChange={e => setScoreA(e.target.value)} autoFocus /></div>
-                      <span className="text-slate-300 font-bold text-2xl">-</span>
-                      <div className="flex-1"><input type="number" inputMode="numeric" className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-4 text-4xl text-center font-black" value={scoreB} onChange={e => setScoreB(e.target.value)} /></div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                      <button onClick={() => setSelectedMatchId(null)} className="py-4 rounded-xl bg-slate-100 text-slate-600 font-bold text-lg">Cancelar</button>
-                      <button onClick={handleSaveScore} className="py-4 rounded-xl bg-emerald-600 text-white font-bold text-lg shadow-lg">Guardar</button>
-                  </div>
-              </div>
-          </div>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in">
+             <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in">
+                 <div className="text-center mb-6">
+                     <h3 className="text-2xl font-black text-slate-800">Resultado</h3>
+                     <p className="text-slate-500">Introduce el marcador final</p>
+                 </div>
+                 
+                 <div className="flex items-center justify-between gap-4 mb-8">
+                     <div className="flex-1">
+                         <div className="bg-slate-50 rounded-2xl border-2 border-slate-200 p-2 mb-2">
+                             <input 
+                                type="tel" 
+                                value={scoreA} 
+                                onChange={(e) => setScoreA(e.target.value)}
+                                className="w-full bg-transparent text-center text-5xl font-black text-slate-900 outline-none p-2"
+                                autoFocus
+                             />
+                         </div>
+                         <p className="text-xs font-bold text-center text-slate-500 truncate px-1">
+                             {state.matches.find(m => m.id === selectedMatchId) ? getPairName(state.matches.find(m => m.id === selectedMatchId)!.pairAId) : 'P1'}
+                         </p>
+                     </div>
+                     <span className="text-2xl font-black text-slate-300">-</span>
+                     <div className="flex-1">
+                         <div className="bg-slate-50 rounded-2xl border-2 border-slate-200 p-2 mb-2">
+                             <input 
+                                type="tel" 
+                                value={scoreB} 
+                                onChange={(e) => setScoreB(e.target.value)}
+                                className="w-full bg-transparent text-center text-5xl font-black text-slate-900 outline-none p-2"
+                             />
+                         </div>
+                         <p className="text-xs font-bold text-center text-slate-500 truncate px-1">
+                             {state.matches.find(m => m.id === selectedMatchId) ? getPairName(state.matches.find(m => m.id === selectedMatchId)!.pairBId) : 'P2'}
+                         </p>
+                     </div>
+                 </div>
+
+                 <div className="flex gap-3">
+                     <button onClick={() => setSelectedMatchId(null)} className="flex-1 py-4 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors">Cancelar</button>
+                     <button onClick={handleSaveScore} className="flex-1 py-4 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg transition-colors">Guardar</button>
+                 </div>
+             </div>
+        </div>
       )}
 
-      {/* Next Match Info Modal */}
+      {/* MODAL: NEXT MATCH INFO */}
       {nextMatchInfo && (
-          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[70] flex items-center justify-center p-6" onClick={handleCloseInfoModal}>
-              <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-slide-up text-center" onClick={e => e.stopPropagation()}>
-                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600"><Info size={24} /></div>
-                  <h3 className="text-xl font-black text-slate-900 mb-2">Próximo Partido</h3>
-                  <div className="space-y-4 mt-6">
-                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100"><div className="font-bold text-slate-800 text-lg mb-1">{nextMatchInfo.pA}</div><div className="text-emerald-600 font-black uppercase tracking-wide">{nextMatchInfo.nextCourtA}</div></div>
-                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100"><div className="font-bold text-slate-800 text-lg mb-1">{nextMatchInfo.pB}</div><div className="text-emerald-600 font-black uppercase tracking-wide">{nextMatchInfo.nextCourtB}</div></div>
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600">
+                      <Info size={32} />
                   </div>
-                  <button onClick={handleCloseInfoModal} className="w-full mt-6 py-4 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Entendido</button>
+                  <h3 className="text-xl font-black text-slate-900 mb-4">Próximos Partidos</h3>
+                  
+                  <div className="space-y-3 mb-6 text-left">
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                          <p className="text-xs font-bold text-slate-400 uppercase mb-1">Pareja 1</p>
+                          <div className="font-bold text-slate-800">{nextMatchInfo.pA}</div>
+                          <div className="text-emerald-600 font-bold text-sm mt-1">➜ {nextMatchInfo.nextCourtA}</div>
+                      </div>
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                          <p className="text-xs font-bold text-slate-400 uppercase mb-1">Pareja 2</p>
+                          <div className="font-bold text-slate-800">{nextMatchInfo.pB}</div>
+                          <div className="text-emerald-600 font-bold text-sm mt-1">➜ {nextMatchInfo.nextCourtB}</div>
+                      </div>
+                  </div>
+
+                  <button onClick={handleCloseInfoModal} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Continuar</button>
               </div>
           </div>
       )}
 
-      {/* Confirmation Modal (Replaces window.confirm) */}
+      {/* MODAL: ROUND CONFIRM */}
       {showRoundConfirm && (
-          <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[80] flex items-center justify-center p-6">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
               <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-scale-in text-center">
-                  <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6 text-orange-600">
-                      <AlertTriangle size={32} />
+                  <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-600 animate-pulse">
+                      <Play size={40} fill="currentColor" />
                   </div>
                   <h3 className="text-2xl font-black text-slate-900 mb-2">¿Avanzar Ronda?</h3>
-                  <p className="text-slate-500 text-base mb-8 leading-relaxed">
-                      Se cerrará la ronda actual. Asegúrate de que todos los resultados son correctos.
+                  <p className="text-slate-500 mb-8">
+                      Se generarán los siguientes partidos. Asegúrate de que todos los resultados estén correctos.
                   </p>
                   <div className="grid grid-cols-1 gap-3">
-                      <button 
-                        onClick={confirmNextRound}
-                        className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold text-lg shadow-lg hover:bg-emerald-700 transition-colors"
-                      >
-                          Sí, Avanzar
+                      <button onClick={confirmNextRound} className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg transition-transform active:scale-95">
+                          Confirmar y Avanzar
                       </button>
-                      <button 
-                        onClick={() => setShowRoundConfirm(false)}
-                        className="w-full py-4 bg-slate-100 text-slate-600 rounded-xl font-bold text-lg hover:bg-slate-200 transition-colors"
-                      >
-                          Cancelar
+                      <button onClick={() => setShowRoundConfirm(false)} className="w-full py-4 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200">
+                          Revisar Resultados
                       </button>
                   </div>
               </div>
           </div>
       )}
 
-       {/* ERROR MODAL (Reused logic for Active View) */}
-       {errorMessage && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
-                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600">
-                      <AlertTriangle size={32} />
-                  </div>
-                  <h3 className="text-xl font-black text-slate-900 mb-2">Error</h3>
-                  <p className="text-slate-500 mb-6 text-sm break-words">{errorMessage}</p>
-                  <button onClick={() => setErrorMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Entendido</button>
-              </div>
-          </div>
-      )}
-
-      {/* Pair Detail Modal */}
+      {/* MODAL: PAIR DETAILS */}
       {selectedPairId && (
-          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[70] flex items-center justify-center p-6" onClick={() => setSelectedPairId(null)}>
-              <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-slide-up" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center sm:p-4">
+              <div className="bg-white rounded-t-3xl sm:rounded-3xl p-6 w-full max-w-md shadow-2xl animate-slide-up h-[80vh] sm:h-auto flex flex-col">
+                  <div className="flex justify-end mb-2">
+                      <button onClick={() => setSelectedPairId(null)} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"><X size={20}/></button>
+                  </div>
                   <PairDetailContent pairId={selectedPairId} />
-                  <button onClick={() => setSelectedPairId(null)} className="w-full mt-6 py-4 bg-slate-100 text-slate-600 rounded-xl font-bold">Cerrar</button>
               </div>
           </div>
       )}
