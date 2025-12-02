@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useTournament, GenerationMethod } from '../store/TournamentContext';
 import { useTimer } from '../store/TimerContext';
-import { Square, ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock } from 'lucide-react';
+import { Square, ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock, Shuffle } from 'lucide-react';
 import { Player } from '../types';
+import { useNavigate } from 'react-router-dom';
 
 const ActiveTournament: React.FC = () => {
   const { state, updateScoreDB, nextRoundDB, startTournamentDB, formatPlayerName } = useTournament();
   const { resetTimer, startTimer } = useTimer();
+  const navigate = useNavigate();
   
   // --- STATE ---
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
@@ -18,8 +20,8 @@ const ActiveTournament: React.FC = () => {
   const [showRoundConfirm, setShowRoundConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
-  // Logic Change: Generation Method State
-  const [generationMethod, setGenerationMethod] = useState<GenerationMethod>('elo');
+  // Logic Change: Generation Method State defaults to 'elo-balanced'
+  const [generationMethod, setGenerationMethod] = useState<GenerationMethod>('elo-balanced');
 
   // --- DATA FILTERING ---
   const currentMatches = state.matches.filter(m => m.round === state.currentRound);
@@ -57,6 +59,11 @@ const ActiveTournament: React.FC = () => {
   // --- HANDLERS ---
 
   const handleStart = async () => {
+      if (generationMethod === 'manual') {
+          // Redirect to Registration for manual setup as it requires the wizard UI
+          navigate('/registration');
+          return;
+      }
       try {
           await startTournamentDB(generationMethod);
           resetTimer(); 
@@ -192,18 +199,22 @@ const ActiveTournament: React.FC = () => {
               {canStart && (
                   <div className="w-full max-w-xs space-y-2">
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Configurar Grupos</p>
-                      <div className="grid grid-cols-3 gap-2">
-                          <button onClick={() => setGenerationMethod('arrival')} className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${generationMethod === 'arrival' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm' : 'border-slate-100 text-slate-400 bg-white hover:border-slate-200'}`}>
-                              <Clock size={20} className="mb-1"/>
-                              <span className="text-[10px] font-bold uppercase">Llegada</span>
+                      <div className="grid grid-cols-4 gap-2">
+                          <button onClick={() => setGenerationMethod('arrival')} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${generationMethod === 'arrival' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400 bg-white'}`}>
+                              <Clock size={18} className="mb-1"/>
+                              <span className="text-[9px] font-bold uppercase text-center leading-tight">Llegada</span>
                           </button>
-                          <button onClick={() => setGenerationMethod('manual')} className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${generationMethod === 'manual' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm' : 'border-slate-100 text-slate-400 bg-white hover:border-slate-200'}`}>
-                              <ListOrdered size={20} className="mb-1"/>
-                              <span className="text-[10px] font-bold uppercase">Manual</span>
+                          <button onClick={() => setGenerationMethod('manual')} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${generationMethod === 'manual' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400 bg-white'}`}>
+                              <ListOrdered size={18} className="mb-1"/>
+                              <span className="text-[9px] font-bold uppercase text-center leading-tight">Manual</span>
                           </button>
-                          <button onClick={() => setGenerationMethod('elo')} className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${generationMethod === 'elo' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm' : 'border-slate-100 text-slate-400 bg-white hover:border-slate-200'}`}>
-                              <TrendingUp size={20} className="mb-1"/>
-                              <span className="text-[10px] font-bold uppercase">Por ELO</span>
+                          <button onClick={() => setGenerationMethod('elo-balanced')} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${generationMethod === 'elo-balanced' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400 bg-white'}`}>
+                              <TrendingUp size={18} className="mb-1"/>
+                              <span className="text-[9px] font-bold uppercase text-center leading-tight">Nivel</span>
+                          </button>
+                          <button onClick={() => setGenerationMethod('elo-mixed')} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${generationMethod === 'elo-mixed' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400 bg-white'}`}>
+                              <Shuffle size={18} className="mb-1"/>
+                              <span className="text-[9px] font-bold uppercase text-center leading-tight">Mix</span>
                           </button>
                       </div>
                   </div>

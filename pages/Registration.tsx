@@ -1,12 +1,114 @@
 import React, { useState } from 'react';
 import { useTournament, TOURNAMENT_CATEGORIES, GenerationMethod, getPairElo } from '../store/TournamentContext';
-import { Users, Trash2, Edit2, Plus, Search, Check, Save, User, X, AlertTriangle, TrendingUp, ListOrdered, Clock, Activity } from 'lucide-react';
-import { Player } from '../types';
+import { Users, Trash2, Edit2, Plus, Search, Check, Save, User, X, AlertTriangle, TrendingUp, ListOrdered, Clock, Shuffle, CheckCircle } from 'lucide-react';
+import { Player, Pair } from '../types';
 
 type ViewMode = 'menu' | 'pair-form';
 
+// --- MANUAL WIZARD COMPONENT ---
+interface WizardProps {
+    pairs: Pair[];
+    players: Player[];
+    onComplete: (orderedPairs: Pair[]) => void;
+    onCancel: () => void;
+    formatName: (p?: Player) => string;
+}
+
+const ManualGroupingWizard: React.FC<WizardProps> = ({ pairs, players, onComplete, onCancel, formatName }) => {
+    const [currentGroupIdx, setCurrentGroupIdx] = useState(0); // 0=A, 1=B, 2=C, 3=D
+    const [orderedPairs, setOrderedPairs] = useState<Pair[]>([]);
+    
+    const groups = ['A', 'B', 'C', 'D'];
+    const currentGroup = groups[currentGroupIdx];
+    
+    // Parejas ya asignadas a grupos anteriores
+    const assignedIds = new Set(orderedPairs.map(p => p.id));
+    // Parejas disponibles para asignar
+    const availablePairs = pairs.filter(p => !assignedIds.has(p.id));
+    
+    // Selección temporal para el grupo actual
+    const [selectedForGroup, setSelectedForGroup] = useState<string[]>([]);
+
+    const toggleSelection = (id: string) => {
+        if (selectedForGroup.includes(id)) {
+            setSelectedForGroup(selectedForGroup.filter(pid => pid !== id));
+        } else {
+            if (selectedForGroup.length < 4) {
+                setSelectedForGroup([...selectedForGroup, id]);
+            }
+        }
+    };
+
+    const confirmGroup = () => {
+        if (selectedForGroup.length !== 4) return;
+        
+        // Añadir las seleccionadas al orden final
+        const newGroupPairs = selectedForGroup.map(id => pairs.find(p => p.id === id)!);
+        const newOrder = [...orderedPairs, ...newGroupPairs];
+        setOrderedPairs(newOrder);
+        setSelectedForGroup([]);
+
+        if (currentGroupIdx < 3) {
+            setCurrentGroupIdx(currentGroupIdx + 1);
+        } else {
+            // Finalizado
+            onComplete(newOrder);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[100] flex flex-col items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-6 w-full max-w-lg shadow-2xl h-[85vh] flex flex-col">
+                <div className="text-center mb-4">
+                    <h3 className="text-2xl font-black text-slate-900">Configurar Grupo {currentGroup}</h3>
+                    <p className="text-slate-500 text-sm">Selecciona 4 parejas de la lista</p>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto pr-2 space-y-2 mb-4 custom-scrollbar">
+                    {availablePairs.map(pair => {
+                        const p1 = players.find(p => p.id === pair.player1Id);
+                        const p2 = players.find(p => p.id === pair.player2Id);
+                        const isSelected = selectedForGroup.includes(pair.id);
+                        
+                        return (
+                            <div 
+                                key={pair.id} 
+                                onClick={() => toggleSelection(pair.id)}
+                                className={`p-3 rounded-xl border-2 flex justify-between items-center cursor-pointer transition-all ${isSelected ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 bg-white hover:border-slate-300'}`}
+                            >
+                                <div>
+                                    <div className="font-bold text-slate-800 text-sm">{formatName(p1)}</div>
+                                    <div className="font-bold text-slate-800 text-sm">& {formatName(p2)}</div>
+                                </div>
+                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
+                                    {isSelected && <Check size={14} className="text-white" strokeWidth={3}/>}
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+
+                <div className="flex flex-col gap-3 pt-4 border-t border-slate-100">
+                    <div className="text-center font-bold text-emerald-600 mb-2">
+                        Seleccionadas: {selectedForGroup.length} / 4
+                    </div>
+                    <button 
+                        onClick={confirmGroup}
+                        disabled={selectedForGroup.length !== 4}
+                        className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-2 ${selectedForGroup.length === 4 ? 'bg-emerald-600 text-white animate-pulse' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                    >
+                        {currentGroupIdx === 3 ? 'Finalizar y Empezar' : `Confirmar Grupo ${currentGroup} >`}
+                    </button>
+                    <button onClick={onCancel} className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- MAIN COMPONENT ---
+
 const Registration: React.FC = () => {
-  // IMPORTANTE: Extraemos formatPlayerName del contexto global
   const { state, addPlayerToDB, createPairInDB, updatePairDB, deletePairDB, startTournamentDB, formatPlayerName } = useTournament();
   const [viewMode, setViewMode] = useState<ViewMode>('menu');
 
@@ -17,13 +119,13 @@ const Registration: React.FC = () => {
   // MODAL STATES
   const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
+  const [showManualWizard, setShowManualWizard] = useState(false);
   
-  // LOGIC CHANGE: Generation Method State
-  const [generationMethod, setGenerationMethod] = useState<GenerationMethod>('elo');
+  // Logic Change: Generation Method State
+  const [generationMethod, setGenerationMethod] = useState<GenerationMethod>('elo-balanced');
 
   const activePairs = state.pairs || [];
 
-  // --- LOGIC: FILTER ALREADY ASSIGNED PLAYERS ---
   const assignedPlayerIds = activePairs.reduce((acc, pair) => {
       if (isEditingPairId && pair.id === isEditingPairId) return acc;
       if (pair.player1Id) acc.add(pair.player1Id);
@@ -91,7 +193,6 @@ const Registration: React.FC = () => {
                               <input placeholder="Nombre completo" value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-emerald-500 text-slate-800 placeholder:text-slate-400" autoFocus />
                               <input placeholder="Apodo (opcional)" value={newPlayer.nickname} onChange={e => setNewPlayer({...newPlayer, nickname: e.target.value})} className="w-full p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-emerald-500 text-slate-800 placeholder:text-slate-400" />
                               
-                              {/* New: Manual Rating Slider */}
                               <div className="bg-slate-100 p-3 rounded-lg border border-slate-200">
                                   <div className="flex justify-between items-center mb-1">
                                     <label className="text-[10px] font-bold text-slate-500 uppercase">Nivel (ELO Manual)</label>
@@ -130,7 +231,6 @@ const Registration: React.FC = () => {
           await createPairInDB(selectedP1, selectedP2);
       }
       
-      // Reset
       setSelectedP1(''); setSelectedP2(''); setIsEditingPairId(null);
       setViewMode('menu');
   };
@@ -151,15 +251,30 @@ const Registration: React.FC = () => {
       }
   };
   
-  const handleStartTournament = async () => {
-      try {
-          await startTournamentDB(generationMethod);
-      } catch (e: any) {
-          setAlertMessage(e.message || "Error al iniciar el torneo.");
+  const handleStartClick = async () => {
+      if (generationMethod === 'manual') {
+          // Si es manual, abrimos el Wizard en lugar de empezar directamente
+          setShowManualWizard(true);
+      } else {
+          try {
+              await startTournamentDB(generationMethod);
+          } catch (e: any) {
+              setAlertMessage(e.message || "Error al iniciar el torneo.");
+          }
       }
   };
 
-  const canStart = activePairs.length === 16;
+  const handleManualWizardComplete = async (orderedPairs: Pair[]) => {
+      setShowManualWizard(false);
+      try {
+          // Llamamos a start pasando el orden custom
+          await startTournamentDB('manual', orderedPairs);
+      } catch (e: any) {
+          setAlertMessage(e.message || "Error al iniciar el torneo manual.");
+      }
+  };
+
+  const canStart = activePairs.filter(p => !p.isReserve).length === 16;
 
   const PairList = ({ pairs, title, colorClass }: { pairs: any[], title: string, colorClass: string }) => (
       <div className="mt-8">
@@ -184,9 +299,8 @@ const Registration: React.FC = () => {
                             </div>
                             
                             <div className="flex items-center gap-3">
-                                {/* ELO Display Badge */}
                                 <div className="flex flex-col items-center justify-center bg-slate-50 px-2 py-1 rounded border border-slate-100 min-w-[50px]">
-                                    <span className="text-[10px] text-slate-400 uppercase font-bold flex items-center gap-1"><Activity size={8}/> ELO</span>
+                                    <span className="text-[10px] text-slate-400 uppercase font-bold flex items-center gap-1"><TrendingUp size={8}/> ELO</span>
                                     <span className="text-xs font-black text-slate-700">{pairElo}</span>
                                 </div>
 
@@ -207,7 +321,7 @@ const Registration: React.FC = () => {
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
         <div><h2 className="text-2xl font-bold text-slate-900">Registro</h2><p className="text-sm text-slate-500">Gestión de Inscripciones</p></div>
-        <div className={`flex flex-col items-end ${activePairs.length === 16 ? 'text-emerald-600' : 'text-blue-600'}`}><span className="text-4xl font-bold">{activePairs.length}<span className="text-xl text-slate-300">/16</span></span></div>
+        <div className={`flex flex-col items-end ${activePairs.filter(p => !p.isReserve).length === 16 ? 'text-emerald-600' : 'text-blue-600'}`}><span className="text-4xl font-bold">{activePairs.filter(p => !p.isReserve).length}<span className="text-xl text-slate-300">/16</span></span></div>
       </div>
 
       {viewMode === 'menu' && (
@@ -219,34 +333,35 @@ const Registration: React.FC = () => {
 
             <PairList pairs={activePairs.filter(p => !p.isReserve)} title="Parejas Confirmadas" colorClass="text-emerald-600" />
             
-            {/* Mostrar lista de reservas si hay */}
             {activePairs.filter(p => p.isReserve).length > 0 && (
                  <PairList pairs={activePairs.filter(p => p.isReserve)} title="Reservas" colorClass="text-orange-500" />
             )}
 
             {state.status === 'setup' && (
-                // FIX: Changed bottom-0 to bottom-[80px] to sit above the navigation bar
-                // FIX: Added z-30 to be under menu (z-40) or interact correctly if stacked
                 <div className="fixed bottom-[80px] left-0 right-0 px-4 z-30 pointer-events-none">
                     <div className="max-w-3xl mx-auto pointer-events-auto bg-white/95 backdrop-blur-md p-4 rounded-2xl border border-slate-200 shadow-[0_-5px_20px_rgba(0,0,0,0.1)]">
                         {canStart && (
-                             <div className="grid grid-cols-3 gap-2 mb-3">
-                                <button onClick={() => setGenerationMethod('arrival')} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${generationMethod === 'arrival' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400'}`}>
-                                    <Clock size={20} className="mb-1"/>
-                                    <span className="text-[10px] font-bold uppercase">Llegada</span>
+                             <div className="grid grid-cols-4 gap-2 mb-3">
+                                <button onClick={() => setGenerationMethod('arrival')} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${generationMethod === 'arrival' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400 bg-white'}`}>
+                                    <Clock size={18} className="mb-1"/>
+                                    <span className="text-[9px] font-bold uppercase text-center leading-tight">Llegada</span>
                                 </button>
-                                <button onClick={() => setGenerationMethod('manual')} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${generationMethod === 'manual' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400'}`}>
-                                    <ListOrdered size={20} className="mb-1"/>
-                                    <span className="text-[10px] font-bold uppercase">Manual</span>
+                                <button onClick={() => setGenerationMethod('manual')} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${generationMethod === 'manual' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400 bg-white'}`}>
+                                    <ListOrdered size={18} className="mb-1"/>
+                                    <span className="text-[9px] font-bold uppercase text-center leading-tight">Manual</span>
                                 </button>
-                                <button onClick={() => setGenerationMethod('elo')} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${generationMethod === 'elo' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400'}`}>
-                                    <TrendingUp size={20} className="mb-1"/>
-                                    <span className="text-[10px] font-bold uppercase">Por ELO</span>
+                                <button onClick={() => setGenerationMethod('elo-balanced')} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${generationMethod === 'elo-balanced' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400 bg-white'}`}>
+                                    <TrendingUp size={18} className="mb-1"/>
+                                    <span className="text-[9px] font-bold uppercase text-center leading-tight">Nivel</span>
+                                </button>
+                                <button onClick={() => setGenerationMethod('elo-mixed')} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${generationMethod === 'elo-mixed' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400 bg-white'}`}>
+                                    <Shuffle size={18} className="mb-1"/>
+                                    <span className="text-[9px] font-bold uppercase text-center leading-tight">Mix</span>
                                 </button>
                              </div>
                         )}
                         <button 
-                            onClick={handleStartTournament}
+                            onClick={handleStartClick}
                             disabled={!canStart}
                             className={`w-full py-4 rounded-2xl font-bold shadow-xl text-xl transition-all ${canStart ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white animate-pulse active:scale-95' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
                         >
@@ -261,28 +376,23 @@ const Registration: React.FC = () => {
       {viewMode === 'pair-form' && (
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-lg animate-slide-up">
               <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2"><Users className="text-emerald-600"/>{isEditingPairId ? 'Editar Pareja' : 'Nueva Pareja'}</h3>
-              
-              {/* Passed "otherSelectedId" prop to allow mutual exclusion */}
               <PlayerSelector 
                 label="JUGADOR 1" 
                 selectedId={selectedP1} 
                 onSelect={setSelectedP1} 
                 otherSelectedId={selectedP2}
               />
-              
               <div className="flex justify-center items-center gap-4 my-6">
                   <div className="h-px bg-slate-200 flex-1"></div>
                   <span className="bg-slate-100 text-slate-400 text-xs px-3 py-1 rounded-full font-bold border border-slate-200">&</span>
                   <div className="h-px bg-slate-200 flex-1"></div>
               </div>
-
               <PlayerSelector 
                 label="JUGADOR 2" 
                 selectedId={selectedP2} 
                 onSelect={setSelectedP2} 
                 otherSelectedId={selectedP1}
               />
-
               <div className="flex gap-3 mt-8 pt-4 border-t border-slate-100">
                   <button onClick={() => setViewMode('menu')} className="flex-1 py-4 bg-slate-100 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-colors">Cancelar</button>
                   <button onClick={handleSavePair} className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-colors active:scale-95"><Save size={20} /> Guardar Pareja</button>
@@ -290,7 +400,6 @@ const Registration: React.FC = () => {
           </div>
       )}
       
-      {/* DELETE CONFIRMATION MODAL */}
       {showDeleteModal && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
               <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
@@ -307,7 +416,6 @@ const Registration: React.FC = () => {
           </div>
       )}
 
-      {/* ALERT MODAL (Replaces window.alert) */}
       {alertMessage && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
               <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
@@ -319,6 +427,16 @@ const Registration: React.FC = () => {
                   <button onClick={() => setAlertMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Entendido</button>
               </div>
           </div>
+      )}
+
+      {showManualWizard && (
+          <ManualGroupingWizard 
+            pairs={activePairs.filter(p => !p.isReserve)} 
+            players={state.players}
+            onCancel={() => setShowManualWizard(false)}
+            onComplete={handleManualWizardComplete}
+            formatName={formatPlayerName}
+          />
       )}
     </div>
   );
