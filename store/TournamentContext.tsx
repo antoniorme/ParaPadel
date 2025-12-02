@@ -578,7 +578,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         let playoffMatches: Partial<Match>[] = [];
 
         // 1. FASE DE GRUPOS (Rondas 1, 2, 3 -> Avanzar simplemente)
-        // Los partidos ya fueron creados al inicio, solo subimos el contador.
         if (state.currentRound < 4) {
              if (isOfflineMode) {
                  dispatch({ type: 'SET_STATE', payload: { currentRound: nextR } });
@@ -590,6 +589,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
              return;
         }
 
+        // 2. GENERAR CUARTOS DE FINAL (Ronda 5)
         if (state.currentRound === 4) {
             const pairsWithStats = recalculateStats(state.pairs, state.matches);
             const rankingsA = getRankedPairsForGroup(pairsWithStats, state.groups, 'A');
@@ -604,55 +604,100 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             playoffMatches.push({ round: 5, bracket: 'main', phase: 'qf', courtId: 3, pairAId: safeGet(rankingsB, 0).id, pairBId: safeGet(rankingsD, 1).id }); 
             playoffMatches.push({ round: 5, bracket: 'main', phase: 'qf', courtId: 4, pairAId: safeGet(rankingsD, 0).id, pairBId: safeGet(rankingsB, 1).id }); 
 
-            // CONSOLACION: Usamos Pista 0 para los partidos que no caben (Solo hay 6 pistas)
+            // CONSOLACION: Turno 1 (Pista 5 y 6)
             playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 5, pairAId: safeGet(rankingsA, 2).id, pairBId: safeGet(rankingsC, 3).id }); 
             playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 6, pairAId: safeGet(rankingsC, 2).id, pairBId: safeGet(rankingsA, 3).id }); 
-            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 0, pairAId: safeGet(rankingsB, 2).id, pairBId: safeGet(rankingsD, 3).id }); // Pista 0: Espera
-            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 0, pairAId: safeGet(rankingsD, 2).id, pairBId: safeGet(rankingsB, 3).id }); // Pista 0: Espera
+            // CONSOLACION: En Espera (Pista 0) - Se jugarán en el Turno 2 (Ronda 6)
+            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 0, pairAId: safeGet(rankingsB, 2).id, pairBId: safeGet(rankingsD, 3).id }); 
+            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 0, pairAId: safeGet(rankingsD, 2).id, pairBId: safeGet(rankingsB, 3).id }); 
         }
 
+        // 3. GENERAR SEMIS MAIN + CUARTOS CONSOLACIÓN TURNO 2 (Ronda 6)
         else if (state.currentRound === 5) {
-            const qfMatches = state.matches.filter(m => m.round === 5);
+            // A. Mover los partidos de espera de la ronda 5 a la ronda 6 y asignarles pista
+            const waitingMatches = state.matches.filter(m => m.round === 5 && m.courtId === 0);
             
-            const mainQF = qfMatches.filter(m => m.bracket === 'main');
-            const main1 = mainQF.find(m => m.courtId === 1);
-            const main2 = mainQF.find(m => m.courtId === 2);
-            const main3 = mainQF.find(m => m.courtId === 3);
-            const main4 = mainQF.find(m => m.courtId === 4);
+            // Si estamos en online, actualizamos estos partidos en la DB
+            if (waitingMatches.length > 0 && !isOfflineMode) {
+                // Asignamos Pista 3 y 4 (junto a Semis Main en 1 y 2) para agrupar visualmente, o 5 y 6.
+                // Usaremos 3 y 4 para que todo se vea "arriba" en la UI.
+                const updates = [
+                    supabase.from('matches').update({ round: 6, court_id: 3 }).eq('id', waitingMatches[0].id),
+                    waitingMatches[1] ? supabase.from('matches').update({ round: 6, court_id: 4 }).eq('id', waitingMatches[1].id) : Promise.resolve()
+                ];
+                await Promise.all(updates);
+            }
 
-            const wMain1 = main1 ? ((main1.scoreA||0)>(main1.scoreB||0)?main1.pairAId:main1.pairBId) : null;
-            const wMain2 = main2 ? ((main2.scoreA||0)>(main2.scoreB||0)?main2.pairAId:main2.pairBId) : null;
-            const wMain3 = main3 ? ((main3.scoreA||0)>(main3.scoreB||0)?main3.pairAId:main3.pairBId) : null;
-            const wMain4 = main4 ? ((main4.scoreA||0)>(main4.scoreB||0)?main4.pairAId:main4.pairBId) : null;
+            // B. Generar Semis Main (Pista 1 y 2)
+            const qfMatches = state.matches.filter(m => m.round === 5 && m.courtId !== 0);
+            const mainQF = qfMatches.filter(m => m.bracket === 'main');
+            
+            const getWinner = (court: number) => {
+                const m = mainQF.find(m => m.courtId === court);
+                return m ? ((m.scoreA||0)>(m.scoreB||0)?m.pairAId:m.pairBId) : null;
+            };
+
+            const wMain1 = getWinner(1);
+            const wMain2 = getWinner(2);
+            const wMain3 = getWinner(3);
+            const wMain4 = getWinner(4);
 
             if (wMain1 && wMain3) playoffMatches.push({ round: 6, bracket: 'main', phase: 'sf', courtId: 1, pairAId: wMain1, pairBId: wMain3 });
             if (wMain2 && wMain4) playoffMatches.push({ round: 6, bracket: 'main', phase: 'sf', courtId: 2, pairAId: wMain2, pairBId: wMain4 });
-
-            // Consolation Semis: Now they can play on courts 3 and 4 or 5 and 6
-            // We use 3 and 4 since main semis use 1 and 2
-            const consQF = qfMatches.filter(m => m.bracket === 'consolation');
-            if (consQF.length >= 4) {
-                 const getW = (m: Match) => (m.scoreA || 0) > (m.scoreB || 0) ? m.pairAId : m.pairBId;
-                 // Assuming order from generation: 0->Court5, 1->Court6, 2->Court0, 3->Court0
-                 playoffMatches.push({ round: 6, bracket: 'consolation', phase: 'sf', courtId: 3, pairAId: getW(consQF[0]), pairBId: getW(consQF[2]) });
-                 playoffMatches.push({ round: 6, bracket: 'consolation', phase: 'sf', courtId: 4, pairAId: getW(consQF[1]), pairBId: getW(consQF[3]) });
+            
+            // Nota: Los partidos de consolación "en espera" ahora existen en R6 gracias al update anterior, no necesitamos crearlos de nuevo,
+            // pero si estuviéramos en offline mode tendríamos que clonarlos. 
+            if (isOfflineMode) {
+                 waitingMatches.forEach((m, idx) => {
+                     playoffMatches.push({ ...m, round: 6, courtId: 3 + idx, id: `moved-${m.id}` });
+                 });
             }
         }
 
+        // 4. GENERAR FINAL MAIN + SEMIS CONSOLACIÓN (Ronda 7)
         else if (state.currentRound === 6) {
-             const sfMatches = state.matches.filter(m => m.round === 6);
-             const getWinner = (court: number, bracket: string) => {
-                 const m = sfMatches.find(m => m.courtId === court && m.bracket === bracket);
+             // A. Final Main
+             const sfMatches = state.matches.filter(m => m.round === 6 && m.bracket === 'main');
+             const getWinnerSF = (court: number) => {
+                 const m = sfMatches.find(m => m.courtId === court);
                  return m ? ((m.scoreA || 0) > (m.scoreB || 0) ? m.pairAId : m.pairBId) : null;
              };
-
-             const wSF1 = getWinner(1, 'main');
-             const wSF2 = getWinner(2, 'main');
+             const wSF1 = getWinnerSF(1);
+             const wSF2 = getWinnerSF(2);
              if (wSF1 && wSF2) playoffMatches.push({ round: 7, bracket: 'main', phase: 'final', courtId: 1, pairAId: wSF1, pairBId: wSF2 });
 
-             const wSFC1 = getWinner(3, 'consolation');
-             const wSFC2 = getWinner(4, 'consolation');
-             if (wSFC1 && wSFC2) playoffMatches.push({ round: 7, bracket: 'consolation', phase: 'final', courtId: 2, pairAId: wSFC1, pairBId: wSFC2 });
+             // B. Semis Consolación
+             // Necesitamos ganadores de R5 (Cons QF Turno 1) y R6 (Cons QF Turno 2)
+             const consQF_R5 = state.matches.filter(m => m.round === 5 && m.bracket === 'consolation' && m.courtId !== 0);
+             const consQF_R6 = state.matches.filter(m => m.round === 6 && m.bracket === 'consolation'); // Los que movimos antes
+             
+             // Helper para sacar ganador de un array de partidos dado un ID de pista original
+             // En R5 usaron Pistas 5 y 6. En R6 usaron Pistas 3 y 4.
+             const getConsWinner = (matches: Match[], court: number) => {
+                  const m = matches.find(m => m.courtId === court);
+                  return m ? ((m.scoreA || 0) > (m.scoreB || 0) ? m.pairAId : m.pairBId) : null;
+             };
+
+             const wC1 = getConsWinner(consQF_R5, 5); // Ganador QF C1
+             const wC2 = getConsWinner(consQF_R5, 6); // Ganador QF C2
+             const wC3 = getConsWinner(consQF_R6, 3); // Ganador QF C3 (Jugado en R6 Pista 3)
+             const wC4 = getConsWinner(consQF_R6, 4); // Ganador QF C4 (Jugado en R6 Pista 4)
+
+             if (wC1 && wC3) playoffMatches.push({ round: 7, bracket: 'consolation', phase: 'sf', courtId: 2, pairAId: wC1, pairBId: wC3 });
+             if (wC2 && wC4) playoffMatches.push({ round: 7, bracket: 'consolation', phase: 'sf', courtId: 3, pairAId: wC2, pairBId: wC4 });
+        }
+
+        // 5. GENERAR FINAL CONSOLACIÓN (Ronda 8 - Nueva ronda extra)
+        else if (state.currentRound === 7) {
+            const sfCons = state.matches.filter(m => m.round === 7 && m.bracket === 'consolation');
+            const getWinner = (court: number) => {
+                 const m = sfCons.find(m => m.courtId === court);
+                 return m ? ((m.scoreA || 0) > (m.scoreB || 0) ? m.pairAId : m.pairBId) : null;
+             };
+             const wSFC1 = getWinner(2);
+             const wSFC2 = getWinner(3);
+
+             if (wSFC1 && wSFC2) playoffMatches.push({ round: 8, bracket: 'consolation', phase: 'final', courtId: 1, pairAId: wSFC1, pairBId: wSFC2 });
         }
 
         if (playoffMatches.length > 0) {
@@ -663,7 +708,9 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
              }));
              
              if (isOfflineMode) {
-                 const newMatches = [...state.matches, ...playoffMatches.map((m, i) => ({ ...m, id: `po-${Date.now()}-${i}`, scoreA: null, scoreB: null, isFinished: false } as Match))];
+                 // En offline simulamos la mezcla
+                 const keptMatches = state.matches.filter(m => !(m.round === 5 && m.courtId === 0)); // Remove waiting old ones
+                 const newMatches = [...keptMatches, ...playoffMatches.map((m, i) => ({ ...m, id: `po-${Date.now()}-${i}`, scoreA: null, scoreB: null, isFinished: false } as Match))];
                  dispatch({ type: 'SET_STATE', payload: { currentRound: nextR, matches: newMatches } });
              } else {
                  const { error } = await supabase.from('matches').insert(dbMatches);
@@ -681,7 +728,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                  loadData();
              }
         } else {
-             if (state.currentRound >= 7) {
+             if (state.currentRound >= 8) {
                  if(isOfflineMode) {
                      dispatch({ type: 'SET_STATE', payload: { status: 'finished' } });
                  } else {

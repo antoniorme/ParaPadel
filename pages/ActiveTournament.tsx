@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useTournament, GenerationMethod } from '../store/TournamentContext';
 import { useTimer } from '../store/TimerContext';
-import { ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock, Shuffle, Coffee } from 'lucide-react';
-import { Player } from '../types';
+import { ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock, Shuffle, Coffee, CheckCircle, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const ActiveTournament: React.FC = () => {
@@ -14,7 +13,13 @@ const ActiveTournament: React.FC = () => {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [scoreA, setScoreA] = useState('');
   const [scoreB, setScoreB] = useState('');
-  const [nextMatchInfo, setNextMatchInfo] = useState<{ pA: string, nextCourtA: string, pB: string, nextCourtB: string } | null>(null);
+  
+  // Updated Info State to support "Eliminated" status
+  const [nextMatchInfo, setNextMatchInfo] = useState<{ 
+      pA_Name: string, pA_Status: string, pA_Next: string, pA_Won: boolean,
+      pB_Name: string, pB_Status: string, pB_Next: string, pB_Won: boolean
+  } | null>(null);
+
   const [lastEditedMatchId, setLastEditedMatchId] = useState<string | null>(null);
   const [selectedPairId, setSelectedPairId] = useState<string | null>(null);
   const [showRoundConfirm, setShowRoundConfirm] = useState(false);
@@ -29,7 +34,6 @@ const ActiveTournament: React.FC = () => {
   const courtUsage: Record<number, number> = {};
 
   // Ordenar: Pistas 1-6 primero, Pista 0 al final.
-  // Si hay duplicados en pistas físicas, priorizamos cuadro principal.
   const sortedMatches = [...currentMatches].sort((a, b) => {
       // Pista 0 siempre al final
       if (a.courtId === 0 && b.courtId !== 0) return 1;
@@ -41,15 +45,14 @@ const ActiveTournament: React.FC = () => {
           if (a.bracket === 'main' && b.bracket !== 'main') return -1;
           if (b.bracket === 'main' && a.bracket !== 'main') return 1;
       }
-      
       return a.courtId - b.courtId;
   });
 
-  const totalMatches = currentMatches.length;
-  // Solo consideramos finalizados los que tienen pista activa. Los descansos no bloquean, pero deben gestionarse.
-  const finishedMatches = currentMatches.filter(m => m.isFinished && m.courtId !== 0).length;
-  const activeMatchesCount = currentMatches.filter(m => m.courtId !== 0).length;
-  const allMatchesFinished = activeMatchesCount > 0 && activeMatchesCount === finishedMatches;
+  // CORRECCIÓN LÓGICA: Solo contamos los partidos que TIENEN PISTA (CourtId > 0)
+  // Los de Pista 0 (En Espera) se ignoran para avanzar de ronda.
+  const activePlayableMatches = currentMatches.filter(m => m.courtId > 0);
+  const finishedPlayableMatches = activePlayableMatches.filter(m => m.isFinished).length;
+  const allMatchesFinished = activePlayableMatches.length > 0 && activePlayableMatches.length === finishedPlayableMatches;
 
   // --- HELPERS ---
   const getPairName = (id: string) => {
@@ -60,14 +63,6 @@ const ActiveTournament: React.FC = () => {
     const name1 = formatPlayerName ? formatPlayerName(p1) : (p1?.name || 'P1');
     const name2 = formatPlayerName ? formatPlayerName(p2) : (p2?.name || 'P2');
     return `${name1} & ${name2}`;
-  };
-
-  const findNextMatchInfo = (pairId: string, currentRound: number) => {
-      const nextRound = currentRound + 1;
-      const nextMatch = state.matches.find(m => m.round === nextRound && (m.pairAId === pairId || m.pairBId === pairId));
-      if (nextMatch) return `Pista ${nextMatch.courtId}`;
-      if (nextRound <= 4) return "Descansa"; 
-      return "Pendiente"; 
   };
 
   const getPairMatches = (pairId: string) => {
@@ -81,6 +76,62 @@ const ActiveTournament: React.FC = () => {
       if (m.phase === 'sf') return 'Semis';
       if (m.phase === 'final') return 'Final';
       return 'Playoff';
+  };
+
+  // --- PREDICTION LOGIC ---
+  const predictNextRoundInfo = (matchId: string, sA: number, sB: number) => {
+      const match = state.matches.find(m => m.id === matchId);
+      if (!match) return null;
+
+      const pA_Won = sA > sB;
+      const round = state.currentRound;
+      
+      const getNextInfo = (isWinner: boolean, currentCourt: number, bracket: string | null) => {
+          if (!isWinner) return { status: 'Eliminado', next: '' };
+          
+          // Lógica adaptada al desdoble
+          if (round === 7 && bracket === 'main') return { status: '¡CAMPEÓN!', next: '🏆' }; 
+          if (round === 8) return { status: '¡CAMPEÓN!', next: '🏆' };
+
+          if (round === 5) { // QF Main + QF Cons Turno 1
+              if (bracket === 'main') {
+                  if (currentCourt === 1 || currentCourt === 3) return { status: 'Clasificado a Semis', next: 'Pista 1' };
+                  if (currentCourt === 2 || currentCourt === 4) return { status: 'Clasificado a Semis', next: 'Pista 2' };
+              } else {
+                  // Consolación: Ganadores de Turno 1 van a Semis en R7
+                  // Juegan en Pista 2 o 3 en R7
+                  if (currentCourt === 5) return { status: 'Clasificado a Semis', next: 'Pista 2 (R7)' };
+                  if (currentCourt === 6) return { status: 'Clasificado a Semis', next: 'Pista 3 (R7)' };
+              }
+          }
+          
+          if (round === 6) { // SF Main + QF Cons Turno 2
+              if (bracket === 'main') return { status: 'Clasificado a Final', next: 'Pista 1' };
+              // Consolación Turno 2 (Jugados en pistas 3 y 4)
+              if (currentCourt === 3) return { status: 'Clasificado a Semis', next: 'Pista 2 (R7)' };
+              if (currentCourt === 4) return { status: 'Clasificado a Semis', next: 'Pista 3 (R7)' };
+          }
+          
+          if (round === 7 && bracket === 'consolation') {
+              return { status: 'Clasificado a Final', next: 'Pista 1 (R8)' };
+          }
+
+          return { status: 'Clasificado', next: 'Siguiente Ronda' };
+      };
+
+      const infoA = getNextInfo(pA_Won, match.courtId, match.bracket as any);
+      const infoB = getNextInfo(!pA_Won, match.courtId, match.bracket as any);
+
+      return {
+          pA_Name: getPairName(match.pairAId),
+          pA_Status: infoA.status,
+          pA_Next: infoA.next,
+          pA_Won: pA_Won,
+          pB_Name: getPairName(match.pairBId),
+          pB_Status: infoB.status,
+          pB_Next: infoB.next,
+          pB_Won: !pA_Won
+      };
   };
 
   // --- HANDLERS ---
@@ -106,14 +157,9 @@ const ActiveTournament: React.FC = () => {
 
         updateScoreDB(selectedMatchId, valA, valB);
         
-        const match = state.matches.find(m => m.id === selectedMatchId);
-        if (match) {
-            const info = {
-                pA: getPairName(match.pairAId),
-                nextCourtA: findNextMatchInfo(match.pairAId, state.currentRound),
-                pB: getPairName(match.pairBId),
-                nextCourtB: findNextMatchInfo(match.pairBId, state.currentRound)
-            };
+        // Use new prediction logic
+        const info = predictNextRoundInfo(selectedMatchId, valA, valB);
+        if (info) {
             setNextMatchInfo(info);
             setLastEditedMatchId(selectedMatchId);
         }
@@ -130,21 +176,12 @@ const ActiveTournament: React.FC = () => {
 
   const handleCloseInfoModal = () => {
       setNextMatchInfo(null);
-      if (lastEditedMatchId) {
-          const currentIndex = sortedMatches.findIndex(m => m.id === lastEditedMatchId);
-          if (currentIndex !== -1 && currentIndex < sortedMatches.length - 1) {
-              const nextMatch = sortedMatches[currentIndex + 1];
-              if (!nextMatch.isFinished && nextMatch.courtId !== 0) {
-                  // No abrir automáticamente si es descanso
-                  // handleOpenScore(nextMatch.id, nextMatch.scoreA, nextMatch.scoreB);
-              }
-          }
-      }
   };
 
   const handleNextRoundClick = () => {
       if (!allMatchesFinished) {
-          return alert(`Faltan resultados. Solo ${finishedMatches}/${activeMatchesCount} partidos activos finalizados.`);
+          const remaining = activePlayableMatches.length - finishedPlayableMatches;
+          return alert(`No se puede avanzar ronda. Faltan ${remaining} partido(s) activos por finalizar.`);
       }
       setShowRoundConfirm(true);
   };
@@ -152,7 +189,6 @@ const ActiveTournament: React.FC = () => {
   const confirmNextRound = async () => {
       setShowRoundConfirm(false);
       try {
-          console.log("Avanzando ronda...");
           resetTimer(); 
           await nextRoundDB();
       } catch (e: any) {
@@ -287,31 +323,34 @@ const ActiveTournament: React.FC = () => {
             <div className="text-center py-10 text-slate-400 italic">Cargando partidos...</div>
         ) : (
             sortedMatches.map(match => {
-                // LÓGICA DE DESCANSO:
-                // 1. Si courtId es 0
-                // 2. Si courtId > 0 pero YA SE HA USADO para otro partido en esta lista (Duplicado)
-                let isResting = match.courtId === 0;
+                // LÓGICA DE VISUALIZACIÓN
+                // Pista 0 = En Espera (Pero jugable)
+                // Duplicado en Pista > 0 = Descanso Técnico
+                const isWaiting = match.courtId === 0;
+                let isTechnicalRest = false;
                 
-                if (match.courtId > 0) {
-                    if (courtUsage[match.courtId]) {
-                        isResting = true; // Forzamos descanso si la pista ya está ocupada
-                    }
+                if (!isWaiting) {
+                    if (courtUsage[match.courtId]) isTechnicalRest = true;
                     courtUsage[match.courtId] = (courtUsage[match.courtId] || 0) + 1;
                 }
 
+                const isBlocked = isTechnicalRest && !match.isFinished;
+
                 return (
-                <div key={match.id} className={`relative rounded-2xl border overflow-hidden ${isResting ? 'bg-slate-50 border-slate-200 opacity-80' : match.isFinished ? 'border-emerald-200 bg-emerald-50/30' : 'bg-white border-slate-200 shadow-sm'}`}>
-                    <div className={`${isResting ? 'bg-slate-200' : 'bg-slate-100'} px-4 py-2 flex justify-between items-center border-b border-slate-200`}>
-                        <span className={`font-bold text-xs uppercase flex gap-2 items-center ${isResting ? 'text-slate-500' : 'text-slate-700'}`}>
-                            {isResting ? (
-                                <span className="flex items-center gap-1"><Coffee size={14}/> DESCANSO</span>
+                <div key={match.id} className={`relative rounded-2xl border overflow-hidden ${isWaiting ? 'bg-slate-50 border-slate-300' : isBlocked ? 'bg-slate-100 opacity-60' : match.isFinished ? 'border-emerald-200 bg-emerald-50/30' : 'bg-white border-slate-200 shadow-sm'}`}>
+                    <div className={`${isWaiting ? 'bg-slate-200' : 'bg-slate-100'} px-4 py-2 flex justify-between items-center border-b border-slate-200`}>
+                        <span className={`font-bold text-xs uppercase flex gap-2 items-center ${isWaiting ? 'text-slate-600' : 'text-slate-700'}`}>
+                            {isWaiting ? (
+                                <span className="flex items-center gap-1"><Coffee size={14}/> EN ESPERA (Siguiente Turno)</span>
+                            ) : isTechnicalRest ? (
+                                <span className="flex items-center gap-1"><Coffee size={14}/> DESCANSO (Pista {match.courtId})</span>
                             ) : (
                                 `Pista ${match.courtId}`
                             )}
                             {getPhaseLabel(match) && <span className="text-slate-400">- {getPhaseLabel(match)}</span>}
                             {match.bracket === 'consolation' && <span className="text-blue-500">(Consolación)</span>}
                         </span>
-                        {match.isFinished && !isResting && (
+                        {match.isFinished && (
                              <button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className="p-1 text-slate-400 hover:text-blue-500">
                                  <Edit2 size={14} />
                              </button>
@@ -323,7 +362,7 @@ const ActiveTournament: React.FC = () => {
                             className="flex items-center justify-between mb-3 cursor-pointer hover:bg-slate-50 p-1 -mx-1 rounded transition-colors"
                             onClick={() => setSelectedPairId(match.pairAId)}
                         >
-                             <span className={`text-lg font-bold w-3/4 truncate flex items-center gap-2 ${isResting ? 'text-slate-500' : 'text-slate-800'}`}>
+                             <span className={`text-lg font-bold w-3/4 truncate flex items-center gap-2 ${isBlocked ? 'text-slate-400' : 'text-slate-800'}`}>
                                  {getPairName(match.pairAId)} <Info size={14} className="text-slate-300"/>
                              </span>
                              <span className="text-3xl font-black text-slate-900">{match.scoreA ?? '-'}</span>
@@ -332,23 +371,28 @@ const ActiveTournament: React.FC = () => {
                             className="flex items-center justify-between cursor-pointer hover:bg-slate-50 p-1 -mx-1 rounded transition-colors"
                             onClick={() => setSelectedPairId(match.pairBId)}
                         >
-                             <span className={`text-lg font-bold w-3/4 truncate flex items-center gap-2 ${isResting ? 'text-slate-500' : 'text-slate-800'}`}>
+                             <span className={`text-lg font-bold w-3/4 truncate flex items-center gap-2 ${isBlocked ? 'text-slate-400' : 'text-slate-800'}`}>
                                  {getPairName(match.pairBId)} <Info size={14} className="text-slate-300"/>
                              </span>
                              <span className="text-3xl font-black text-slate-900">{match.scoreB ?? '-'}</span>
                         </div>
 
-                        {!match.isFinished && !isResting && (
+                        {!match.isFinished && !isBlocked && !isWaiting && (
                             <button 
                                 onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)}
-                                className="w-full mt-6 py-4 bg-blue-600 active:bg-blue-700 rounded-xl text-base font-bold text-white shadow-md touch-manipulation"
+                                className={`w-full mt-6 py-4 rounded-xl text-base font-bold text-white shadow-md touch-manipulation bg-blue-600 active:bg-blue-700`}
                             >
                                 Introducir Resultado
                             </button>
                         )}
-                        {isResting && (
-                             <div className="w-full mt-4 py-2 bg-slate-100 rounded-lg text-center text-xs font-bold text-slate-400 uppercase">
-                                 En Espera de Pista
+                        {isWaiting && (
+                             <div className="w-full mt-4 py-2 bg-slate-200 rounded-lg text-center text-xs font-bold text-slate-500 uppercase">
+                                 Se juega en la siguiente ronda
+                             </div>
+                        )}
+                        {isBlocked && (
+                             <div className="w-full mt-4 py-2 bg-slate-200 rounded-lg text-center text-xs font-bold text-slate-400 uppercase">
+                                 Pista Ocupada
                              </div>
                         )}
                     </div>
@@ -364,7 +408,7 @@ const ActiveTournament: React.FC = () => {
             onClick={handleNextRoundClick}
             className={`flex items-center gap-2 px-6 py-4 rounded-full shadow-2xl font-black text-lg transition-all ${allMatchesFinished ? 'bg-emerald-600 text-white hover:bg-emerald-500 animate-bounce' : 'bg-slate-800 text-slate-400 opacity-90'}`}
         >
-            {state.currentRound >= 7 ? 'Finalizar Torneo' : 'Siguiente Ronda'} <ChevronRight size={24} />
+            {state.currentRound >= 8 ? 'Finalizar Torneo' : 'Siguiente Ronda'} <ChevronRight size={24} />
         </button>
       </div>
 
@@ -423,18 +467,31 @@ const ActiveTournament: React.FC = () => {
                   <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600">
                       <Info size={32} />
                   </div>
-                  <h3 className="text-xl font-black text-slate-900 mb-4">Próximos Partidos</h3>
+                  <h3 className="text-xl font-black text-slate-900 mb-4">Resultado Playoff</h3>
                   
                   <div className="space-y-3 mb-6 text-left">
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                          <p className="text-xs font-bold text-slate-400 uppercase mb-1">Pareja 1</p>
-                          <div className="font-bold text-slate-800">{nextMatchInfo.pA}</div>
-                          <div className="text-emerald-600 font-bold text-sm mt-1">➜ {nextMatchInfo.nextCourtA}</div>
+                      {/* PAIR A */}
+                      <div className={`p-3 rounded-xl border ${nextMatchInfo.pA_Won ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
+                          <div className="flex justify-between items-center mb-1">
+                              <p className="text-xs font-bold text-slate-400 uppercase">Pareja 1</p>
+                              {nextMatchInfo.pA_Won ? <CheckCircle size={14} className="text-emerald-500"/> : <XCircle size={14} className="text-rose-500"/>}
+                          </div>
+                          <div className="font-bold text-slate-800">{nextMatchInfo.pA_Name}</div>
+                          <div className={`font-bold text-sm mt-1 ${nextMatchInfo.pA_Won ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              {nextMatchInfo.pA_Status} {nextMatchInfo.pA_Next ? `➜ ${nextMatchInfo.pA_Next}` : ''}
+                          </div>
                       </div>
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                          <p className="text-xs font-bold text-slate-400 uppercase mb-1">Pareja 2</p>
-                          <div className="font-bold text-slate-800">{nextMatchInfo.pB}</div>
-                          <div className="text-emerald-600 font-bold text-sm mt-1">➜ {nextMatchInfo.nextCourtB}</div>
+
+                      {/* PAIR B */}
+                      <div className={`p-3 rounded-xl border ${nextMatchInfo.pB_Won ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
+                          <div className="flex justify-between items-center mb-1">
+                              <p className="text-xs font-bold text-slate-400 uppercase">Pareja 2</p>
+                              {nextMatchInfo.pB_Won ? <CheckCircle size={14} className="text-emerald-500"/> : <XCircle size={14} className="text-rose-500"/>}
+                          </div>
+                          <div className="font-bold text-slate-800">{nextMatchInfo.pB_Name}</div>
+                          <div className={`font-bold text-sm mt-1 ${nextMatchInfo.pB_Won ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              {nextMatchInfo.pB_Status} {nextMatchInfo.pB_Next ? `➜ ${nextMatchInfo.pB_Next}` : ''}
+                          </div>
                       </div>
                   </div>
 
@@ -452,7 +509,9 @@ const ActiveTournament: React.FC = () => {
                   </div>
                   <h3 className="text-2xl font-black text-slate-900 mb-2">¿Avanzar Ronda?</h3>
                   <p className="text-slate-500 mb-8">
-                      Se generarán los siguientes partidos. Asegúrate de que todos los resultados estén correctos.
+                      {state.currentRound === 5 
+                        ? "Se activarán las Semifinales del Principal y los partidos de Consolación pendientes."
+                        : "Se generarán los siguientes partidos. Asegúrate de que todos los resultados estén correctos."}
                   </p>
                   <div className="grid grid-cols-1 gap-3">
                       <button onClick={confirmNextRound} className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg transition-transform active:scale-95">
