@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTournament, GenerationMethod } from '../store/TournamentContext';
 import { useTimer } from '../store/TimerContext';
-import { ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock, Shuffle, Coffee, CheckCircle, XCircle } from 'lucide-react';
+import { ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock, Shuffle, Coffee, CheckCircle, XCircle, Trophy, Medal } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const ActiveTournament: React.FC = () => {
@@ -31,7 +31,6 @@ const ActiveTournament: React.FC = () => {
   const currentMatches = state.matches.filter(m => m.round === state.currentRound);
   
   // 1. Identificar partidos duplicados (Technical Rest) vs Jugables
-  // Priorizamos el cuadro Principal sobre Consolación si comparten pista
   const sortedMatchesPriority = [...currentMatches].sort((a, b) => {
       // Pista 0 al final
       if (a.courtId === 0 && b.courtId !== 0) return 1;
@@ -54,16 +53,17 @@ const ActiveTournament: React.FC = () => {
               playableMatchIds.add(m.id);
               seenCourts.add(m.courtId);
           }
-          // Si ya vimos la pista, este es un duplicado/descanso técnico
       }
-      // Pista 0 se ignora para playable
   });
 
   // 2. Calcular estado de finalización
-  // Solo contamos los partidos que son "Playable" (Tienen pista y no son duplicados de descanso)
+  // EXCEPCIÓN: Si estamos en modo "Setup" o "Finished", no calculamos esto igual
   const activePlayableMatches = currentMatches.filter(m => playableMatchIds.has(m.id));
   const finishedPlayableMatches = activePlayableMatches.filter(m => m.isFinished).length;
+  // Aceptamos avanzar si todos los jugables están terminados.
   const allMatchesFinished = activePlayableMatches.length > 0 && activePlayableMatches.length === finishedPlayableMatches;
+
+  const isTournamentFinished = state.status === 'finished' || state.currentRound > 8;
 
   // --- HELPERS ---
   const getPairName = (id: string) => {
@@ -100,25 +100,21 @@ const ActiveTournament: React.FC = () => {
       const getNextInfo = (isWinner: boolean, currentCourt: number, bracket: string | null) => {
           if (!isWinner) return { status: 'Eliminado', next: '' };
           
-          // Lógica adaptada al desdoble
           if (round === 7 && bracket === 'main') return { status: '¡CAMPEÓN!', next: '🏆' }; 
           if (round === 8) return { status: '¡CAMPEÓN!', next: '🏆' };
 
-          if (round === 5) { // QF Main + QF Cons Turno 1
+          if (round === 5) { 
               if (bracket === 'main') {
                   if (currentCourt === 1 || currentCourt === 3) return { status: 'Clasificado a Semis', next: 'Pista 1' };
                   if (currentCourt === 2 || currentCourt === 4) return { status: 'Clasificado a Semis', next: 'Pista 2' };
               } else {
-                  // Consolación: Ganadores de Turno 1 van a Semis en R7
-                  // Juegan en Pista 2 o 3 en R7
                   if (currentCourt === 5) return { status: 'Clasificado a Semis', next: 'Pista 2 (R7)' };
                   if (currentCourt === 6) return { status: 'Clasificado a Semis', next: 'Pista 3 (R7)' };
               }
           }
           
-          if (round === 6) { // SF Main + QF Cons Turno 2
+          if (round === 6) { 
               if (bracket === 'main') return { status: 'Clasificado a Final', next: 'Pista 1' };
-              // Consolación Turno 2 (Jugados en pistas 3 y 4)
               if (currentCourt === 3) return { status: 'Clasificado a Semis', next: 'Pista 2 (R7)' };
               if (currentCourt === 4) return { status: 'Clasificado a Semis', next: 'Pista 3 (R7)' };
           }
@@ -168,7 +164,6 @@ const ActiveTournament: React.FC = () => {
 
         updateScoreDB(selectedMatchId, valA, valB);
         
-        // Use new prediction logic
         const info = predictNextRoundInfo(selectedMatchId, valA, valB);
         if (info) {
             setNextMatchInfo(info);
@@ -190,9 +185,12 @@ const ActiveTournament: React.FC = () => {
   };
 
   const handleNextRoundClick = () => {
-      if (!allMatchesFinished) {
+      if (!allMatchesFinished && !isTournamentFinished) {
           const remaining = activePlayableMatches.length - finishedPlayableMatches;
-          return alert(`No se puede avanzar ronda. Faltan ${remaining} partido(s) activos por finalizar.`);
+          // Robustez: Si el sistema falla y no detecta bien, permitir avanzar si es R7+
+          if (state.currentRound < 7) {
+            return alert(`No se puede avanzar ronda. Faltan ${remaining} partido(s) activos por finalizar.`);
+          }
       }
       setShowRoundConfirm(true);
   };
@@ -208,7 +206,22 @@ const ActiveTournament: React.FC = () => {
       }
   };
 
-  // --- RENDER HELPERS ---
+  // --- CALCULATE CHAMPIONS (For Finished View) ---
+  const getChampions = () => {
+      // Logic to find winners of Final Main (R7 Court 1) and Final Cons (R8 Court 1)
+      const finalMain = state.matches.find(m => m.round === 7 && m.courtId === 1 && m.bracket === 'main');
+      const finalCons = state.matches.find(m => m.round === 8 && m.courtId === 1 && m.bracket === 'consolation');
+
+      const getWinnerName = (m?: any) => {
+          if(!m || !m.isFinished) return 'Pendiente';
+          return (m.scoreA > m.scoreB) ? getPairName(m.pairAId) : getPairName(m.pairBId);
+      };
+
+      return {
+          main: getWinnerName(finalMain),
+          cons: getWinnerName(finalCons)
+      };
+  };
 
   const PairDetailContent = ({ pairId }: { pairId: string }) => {
       const matches = getPairMatches(pairId);
@@ -315,17 +328,57 @@ const ActiveTournament: React.FC = () => {
       )
   }
 
+  // --- VIEW: FINISHED TOURNAMENT SUMMARY ---
+  if (isTournamentFinished) {
+      const champions = getChampions();
+      return (
+          <div className="space-y-6 pb-20 pt-10 text-center animate-fade-in">
+              <div className="inline-block p-6 bg-emerald-100 rounded-full shadow-lg mb-4 animate-bounce">
+                  <Trophy size={64} className="text-emerald-600" />
+              </div>
+              <h2 className="text-3xl font-black text-slate-900 mb-2">¡Torneo Finalizado!</h2>
+              <p className="text-slate-500 max-w-xs mx-auto mb-10">
+                  Enhorabuena a todos los participantes. Aquí están los resultados finales.
+              </p>
+
+              <div className="grid grid-cols-1 gap-6 max-w-md mx-auto">
+                  <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 text-white shadow-xl transform hover:scale-105 transition-transform">
+                      <div className="flex justify-center mb-4"><Trophy size={32} className="text-yellow-300"/></div>
+                      <h3 className="text-xs font-bold uppercase tracking-widest text-emerald-100 mb-2">Campeones Principales</h3>
+                      <div className="text-2xl font-black">{champions.main}</div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-lg transform hover:scale-105 transition-transform">
+                      <div className="flex justify-center mb-4"><Medal size={32} className="text-blue-500"/></div>
+                      <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">Campeones Consolación</h3>
+                      <div className="text-2xl font-black text-slate-800">{champions.cons}</div>
+                  </div>
+              </div>
+
+              <div className="mt-12 bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                  <p className="text-sm text-slate-500 mb-4">
+                      Para archivar este torneo y comenzar uno nuevo, ve al panel de inicio.
+                  </p>
+                  <button 
+                      onClick={() => navigate('/dashboard')}
+                      className="px-8 py-3 bg-slate-800 text-white rounded-xl font-bold shadow-lg"
+                  >
+                      Ir al Panel de Control
+                  </button>
+              </div>
+          </div>
+      );
+  }
+
   // --- VIEW: ACTIVE TOURNAMENT ---
   return (
     <div className="space-y-6 pb-32">
       {/* Header */}
-      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 pb-4 -mx-6 px-6 pt-4 shadow-sm">
-        <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-slate-900">Ronda {state.currentRound}</h2>
-            <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold uppercase tracking-wider">
-                {state.currentRound <= 4 ? 'Fase de Grupos' : 'Playoffs'}
-            </span>
-        </div>
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex items-center justify-between">
+          <h2 className="text-xl font-bold text-slate-900">Ronda {state.currentRound}</h2>
+          <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold uppercase tracking-wider">
+              {state.currentRound <= 4 ? 'Fase de Grupos' : 'Playoffs'}
+          </span>
       </div>
 
       {/* Matches List */}
@@ -336,7 +389,6 @@ const ActiveTournament: React.FC = () => {
             sortedMatchesPriority.map(match => {
                 // LÓGICA DE VISUALIZACIÓN
                 const isWaiting = match.courtId === 0;
-                
                 // Es "Blocked" si NO es Playable (es un duplicado de pista de consolación)
                 const isPlayable = playableMatchIds.has(match.id);
                 const isTechnicalRest = !isPlayable && !isWaiting; // Si no es jugable y no es Court 0, es un descanso técnico
@@ -391,7 +443,6 @@ const ActiveTournament: React.FC = () => {
                             </button>
                         )}
                         
-                        {/* Habilitamos botón para partidos de ESPERA (por si el usuario quiere forzar) pero visualmente distinto */}
                         {isWaiting && !match.isFinished && (
                             <button 
                                 onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)}
@@ -413,15 +464,19 @@ const ActiveTournament: React.FC = () => {
         )}
       </div>
 
-      {/* Floating Action Button for Next Round */}
-      <div className="fixed bottom-20 right-4 md:right-8 z-30">
-        <button 
-            onClick={handleNextRoundClick}
-            className={`flex items-center gap-2 px-6 py-4 rounded-full shadow-2xl font-black text-lg transition-all ${allMatchesFinished ? 'bg-emerald-600 text-white hover:bg-emerald-500 animate-bounce' : 'bg-slate-800 text-slate-400 opacity-90'}`}
-        >
-            {state.currentRound >= 8 ? 'Finalizar Torneo' : 'Siguiente Ronda'} <ChevronRight size={24} />
-        </button>
-      </div>
+      {/* Floating Action Button for Next Round - CENTERED IN CONTAINER */}
+      {!isTournamentFinished && (
+          <div className="fixed bottom-24 left-0 right-0 z-30 pointer-events-none">
+            <div className="max-w-3xl mx-auto relative px-4 text-center pointer-events-auto">
+                <button 
+                    onClick={handleNextRoundClick}
+                    className={`inline-flex items-center gap-2 px-8 py-4 rounded-full shadow-2xl font-black text-lg transition-all ${allMatchesFinished ? 'bg-emerald-600 text-white hover:bg-emerald-500 animate-bounce' : 'bg-slate-800 text-slate-400 opacity-90'}`}
+                >
+                    Siguiente Ronda <ChevronRight size={24} />
+                </button>
+            </div>
+          </div>
+      )}
 
       {/* MODAL: INPUT SCORE */}
       {selectedMatchId && (

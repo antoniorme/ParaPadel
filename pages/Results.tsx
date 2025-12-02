@@ -3,8 +3,8 @@ import { useTournament } from '../store/TournamentContext';
 import { Trophy, Grid, GitMerge, ArrowLeft, Edit2 } from 'lucide-react';
 
 const Results: React.FC = () => {
-  const { state, updateScoreDB, formatPlayerName } = useTournament(); // Use global helper
-  // CHANGE: Default to bracket if in Playoffs (Round > 4)
+  const { state, updateScoreDB, formatPlayerName } = useTournament();
+  // Default to bracket if in Playoffs (Round > 4)
   const [tab, setTab] = useState<'groups' | 'bracket'>(state.currentRound > 4 ? 'bracket' : 'groups');
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [editMatchId, setEditMatchId] = useState<string | null>(null);
@@ -35,15 +35,18 @@ const Results: React.FC = () => {
 
       return (
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden mb-2">
-            <div className="bg-slate-50 px-3 py-1 text-[10px] font-bold text-slate-400 uppercase border-b border-slate-100">{title}</div>
+            <div className="bg-slate-50 px-3 py-1 text-[10px] font-bold text-slate-400 uppercase border-b border-slate-100 flex justify-between">
+                <span>{title}</span>
+                {hasResult && <span className="text-slate-500">{scoreA} - {scoreB}</span>}
+            </div>
             <div className="p-3 text-sm">
                 <div className={`flex justify-between p-1 rounded ${winner === 'p1' ? 'bg-emerald-50' : ''}`}>
-                    <span className={`font-medium ${winner === 'p1' ? 'text-emerald-700 font-bold' : 'text-slate-600'}`}>{p1}</span>
-                    {winner === 'p1' && <Trophy size={14} className="text-emerald-500"/>}
+                    <span className={`font-medium truncate ${winner === 'p1' ? 'text-emerald-700 font-bold' : 'text-slate-600'}`}>{p1}</span>
+                    {winner === 'p1' && <Trophy size={14} className="text-emerald-500 flex-shrink-0"/>}
                 </div>
                 <div className={`flex justify-between mt-1 p-1 rounded ${winner === 'p2' ? 'bg-emerald-50' : ''}`}>
-                    <span className={`font-medium ${winner === 'p2' ? 'text-emerald-700 font-bold' : 'text-slate-600'}`}>{p2}</span>
-                    {winner === 'p2' && <Trophy size={14} className="text-emerald-500"/>}
+                    <span className={`font-medium truncate ${winner === 'p2' ? 'text-emerald-700 font-bold' : 'text-slate-600'}`}>{p2}</span>
+                    {winner === 'p2' && <Trophy size={14} className="text-emerald-500 flex-shrink-0"/>}
                 </div>
             </div>
         </div>
@@ -57,9 +60,17 @@ const Results: React.FC = () => {
       return pair ? getPairName(pair.id) : `?`;
   };
 
-  const getMatchData = (idSuffix: string) => {
-      return { scoreA: null, scoreB: null };
-  }
+  // Helper to find match data by round/court or ID
+  const getMatchData = (round: number, courtId: number) => {
+      const m = state.matches.find(m => m.round === round && m.courtId === courtId);
+      if (!m) return { p1: '?', p2: '?', scoreA: null, scoreB: null };
+      return {
+          p1: getPairName(m.pairAId),
+          p2: getPairName(m.pairBId),
+          scoreA: m.scoreA,
+          scoreB: m.scoreB
+      };
+  };
 
   const handleSaveEdit = () => {
       if (editMatchId && scoreA !== '' && scoreB !== '') {
@@ -122,6 +133,31 @@ const Results: React.FC = () => {
       );
   }
 
+  // --- BRACKET DATA PREP ---
+  // Main Bracket
+  const qf1 = { ...getMatchData(5, 1), p1: getGroupPosName('A',1), p2: getGroupPosName('C',2) };
+  const qf2 = { ...getMatchData(5, 2), p1: getGroupPosName('C',1), p2: getGroupPosName('A',2) };
+  const qf3 = { ...getMatchData(5, 3), p1: getGroupPosName('B',1), p2: getGroupPosName('D',2) };
+  const qf4 = { ...getMatchData(5, 4), p1: getGroupPosName('D',1), p2: getGroupPosName('B',2) };
+  
+  const sf1 = getMatchData(6, 1);
+  const sf2 = getMatchData(6, 2);
+  const finalMain = getMatchData(7, 1);
+
+  // Consolation Bracket
+  // QF Cons Turno 1 (R5)
+  const qfC1 = { ...getMatchData(5, 5), p1: getGroupPosName('A',3), p2: getGroupPosName('C',4) };
+  const qfC2 = { ...getMatchData(5, 6), p1: getGroupPosName('C',3), p2: getGroupPosName('A',4) };
+  // QF Cons Turno 2 (R6) - We look for matches in R6 with courts 3 & 4
+  const qfC3 = { ...getMatchData(6, 3), p1: getGroupPosName('B',3), p2: getGroupPosName('D',4) };
+  const qfC4 = { ...getMatchData(6, 4), p1: getGroupPosName('D',3), p2: getGroupPosName('B',4) };
+  // NOTE: If matches were waiting in R5 court 0, they are now here in R6.
+  
+  const sfC1 = getMatchData(7, 2);
+  const sfC2 = getMatchData(7, 3);
+  const finalCons = getMatchData(8, 1);
+
+
   return (
     <div className="space-y-6 pb-20">
       <div className="flex items-center justify-between">
@@ -161,17 +197,37 @@ const Results: React.FC = () => {
 
       {tab === 'bracket' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* MAIN BRACKET */}
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                   <h3 className="text-emerald-600 font-bold mb-4 text-center flex items-center justify-center gap-2"><Trophy size={18}/> Cuadro Principal</h3>
                   <div className="space-y-6 relative">
+                      {/* QF */}
                       <div>
-                          <p className="text-xs text-slate-400 font-bold mb-2">CUARTOS</p>
-                          <BracketMatch title="QF1 - Pista 1" p1={getGroupPosName('A',1)} p2={getGroupPosName('C',2)} {...getMatchData('qf-m-1')} />
-                          <BracketMatch title="QF2 - Pista 2" p1={getGroupPosName('C',1)} p2={getGroupPosName('A',2)} {...getMatchData('qf-m-2')} />
-                          <BracketMatch title="QF3 - Pista 3" p1={getGroupPosName('B',1)} p2={getGroupPosName('D',2)} {...getMatchData('qf-m-3')} />
-                          <BracketMatch title="QF4 - Pista 4" p1={getGroupPosName('D',1)} p2={getGroupPosName('B',2)} {...getMatchData('qf-m-4')} />
+                          <p className="text-xs text-slate-400 font-bold mb-2">CUARTOS DE FINAL</p>
+                          <BracketMatch title="QF1" {...qf1} />
+                          <BracketMatch title="QF2" {...qf2} />
+                          <BracketMatch title="QF3" {...qf3} />
+                          <BracketMatch title="QF4" {...qf4} />
                       </div>
-                      <p className="text-center text-xs text-slate-400 mt-4 italic">El cuadro se genera automáticamente al finalizar la fase de grupos.</p>
+                      
+                      {/* SF */}
+                      {state.currentRound >= 6 && (
+                          <div className="animate-fade-in">
+                              <p className="text-xs text-slate-400 font-bold mb-2">SEMIFINALES</p>
+                              <BracketMatch title="SF1" {...sf1} />
+                              <BracketMatch title="SF2" {...sf2} />
+                          </div>
+                      )}
+
+                      {/* FINAL */}
+                      {state.currentRound >= 7 && (
+                          <div className="animate-fade-in">
+                              <p className="text-xs text-emerald-600 font-bold mb-2 flex items-center gap-1"><Trophy size={12}/> GRAN FINAL</p>
+                              <div className="border-2 border-emerald-100 rounded-lg shadow-sm">
+                                  <BracketMatch title="FINAL" {...finalMain} />
+                              </div>
+                          </div>
+                      )}
                   </div>
               </div>
 
@@ -179,13 +235,33 @@ const Results: React.FC = () => {
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                   <h3 className="text-blue-500 font-bold mb-4 text-center flex items-center justify-center gap-2"><Grid size={18}/> Consolación</h3>
                   <div className="space-y-6 relative">
+                      {/* QF */}
                       <div>
-                          <p className="text-xs text-slate-400 font-bold mb-2">CUARTOS</p>
-                          <BracketMatch title="QF C1 - Pista 5" p1={getGroupPosName('A',3)} p2={getGroupPosName('C',4)} {...getMatchData('qf-c-1')} />
-                          <BracketMatch title="QF C2 - Pista 6" p1={getGroupPosName('C',3)} p2={getGroupPosName('A',4)} {...getMatchData('qf-c-2')} />
-                          <BracketMatch title="QF C3 - En Espera" p1={getGroupPosName('B',3)} p2={getGroupPosName('D',4)} {...getMatchData('qf-c-3')} />
-                          <BracketMatch title="QF C4 - En Espera" p1={getGroupPosName('D',3)} p2={getGroupPosName('B',4)} {...getMatchData('qf-c-4')} />
+                          <p className="text-xs text-slate-400 font-bold mb-2">CUARTOS DE FINAL</p>
+                          <BracketMatch title="QF C1" {...qfC1} />
+                          <BracketMatch title="QF C2" {...qfC2} />
+                          <BracketMatch title="QF C3" {...qfC3} />
+                          <BracketMatch title="QF C4" {...qfC4} />
                       </div>
+
+                      {/* SF */}
+                      {state.currentRound >= 7 && (
+                          <div className="animate-fade-in">
+                              <p className="text-xs text-slate-400 font-bold mb-2">SEMIFINALES</p>
+                              <BracketMatch title="SF C1" {...sfC1} />
+                              <BracketMatch title="SF C2" {...sfC2} />
+                          </div>
+                      )}
+
+                       {/* FINAL */}
+                       {state.currentRound >= 8 && (
+                          <div className="animate-fade-in">
+                              <p className="text-xs text-blue-600 font-bold mb-2 flex items-center gap-1"><Trophy size={12}/> FINAL CONSOLACIÓN</p>
+                              <div className="border-2 border-blue-100 rounded-lg shadow-sm">
+                                  <BracketMatch title="FINAL CONS." {...finalCons} />
+                              </div>
+                          </div>
+                      )}
                   </div>
               </div>
           </div>

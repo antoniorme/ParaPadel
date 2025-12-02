@@ -53,34 +53,37 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       
       {/* Global Timer Sticky Bar (Only if tournament is active) */}
       {state.status === 'active' && (
-          <div className={`sticky top-0 z-50 px-4 py-2 flex items-center justify-between shadow-md transition-colors ${isActive ? 'bg-slate-900 text-white' : timeLeft === 0 ? 'bg-rose-600 text-white animate-pulse' : 'bg-slate-800 text-slate-300'}`}>
-              <div className="flex items-center gap-3">
-                  <div className="font-mono text-2xl font-bold tracking-wider">{formatTime(timeLeft)}</div>
-                  <div className="text-xs uppercase font-bold tracking-widest opacity-70">
-                      Ronda {state.currentRound}
-                  </div>
-              </div>
-              <div className="flex gap-2">
-                  <button onClick={isActive ? pauseTimer : startTimer} className="p-1.5 bg-white/10 rounded-full hover:bg-white/20 active:scale-95 transition-all">
-                      {isActive ? <Square size={16} fill="currentColor"/> : <Play size={16} fill="currentColor"/>}
-                  </button>
-                  <button onClick={resetTimer} className="p-1.5 bg-white/10 rounded-full hover:bg-white/20 active:scale-95 transition-all">
-                      <Clock size={16} />
-                  </button>
-              </div>
+          <div className="sticky top-0 z-50 bg-slate-50/90 backdrop-blur-sm">
+             <div className={`max-w-3xl mx-auto px-4 py-2 flex items-center justify-between shadow-md transition-colors rounded-b-xl ${isActive ? 'bg-slate-900 text-white' : timeLeft === 0 ? 'bg-rose-600 text-white animate-pulse' : 'bg-slate-800 text-slate-300'}`}>
+                <div className="flex items-center gap-3">
+                    <div className="font-mono text-2xl font-bold tracking-wider">{formatTime(timeLeft)}</div>
+                    <div className="text-xs uppercase font-bold tracking-widest opacity-70">
+                        Ronda {state.currentRound}
+                    </div>
+                </div>
+                <div className="flex gap-2">
+                    <button onClick={isActive ? pauseTimer : startTimer} className="p-1.5 bg-white/10 rounded-full hover:bg-white/20 active:scale-95 transition-all">
+                        {isActive ? <Square size={16} fill="currentColor"/> : <Play size={16} fill="currentColor"/>}
+                    </button>
+                    <button onClick={resetTimer} className="p-1.5 bg-white/10 rounded-full hover:bg-white/20 active:scale-95 transition-all">
+                        <Clock size={16} />
+                    </button>
+                </div>
+             </div>
           </div>
       )}
 
-      {/* Main Header (Hidden if Timer is showing to save space? No, keep it for Menu) */}
-      {/* If timer is active, this header goes BELOW it */}
-      <header className="bg-white p-4 flex justify-between items-center border-b border-slate-200">
-        <h1 className="text-lg font-bold bg-gradient-to-r from-emerald-600 to-teal-700 bg-clip-text text-transparent truncate max-w-[200px]">
-            {clubData.name || 'PadelPro'}
-        </h1>
-        <button onClick={() => setIsMenuOpen(true)} className="text-slate-700 hover:text-emerald-600 p-2 rounded-full hover:bg-slate-100">
-          <Menu size={24} />
-        </button>
-      </header>
+      {/* Main Header (Boxed) */}
+      <div className="bg-slate-50 pt-2 px-2 md:pt-4">
+          <header className="max-w-3xl mx-auto bg-white p-4 flex justify-between items-center border border-slate-200 rounded-2xl shadow-sm">
+            <h1 className="text-lg font-bold bg-gradient-to-r from-emerald-600 to-teal-700 bg-clip-text text-transparent truncate max-w-[200px]">
+                {clubData.name || 'PadelPro'}
+            </h1>
+            <button onClick={() => setIsMenuOpen(true)} className="text-slate-700 hover:text-emerald-600 p-2 rounded-full hover:bg-slate-100 transition-colors">
+              <Menu size={24} />
+            </button>
+          </header>
+      </div>
 
       {/* Hamburger Menu Drawer */}
       {isMenuOpen && (
@@ -89,7 +92,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               <div className="absolute right-0 top-0 bottom-0 w-64 bg-white shadow-2xl p-6 animate-slide-left flex flex-col">
                   <div className="flex justify-between items-center mb-8">
                       <span className="font-bold text-slate-400 uppercase text-xs tracking-wider">Menú Principal</span>
-                      <button onClick={() => setIsMenuOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-600"><X size={20}/></button>
+                      <button onClick={() => setIsMenuOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-600 hover:bg-slate-200"><X size={20}/></button>
                   </div>
 
                   <div className="space-y-4 flex-1">
@@ -117,36 +120,38 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       )}
 
       {/* Main Content */}
-      <main className="flex-1 p-4 pb-24 md:p-8 md:pb-8 overflow-y-auto">
+      <main className="flex-1 p-4 pb-32 md:p-6 overflow-y-auto">
         <div className="max-w-3xl mx-auto">
           {children}
         </div>
       </main>
 
-      {/* Mobile Bottom Navigation */}
+      {/* Mobile Bottom Navigation (Boxed) */}
       {user && (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-40 flex justify-around items-center safe-pb text-xs shadow-[0_-4px_10px_-1px_rgba(0,0,0,0.05)] pb-2 pt-1">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.path;
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`flex flex-col items-center justify-center py-3 px-2 w-full transition-colors ${
-                  isActive
-                    ? 'text-emerald-600'
-                    : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                <div className={`p-1 rounded-xl mb-1 transition-all ${isActive ? 'bg-emerald-100' : 'bg-transparent'}`}>
-                   <Icon size={24} strokeWidth={isActive ? 2.5 : 2} />
-                </div>
-                <span className={`font-medium ${isActive ? 'text-emerald-700' : ''}`}>{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
+        <div className="fixed bottom-0 left-0 right-0 z-40 p-2 pointer-events-none">
+            <nav className="max-w-3xl mx-auto bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex justify-around items-center px-2 py-1 pointer-events-auto">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`flex flex-col items-center justify-center py-3 px-2 w-full transition-colors rounded-xl ${
+                      isActive
+                        ? 'text-emerald-600'
+                        : 'text-slate-400 hover:text-slate-600'
+                    }`}
+                  >
+                    <div className={`p-1 rounded-xl mb-0.5 transition-all ${isActive ? 'bg-emerald-100 scale-110' : 'bg-transparent'}`}>
+                      <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+                    </div>
+                    <span className={`text-[10px] font-bold ${isActive ? 'text-emerald-700' : 'text-slate-400'}`}>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+        </div>
       )}
     </div>
   );

@@ -8,73 +8,49 @@ const GROUP_NAMES = ['A', 'B', 'C', 'D'];
 const STORAGE_KEY = 'padelpro_local_db_v3'; 
 export const TOURNAMENT_CATEGORIES = ['Iniciación', '5ª CAT', '4ª CAT', '3ª CAT', '2ª CAT', '1ª CAT'];
 
-// Nuevos métodos de generación
 export type GenerationMethod = 'elo-balanced' | 'elo-mixed' | 'manual' | 'arrival';
 
 // --- Logic Helpers ---
 
-// Helper para obtener el ELO combinado de una pareja
-// EXPORTADO para usar en UI (Registro)
 export const getPairElo = (pair: Pair, players: Player[]): number => {
     const p1 = players.find(p => p.id === pair.player1Id);
     const p2 = players.find(p => p.id === pair.player2Id);
-    // Usamos calculateDisplayRanking para tener el valor más realista, o fallback a 1200
     const score1 = p1 ? calculateDisplayRanking(p1) : 1200;
     const score2 = p2 ? calculateDisplayRanking(p2) : 1200;
     return score1 + score2;
 };
 
-// Generación de grupos basada en el método seleccionado
 const generateGroupsHelper = (pairs: Pair[], players: Player[], method: GenerationMethod = 'manual'): Group[] => {
   let activePairs = pairs.filter(p => !p.isReserve);
   
-  // 1. LLEGADA: Orden estricto por creación/ID
   if (method === 'arrival') {
       activePairs = [...activePairs].sort((a, b) => (a.id > b.id ? 1 : -1));
-  } 
-  
-  // 2. ELO EQUILIBRADO: Champions League (Grupo A fuertes -> Grupo D débiles)
-  else if (method === 'elo-balanced') {
+  } else if (method === 'elo-balanced') {
       activePairs = [...activePairs].sort((a, b) => {
           const eloA = getPairElo(a, players);
           const eloB = getPairElo(b, players);
           return eloB - eloA;
       });
-  } 
-  
-  // 3. ELO MEZCLADO: Equilibrar los GRUPOS entre sí (Cada grupo tiene 1 cabeza de serie, 1 alto, 1 medio, 1 bajo)
-  else if (method === 'elo-mixed') {
-      // Primero ordenamos por ranking
+  } else if (method === 'elo-mixed') {
       const rankedPairs = [...activePairs].sort((a, b) => {
           const eloA = getPairElo(a, players);
           const eloB = getPairElo(b, players);
           return eloB - eloA;
       });
 
-      // Dividimos en 4 bombos (Pots)
-      const pot1 = rankedPairs.slice(0, 4);   // Top 4 (Cabezas de serie)
-      const pot2 = rankedPairs.slice(4, 8);   // Nivel Alto
-      const pot3 = rankedPairs.slice(8, 12);  // Nivel Medio
-      const pot4 = rankedPairs.slice(12, 16); // Nivel Bajo
+      const pot1 = rankedPairs.slice(0, 4);   
+      const pot2 = rankedPairs.slice(4, 8);   
+      const pot3 = rankedPairs.slice(8, 12);  
+      const pot4 = rankedPairs.slice(12, 16); 
 
-      // Repartimos en sistema de serpiente o directo para equilibrar
-      // Asignación directa para asegurar variedad:
-      // Grupo A: 1º, 5º, 9º, 13º
-      // Grupo B: 2º, 6º, 10º, 14º
-      // ...
       const groupA_Pairs = [pot1[0], pot2[0], pot3[0], pot4[0]];
       const groupB_Pairs = [pot1[1], pot2[1], pot3[1], pot4[1]];
       const groupC_Pairs = [pot1[2], pot2[2], pot3[2], pot4[2]];
       const groupD_Pairs = [pot1[3], pot2[3], pot3[3], pot4[3]];
 
-      // Reconstruimos la lista plana ordenada por grupos para el corte final
       activePairs = [...groupA_Pairs, ...groupB_Pairs, ...groupC_Pairs, ...groupD_Pairs];
   }
 
-  // 4. MANUAL: Se asume que 'pairs' YA VIENE ORDENADO (A1..A4, B1..B4) desde la UI
-  // method === 'manual': NO HACEMOS SORT
-
-  // Asegurar límite de 16
   activePairs = activePairs.slice(0, 16);
 
   const groups: Group[] = [];
@@ -87,8 +63,6 @@ const generateGroupsHelper = (pairs: Pair[], players: Player[], method: Generati
   return groups;
 };
 
-// Reconstruye los grupos basándose en los partidos ya generados
-// Esto es vital para que al recargar la página (F5) los grupos no vuelvan al orden de creación
 const reconstructGroupsFromMatches = (pairs: Pair[], matches: Match[], players: Player[]): Group[] => {
     const groupMap: Record<string, Set<string>> = {
         'A': new Set(), 'B': new Set(), 'C': new Set(), 'D': new Set()
@@ -103,7 +77,6 @@ const reconstructGroupsFromMatches = (pairs: Pair[], matches: Match[], players: 
             else if (m.courtId === 3 || m.courtId === 4) targetGroup = 'B';
             else if (m.courtId === 5 || m.courtId === 6) targetGroup = 'C';
         } else if (m.round === 2) {
-             // Solo necesitamos capturar al D que no jugó en R1
              if (m.courtId === 5 || m.courtId === 6) targetGroup = 'D';
         }
 
@@ -118,7 +91,6 @@ const reconstructGroupsFromMatches = (pairs: Pair[], matches: Match[], players: 
         pairIds: Array.from(groupMap[name])
     }));
 
-    // Fallback: Si no hay partidos, usamos ELO Equilibrado por seguridad
     const totalAssigned = groups.reduce((acc, g) => acc + g.pairIds.length, 0);
     if (totalAssigned < 16 && matches.length === 0) {
         return generateGroupsHelper(pairs, players, 'elo-balanced');
@@ -259,6 +231,19 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const [state, dispatch] = useReducer(reducer, initialState);
     const { user, isOfflineMode } = useAuth();
 
+    const formatPlayerName = useCallback((p?: Player) => {
+        if (!p) return 'Jugador';
+        if (p.nickname) return p.nickname;
+        
+        const parts = p.name.trim().split(/\s+/);
+        if (parts.length >= 2) {
+            const firstName = parts[0];
+            const lastName = parts[1];
+            return `${firstName} ${lastName.substring(0, 3)}.`;
+        }
+        return parts[0];
+    }, []);
+
     const loadData = useCallback(async () => {
         if (!user) return;
         dispatch({ type: 'SET_LOADING', payload: true });
@@ -292,7 +277,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                     isReserve: false 
                 }));
 
-                // Mark reserves based on index
                 mappedPairs = mappedPairs.map((p, idx) => ({ ...p, isReserve: idx >= 16 }));
 
                 const mappedMatches: Match[] = (matches || []).map(m => ({
@@ -473,12 +457,10 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             throw new Error(`Se necesitan 16 parejas titulares. Tienes ${activePairs.length}.`);
         }
 
-        // Si es manual, usamos el orden personalizado si se provee
         if (method === 'manual' && customOrderedPairs) {
             activePairs = customOrderedPairs;
         }
         
-        // Generamos los grupos pasando los pares (que pueden estar pre-ordenados si es Manual)
         const groups = generateGroupsHelper(activePairs, state.players, method);
         const matches = generateGroupMatchesHelper(groups);
 
@@ -577,7 +559,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         const nextR = state.currentRound + 1;
         let playoffMatches: Partial<Match>[] = [];
 
-        // 1. FASE DE GRUPOS (Rondas 1, 2, 3 -> Avanzar simplemente)
         if (state.currentRound < 4) {
              if (isOfflineMode) {
                  dispatch({ type: 'SET_STATE', payload: { currentRound: nextR } });
@@ -589,7 +570,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
              return;
         }
 
-        // 2. GENERAR CUARTOS DE FINAL (Ronda 5)
         if (state.currentRound === 4) {
             const pairsWithStats = recalculateStats(state.pairs, state.matches);
             const rankingsA = getRankedPairsForGroup(pairsWithStats, state.groups, 'A');
@@ -604,25 +584,17 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             playoffMatches.push({ round: 5, bracket: 'main', phase: 'qf', courtId: 3, pairAId: safeGet(rankingsB, 0).id, pairBId: safeGet(rankingsD, 1).id }); 
             playoffMatches.push({ round: 5, bracket: 'main', phase: 'qf', courtId: 4, pairAId: safeGet(rankingsD, 0).id, pairBId: safeGet(rankingsB, 1).id }); 
 
-            // CONSOLACION: Turno 1 (Pista 5 y 6)
             playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 5, pairAId: safeGet(rankingsA, 2).id, pairBId: safeGet(rankingsC, 3).id }); 
             playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 6, pairAId: safeGet(rankingsC, 2).id, pairBId: safeGet(rankingsA, 3).id }); 
-            // CONSOLACION: En Espera (Pista 0) - Se jugarán en el Turno 2 (Ronda 6)
             playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 0, pairAId: safeGet(rankingsB, 2).id, pairBId: safeGet(rankingsD, 3).id }); 
             playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 0, pairAId: safeGet(rankingsD, 2).id, pairBId: safeGet(rankingsB, 3).id }); 
         }
 
-        // 3. GENERAR SEMIS MAIN + CUARTOS CONSOLACIÓN TURNO 2 (Ronda 6)
         else if (state.currentRound === 5) {
-            // A. Mover los partidos de espera de la ronda 5 a la ronda 6 y asignarles pista
-            // ROBUST FIX: No buscar solo courtId=0, buscar CUALQUIER partido de consolación no finalizado.
-            // Esto arregla el caso donde el usuario ya tenía partidos duplicados en Pista 5 y 6.
+            // ROBUST FIX: Find any unfinished consolation match from R5, regardless of court ID
             const waitingMatches = state.matches.filter(m => m.round === 5 && m.bracket === 'consolation' && !m.isFinished);
             
-            // Si estamos en online, actualizamos estos partidos en la DB
             if (waitingMatches.length > 0 && !isOfflineMode) {
-                // Asignamos Pista 3 y 4 (junto a Semis Main en 1 y 2) para agrupar visualmente, o 5 y 6.
-                // Usaremos 3 y 4 para que todo se vea "arriba" en la UI.
                 const updates = [
                     supabase.from('matches').update({ round: 6, court_id: 3 }).eq('id', waitingMatches[0].id),
                     waitingMatches[1] ? supabase.from('matches').update({ round: 6, court_id: 4 }).eq('id', waitingMatches[1].id) : Promise.resolve()
@@ -630,7 +602,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 await Promise.all(updates);
             }
 
-            // B. Generar Semis Main (Pista 1 y 2)
             const qfMatches = state.matches.filter(m => m.round === 5 && m.isFinished && m.bracket === 'main');
             
             const getWinner = (court: number) => {
@@ -646,8 +617,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             if (wMain1 && wMain3) playoffMatches.push({ round: 6, bracket: 'main', phase: 'sf', courtId: 1, pairAId: wMain1, pairBId: wMain3 });
             if (wMain2 && wMain4) playoffMatches.push({ round: 6, bracket: 'main', phase: 'sf', courtId: 2, pairAId: wMain2, pairBId: wMain4 });
             
-            // Nota: Los partidos de consolación "en espera" ahora existen en R6 gracias al update anterior, no necesitamos crearlos de nuevo,
-            // pero si estuviéramos en offline mode tendríamos que clonarlos. 
             if (isOfflineMode) {
                  waitingMatches.forEach((m, idx) => {
                      playoffMatches.push({ ...m, round: 6, courtId: 3 + idx, id: `moved-${m.id}` });
@@ -655,9 +624,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             }
         }
 
-        // 4. GENERAR FINAL MAIN + SEMIS CONSOLACIÓN (Ronda 7)
         else if (state.currentRound === 6) {
-             // A. Final Main
              const sfMatches = state.matches.filter(m => m.round === 6 && m.bracket === 'main');
              const getWinnerSF = (court: number) => {
                  const m = sfMatches.find(m => m.courtId === court);
@@ -667,28 +634,23 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
              const wSF2 = getWinnerSF(2);
              if (wSF1 && wSF2) playoffMatches.push({ round: 7, bracket: 'main', phase: 'final', courtId: 1, pairAId: wSF1, pairBId: wSF2 });
 
-             // B. Semis Consolación
-             // Necesitamos ganadores de R5 (Cons QF Turno 1) y R6 (Cons QF Turno 2)
              const consQF_R5 = state.matches.filter(m => m.round === 5 && m.bracket === 'consolation' && m.isFinished);
-             const consQF_R6 = state.matches.filter(m => m.round === 6 && m.bracket === 'consolation' && m.isFinished); // Los que movimos
+             const consQF_R6 = state.matches.filter(m => m.round === 6 && m.bracket === 'consolation' && m.isFinished); 
              
-             // Helper para sacar ganador de un array de partidos dado un ID de pista original
-             // En R5 usaron Pistas 5 y 6. En R6 usaron Pistas 3 y 4.
              const getConsWinner = (matches: Match[], court: number) => {
                   const m = matches.find(m => m.courtId === court);
                   return m ? ((m.scoreA || 0) > (m.scoreB || 0) ? m.pairAId : m.pairBId) : null;
              };
 
-             const wC1 = getConsWinner(consQF_R5, 5); // Ganador QF C1
-             const wC2 = getConsWinner(consQF_R5, 6); // Ganador QF C2
-             const wC3 = getConsWinner(consQF_R6, 3); // Ganador QF C3 (Jugado en R6 Pista 3)
-             const wC4 = getConsWinner(consQF_R6, 4); // Ganador QF C4 (Jugado en R6 Pista 4)
+             const wC1 = getConsWinner(consQF_R5, 5); 
+             const wC2 = getConsWinner(consQF_R5, 6); 
+             const wC3 = getConsWinner(consQF_R6, 3); 
+             const wC4 = getConsWinner(consQF_R6, 4); 
 
              if (wC1 && wC3) playoffMatches.push({ round: 7, bracket: 'consolation', phase: 'sf', courtId: 2, pairAId: wC1, pairBId: wC3 });
              if (wC2 && wC4) playoffMatches.push({ round: 7, bracket: 'consolation', phase: 'sf', courtId: 3, pairAId: wC2, pairBId: wC4 });
         }
 
-        // 5. GENERAR FINAL CONSOLACIÓN (Ronda 8 - Nueva ronda extra)
         else if (state.currentRound === 7) {
             const sfCons = state.matches.filter(m => m.round === 7 && m.bracket === 'consolation');
             const getWinner = (court: number) => {
@@ -709,8 +671,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
              }));
              
              if (isOfflineMode) {
-                 // En offline simulamos la mezcla
-                 const keptMatches = state.matches.filter(m => !(m.round === 5 && m.courtId === 0)); // Remove waiting old ones
+                 const keptMatches = state.matches.filter(m => !(m.round === 5 && m.courtId === 0)); 
                  const newMatches = [...keptMatches, ...playoffMatches.map((m, i) => ({ ...m, id: `po-${Date.now()}-${i}`, scoreA: null, scoreB: null, isFinished: false } as Match))];
                  dispatch({ type: 'SET_STATE', payload: { currentRound: nextR, matches: newMatches } });
              } else {
@@ -746,7 +707,41 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
              return;
          }
          if (state.id) {
-             await supabase.from('tournaments').update({ status: 'finished' }).eq('id', state.id);
+             // 1. Calculate Winners
+             let winnerMainName = 'Desconocido';
+             let winnerConsName = 'Desconocido';
+
+             // Main Final (R7, Court 1)
+             const mainFinal = state.matches.find(m => m.round === 7 && m.courtId === 1 && m.bracket === 'main');
+             if (mainFinal && mainFinal.isFinished) {
+                 const wId = (mainFinal.scoreA || 0) > (mainFinal.scoreB || 0) ? mainFinal.pairAId : mainFinal.pairBId;
+                 const p = state.pairs.find(pair => pair.id === wId);
+                 if(p) {
+                      const p1 = state.players.find(pl => pl.id === p.player1Id);
+                      const p2 = state.players.find(pl => pl.id === p.player2Id);
+                      winnerMainName = `${formatPlayerName(p1)} & ${formatPlayerName(p2)}`;
+                 }
+             }
+
+             // Consolation Final (R8, Court 1)
+             const consFinal = state.matches.find(m => m.round === 8 && m.courtId === 1 && m.bracket === 'consolation');
+             if (consFinal && consFinal.isFinished) {
+                 const wId = (consFinal.scoreA || 0) > (consFinal.scoreB || 0) ? consFinal.pairAId : consFinal.pairBId;
+                  const p = state.pairs.find(pair => pair.id === wId);
+                 if(p) {
+                      const p1 = state.players.find(pl => pl.id === p.player1Id);
+                      const p2 = state.players.find(pl => pl.id === p.player2Id);
+                      winnerConsName = `${formatPlayerName(p1)} & ${formatPlayerName(p2)}`;
+                 }
+             }
+
+             // 2. Update DB with Winners
+             await supabase.from('tournaments').update({ 
+                 status: 'finished',
+                 winner_main: winnerMainName,
+                 winner_consolation: winnerConsName
+             }).eq('id', state.id);
+
              dispatch({ type: 'RESET_LOCAL' });
          }
     };
@@ -763,19 +758,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
              await supabase.from('tournaments').delete().eq('id', state.id);
              loadData();
         }
-    };
-
-    const formatPlayerName = (p?: Player) => {
-        if (!p) return 'Jugador';
-        if (p.nickname) return p.nickname;
-        
-        const parts = p.name.trim().split(/\s+/);
-        if (parts.length >= 2) {
-            const firstName = parts[0];
-            const lastName = parts[1];
-            return `${firstName} ${lastName.substring(0, 3)}.`;
-        }
-        return parts[0];
     };
 
     return (
