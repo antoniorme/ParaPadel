@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ClubData, PastTournament, TournamentState } from '../types';
 import { supabase } from '../lib/supabase';
@@ -62,6 +63,7 @@ export const HistoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
                             id: t.id,
                             status: 'finished',
                             currentRound: t.current_round,
+                            format: t.format || '16_mini',
                             players: allPlayers || [], // Needed for name resolution
                             pairs: tPairs.map(p => ({
                                 id: p.id, tournament_id: p.tournament_id, player1Id: p.player1_id, player2Id: p.player2_id,
@@ -84,6 +86,7 @@ export const HistoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
                             winnerMain: t.winner_main || 'No registrado',
                             winnerConsolation: t.winner_consolation || 'No registrado',
                             playerCount: tPairs.length * 2,
+                            format: t.format || '16_mini',
                             data: historicalState // Store full data for stats calculation
                         };
                     });

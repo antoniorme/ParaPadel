@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { useHistory } from '../store/HistoryContext';
-import { Users, PlayCircle, CheckCircle, Clock, Database, Trash2, Archive, RefreshCw, AlertTriangle, Check } from 'lucide-react';
+import { Users, PlayCircle, CheckCircle, Clock, Database, Trash2, Archive, RefreshCw, AlertTriangle, Play } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const Dashboard: React.FC = () => {
@@ -37,7 +37,6 @@ const Dashboard: React.FC = () => {
           dispatch({ type: 'RESET_LOCAL' });
       } else if (modalConfig.type === 'archive') {
           archiveTournament(state);
-          dispatch({ type: 'RESET_LOCAL' });
       } else if (modalConfig.type === 'demo') {
           dispatch({ type: 'LOAD_DEMO_DATA' });
       } else if (modalConfig.type === 'reload') {
@@ -47,9 +46,8 @@ const Dashboard: React.FC = () => {
   };
   
   const openModal = (type: 'reset' | 'archive' | 'demo' | 'reload') => {
-      // Check specific conditions before opening
       if (type === 'demo' && state.pairs.length > 0) {
-          // If pairs exist, show confirmation that data will be lost
+          // Logic handled in modal render/text
       }
       setModalConfig({ type, isOpen: true });
   }
@@ -71,10 +69,9 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8 pb-10">
+    <div className="space-y-6 pb-10">
       <div>
-        <h2 className="text-3xl font-black text-slate-900 mb-2">Panel de Control</h2>
-        <p className="text-slate-500 font-medium">Gestiona tu mini torneo.</p>
+        <h2 className="text-lg font-bold text-slate-800 mb-2">Panel de Control</h2>
       </div>
 
       {/* 2x2 Grid for Mobile */}
@@ -84,13 +81,13 @@ const Dashboard: React.FC = () => {
           value={state.players.length} 
           icon={Users} 
           color="text-blue-400" 
-          onClick={() => navigate('/players')} /* Changed to /players */
+          onClick={() => navigate('/players')} 
         />
         <StatCard 
           title="Parejas" 
-          value={`${state.pairs.length} / 16`} 
+          value={`${state.pairs.length}`} 
           icon={Users} 
-          color={state.pairs.length === 16 ? "text-emerald-400" : "text-orange-400"}
+          color={state.pairs.length >= 10 ? "text-emerald-400" : "text-orange-400"}
           onClick={() => navigate('/registration')}
         />
         <StatCard 
@@ -113,6 +110,25 @@ const Dashboard: React.FC = () => {
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
         <h3 className="text-lg font-bold text-slate-800 mb-6">Acciones Rápidas</h3>
         <div className="flex flex-col gap-4">
+           
+          {state.status === 'setup' && (
+             <button 
+             onClick={() => navigate('/active')}
+             className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-colors shadow-md text-lg flex items-center justify-center gap-2"
+           >
+             <Play size={24}/> CONFIGURAR Y EMPEZAR
+           </button>
+          )}
+
+           {state.status === 'active' && (
+             <button 
+             onClick={() => navigate('/active')}
+             className="w-full py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold transition-colors animate-pulse flex items-center justify-center gap-2 shadow-md text-lg"
+           >
+             <PlayCircle size={24}/> IR AL TORNEO EN VIVO
+           </button>
+          )}
+
            <button 
             onClick={() => navigate('/registration')}
             className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-colors shadow-md text-lg"
@@ -121,18 +137,10 @@ const Dashboard: React.FC = () => {
           </button>
           <button 
             onClick={() => navigate('/checkin')}
-            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-colors shadow-md text-lg"
+            className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors shadow-sm text-lg"
           >
             Control / Pagos
           </button>
-          {state.status === 'active' && (
-             <button 
-             onClick={() => navigate('/active')}
-             className="w-full py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold transition-colors animate-pulse flex items-center justify-center gap-2 shadow-md text-lg"
-           >
-             <PlayCircle size={24}/> IR AL TORNEO EN VIVO
-           </button>
-          )}
         </div>
       </div>
 

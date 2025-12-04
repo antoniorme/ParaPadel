@@ -1,115 +1,13 @@
+
 import React, { useState } from 'react';
-import { useTournament, TOURNAMENT_CATEGORIES, GenerationMethod, getPairElo } from '../store/TournamentContext';
-import { Users, Trash2, Edit2, Plus, Search, Check, Save, User, X, AlertTriangle, TrendingUp, ListOrdered, Clock, Shuffle, CheckCircle } from 'lucide-react';
-import { Player, Pair } from '../types';
+import { useTournament, TOURNAMENT_CATEGORIES, getPairElo } from '../store/TournamentContext';
+import { Users, Trash2, Edit2, Plus, Search, Check, Save, User, X, AlertTriangle, TrendingUp } from 'lucide-react';
+import { TournamentFormat } from '../types';
 
 type ViewMode = 'menu' | 'pair-form';
 
-// --- MANUAL WIZARD COMPONENT ---
-interface WizardProps {
-    pairs: Pair[];
-    players: Player[];
-    onComplete: (orderedPairs: Pair[]) => void;
-    onCancel: () => void;
-    formatName: (p?: Player) => string;
-}
-
-const ManualGroupingWizard: React.FC<WizardProps> = ({ pairs, players, onComplete, onCancel, formatName }) => {
-    const [currentGroupIdx, setCurrentGroupIdx] = useState(0); // 0=A, 1=B, 2=C, 3=D
-    const [orderedPairs, setOrderedPairs] = useState<Pair[]>([]);
-    
-    const groups = ['A', 'B', 'C', 'D'];
-    const currentGroup = groups[currentGroupIdx];
-    
-    // Parejas ya asignadas a grupos anteriores
-    const assignedIds = new Set(orderedPairs.map(p => p.id));
-    // Parejas disponibles para asignar
-    const availablePairs = pairs.filter(p => !assignedIds.has(p.id));
-    
-    // Selección temporal para el grupo actual
-    const [selectedForGroup, setSelectedForGroup] = useState<string[]>([]);
-
-    const toggleSelection = (id: string) => {
-        if (selectedForGroup.includes(id)) {
-            setSelectedForGroup(selectedForGroup.filter(pid => pid !== id));
-        } else {
-            if (selectedForGroup.length < 4) {
-                setSelectedForGroup([...selectedForGroup, id]);
-            }
-        }
-    };
-
-    const confirmGroup = () => {
-        if (selectedForGroup.length !== 4) return;
-        
-        // Añadir las seleccionadas al orden final
-        const newGroupPairs = selectedForGroup.map(id => pairs.find(p => p.id === id)!);
-        const newOrder = [...orderedPairs, ...newGroupPairs];
-        setOrderedPairs(newOrder);
-        setSelectedForGroup([]);
-
-        if (currentGroupIdx < 3) {
-            setCurrentGroupIdx(currentGroupIdx + 1);
-        } else {
-            // Finalizado
-            onComplete(newOrder);
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[100] flex flex-col items-center justify-center p-4">
-            <div className="bg-white rounded-3xl p-6 w-full max-w-lg shadow-2xl h-[85vh] flex flex-col">
-                <div className="text-center mb-4">
-                    <h3 className="text-2xl font-black text-slate-900">Configurar Grupo {currentGroup}</h3>
-                    <p className="text-slate-500 text-sm">Selecciona 4 parejas de la lista</p>
-                </div>
-                
-                <div className="flex-1 overflow-y-auto pr-2 space-y-2 mb-4 custom-scrollbar">
-                    {availablePairs.map(pair => {
-                        const p1 = players.find(p => p.id === pair.player1Id);
-                        const p2 = players.find(p => p.id === pair.player2Id);
-                        const isSelected = selectedForGroup.includes(pair.id);
-                        
-                        return (
-                            <div 
-                                key={pair.id} 
-                                onClick={() => toggleSelection(pair.id)}
-                                className={`p-3 rounded-xl border-2 flex justify-between items-center cursor-pointer transition-all ${isSelected ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 bg-white hover:border-slate-300'}`}
-                            >
-                                <div>
-                                    <div className="font-bold text-slate-800 text-sm">{formatName(p1)}</div>
-                                    <div className="font-bold text-slate-800 text-sm">& {formatName(p2)}</div>
-                                </div>
-                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
-                                    {isSelected && <Check size={14} className="text-white" strokeWidth={3}/>}
-                                </div>
-                            </div>
-                        )
-                    })}
-                </div>
-
-                <div className="flex flex-col gap-3 pt-4 border-t border-slate-100">
-                    <div className="text-center font-bold text-emerald-600 mb-2">
-                        Seleccionadas: {selectedForGroup.length} / 4
-                    </div>
-                    <button 
-                        onClick={confirmGroup}
-                        disabled={selectedForGroup.length !== 4}
-                        className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-2 ${selectedForGroup.length === 4 ? 'bg-emerald-600 text-white animate-pulse' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
-                    >
-                        {currentGroupIdx === 3 ? 'Finalizar y Empezar' : `Confirmar Grupo ${currentGroup} >`}
-                    </button>
-                    <button onClick={onCancel} className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">Cancelar</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// --- MAIN COMPONENT ---
-
 const Registration: React.FC = () => {
-  const { state, addPlayerToDB, createPairInDB, updatePairDB, deletePairDB, startTournamentDB, formatPlayerName } = useTournament();
+  const { state, addPlayerToDB, createPairInDB, updatePairDB, deletePairDB, formatPlayerName } = useTournament();
   const [viewMode, setViewMode] = useState<ViewMode>('menu');
 
   const [isEditingPairId, setIsEditingPairId] = useState<string | null>(null);
@@ -119,12 +17,16 @@ const Registration: React.FC = () => {
   // MODAL STATES
   const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
-  const [showManualWizard, setShowManualWizard] = useState(false);
   
-  // Logic Change: Generation Method State
-  const [generationMethod, setGenerationMethod] = useState<GenerationMethod>('elo-balanced');
+  // Usamos el formato del estado para visualizar las reservas, pero no lo cambiamos aquí.
+  const currentFormat = state.format || '16_mini';
 
   const activePairs = state.pairs || [];
+  const limit = currentFormat === '10_mini' ? 10 : 16;
+  
+  // En Registration mostramos todas como "inscritas", la distinción titular/reserva se hace mejor en Directo
+  // Pero para visualizar el orden, las mostramos todas.
+  const totalRegistered = activePairs.length;
 
   const assignedPlayerIds = activePairs.reduce((acc, pair) => {
       if (isEditingPairId && pair.id === isEditingPairId) return acc;
@@ -227,7 +129,8 @@ const Registration: React.FC = () => {
       if (isEditingPairId) {
           await updatePairDB(isEditingPairId, selectedP1, selectedP2);
       } else {
-          if (state.pairs.length >= 20) return setAlertMessage("Límite de parejas alcanzado.");
+          // Límite amplio para permitir reservas
+          if (state.pairs.length >= 32) return setAlertMessage("Límite de parejas alcanzado.");
           await createPairInDB(selectedP1, selectedP2);
       }
       
@@ -250,31 +153,6 @@ const Registration: React.FC = () => {
           setShowDeleteModal(null);
       }
   };
-  
-  const handleStartClick = async () => {
-      if (generationMethod === 'manual') {
-          // Si es manual, abrimos el Wizard en lugar de empezar directamente
-          setShowManualWizard(true);
-      } else {
-          try {
-              await startTournamentDB(generationMethod);
-          } catch (e: any) {
-              setAlertMessage(e.message || "Error al iniciar el torneo.");
-          }
-      }
-  };
-
-  const handleManualWizardComplete = async (orderedPairs: Pair[]) => {
-      setShowManualWizard(false);
-      try {
-          // Llamamos a start pasando el orden custom
-          await startTournamentDB('manual', orderedPairs);
-      } catch (e: any) {
-          setAlertMessage(e.message || "Error al iniciar el torneo manual.");
-      }
-  };
-
-  const canStart = activePairs.filter(p => !p.isReserve).length === 16;
 
   const PairList = ({ pairs, title, colorClass }: { pairs: any[], title: string, colorClass: string }) => (
       <div className="mt-8">
@@ -321,7 +199,7 @@ const Registration: React.FC = () => {
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
         <div><h2 className="text-2xl font-bold text-slate-900">Registro</h2><p className="text-sm text-slate-500">Gestión de Inscripciones</p></div>
-        <div className={`flex flex-col items-end ${activePairs.filter(p => !p.isReserve).length === 16 ? 'text-emerald-600' : 'text-blue-600'}`}><span className="text-4xl font-bold">{activePairs.filter(p => !p.isReserve).length}<span className="text-xl text-slate-300">/16</span></span></div>
+        <div className={`flex flex-col items-end text-blue-600`}><span className="text-4xl font-bold">{totalRegistered}</span></div>
       </div>
 
       {viewMode === 'menu' && (
@@ -330,46 +208,8 @@ const Registration: React.FC = () => {
                 <div className="bg-emerald-100 p-3 rounded-full text-emerald-600 group-hover:bg-emerald-200 transition-colors"><Users size={32} /></div>
                 <span className="font-black text-emerald-800 text-lg">AÑADIR NUEVA PAREJA</span>
             </button>
-
-            <PairList pairs={activePairs.filter(p => !p.isReserve)} title="Parejas Confirmadas" colorClass="text-emerald-600" />
             
-            {activePairs.filter(p => p.isReserve).length > 0 && (
-                 <PairList pairs={activePairs.filter(p => p.isReserve)} title="Reservas" colorClass="text-orange-500" />
-            )}
-
-            {state.status === 'setup' && (
-                <div className="fixed bottom-[80px] left-0 right-0 px-4 z-30 pointer-events-none">
-                    <div className="max-w-3xl mx-auto pointer-events-auto bg-white/95 backdrop-blur-md p-4 rounded-2xl border border-slate-200 shadow-[0_-5px_20px_rgba(0,0,0,0.1)]">
-                        {canStart && (
-                             <div className="grid grid-cols-4 gap-2 mb-3">
-                                <button onClick={() => setGenerationMethod('arrival')} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${generationMethod === 'arrival' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400 bg-white'}`}>
-                                    <Clock size={18} className="mb-1"/>
-                                    <span className="text-[9px] font-bold uppercase text-center leading-tight">Llegada</span>
-                                </button>
-                                <button onClick={() => setGenerationMethod('manual')} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${generationMethod === 'manual' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400 bg-white'}`}>
-                                    <ListOrdered size={18} className="mb-1"/>
-                                    <span className="text-[9px] font-bold uppercase text-center leading-tight">Manual</span>
-                                </button>
-                                <button onClick={() => setGenerationMethod('elo-balanced')} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${generationMethod === 'elo-balanced' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400 bg-white'}`}>
-                                    <TrendingUp size={18} className="mb-1"/>
-                                    <span className="text-[9px] font-bold uppercase text-center leading-tight">Nivel</span>
-                                </button>
-                                <button onClick={() => setGenerationMethod('elo-mixed')} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${generationMethod === 'elo-mixed' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400 bg-white'}`}>
-                                    <Shuffle size={18} className="mb-1"/>
-                                    <span className="text-[9px] font-bold uppercase text-center leading-tight">Mix</span>
-                                </button>
-                             </div>
-                        )}
-                        <button 
-                            onClick={handleStartClick}
-                            disabled={!canStart}
-                            className={`w-full py-4 rounded-2xl font-bold shadow-xl text-xl transition-all ${canStart ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white animate-pulse active:scale-95' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
-                        >
-                            EMPEZAR TORNEO
-                        </button>
-                    </div>
-                </div>
-            )}
+            <PairList pairs={activePairs} title="Parejas Inscritas" colorClass="text-slate-600" />
           </>
       )}
 
@@ -427,16 +267,6 @@ const Registration: React.FC = () => {
                   <button onClick={() => setAlertMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Entendido</button>
               </div>
           </div>
-      )}
-
-      {showManualWizard && (
-          <ManualGroupingWizard 
-            pairs={activePairs.filter(p => !p.isReserve)} 
-            players={state.players}
-            onCancel={() => setShowManualWizard(false)}
-            onComplete={handleManualWizardComplete}
-            formatName={formatPlayerName}
-          />
       )}
     </div>
   );

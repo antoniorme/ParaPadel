@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Trophy, Users, ClipboardList, Activity, List, Menu, LogOut, UserCog, History, Settings, HelpCircle, X, Clock, Play, Square } from 'lucide-react';
@@ -51,7 +52,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
       
-      {/* Global Timer Sticky Bar (Only if tournament is active) */}
+      {/* Global Timer Sticky Bar (Only if tournament is active) - HIDDEN PER REQUEST */}
+      {/* 
       {state.status === 'active' && (
           <div className="sticky top-0 z-50 bg-slate-50/90 backdrop-blur-sm">
              <div className={`max-w-3xl mx-auto px-4 py-2 flex items-center justify-between shadow-md transition-colors rounded-b-xl ${isActive ? 'bg-slate-900 text-white' : timeLeft === 0 ? 'bg-rose-600 text-white animate-pulse' : 'bg-slate-800 text-slate-300'}`}>
@@ -71,10 +73,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 </div>
              </div>
           </div>
-      )}
+      )} 
+      */}
 
-      {/* Main Header (Boxed) */}
-      <div className="bg-slate-50 pt-2 px-2 md:pt-4">
+      {/* Main Header (Boxed) - Sticky */}
+      <div className="bg-slate-50 pt-2 px-2 md:pt-4 sticky top-0 z-40">
           <header className="max-w-3xl mx-auto bg-white p-4 flex justify-between items-center border border-slate-200 rounded-2xl shadow-sm">
             <h1 className="text-lg font-bold bg-gradient-to-r from-emerald-600 to-teal-700 bg-clip-text text-transparent truncate max-w-[200px]">
                 {clubData.name || 'PadelPro'}

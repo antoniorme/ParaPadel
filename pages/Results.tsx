@@ -1,11 +1,15 @@
+
 import React, { useState } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { Trophy, Grid, GitMerge, ArrowLeft, Edit2 } from 'lucide-react';
 
 const Results: React.FC = () => {
   const { state, updateScoreDB, formatPlayerName } = useTournament();
-  // Default to bracket if in Playoffs (Round > 4)
-  const [tab, setTab] = useState<'groups' | 'bracket'>(state.currentRound > 4 ? 'bracket' : 'groups');
+  // Determinar ronda de playoffs según formato
+  const isMini10 = state.format === '10_mini';
+  const playoffStartRound = isMini10 ? 4 : 5;
+  
+  const [tab, setTab] = useState<'groups' | 'bracket'>(state.currentRound >= playoffStartRound ? 'bracket' : 'groups');
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [editMatchId, setEditMatchId] = useState<string | null>(null);
   const [scoreA, setScoreA] = useState('');
@@ -54,7 +58,7 @@ const Results: React.FC = () => {
   };
 
   const getGroupPosName = (g: string, p: number) => {
-      if (state.currentRound < 5) return `${p}º Grp ${g}`;
+      if (state.currentRound < playoffStartRound) return `${p}º Grp ${g}`;
       const sorted = getSortedGroupPairs(g);
       const pair = sorted[p-1];
       return pair ? getPairName(pair.id) : `?`;
@@ -81,6 +85,59 @@ const Results: React.FC = () => {
           setEditMatchId(null);
       }
   };
+
+  // --- BRACKET DATA PREP (DYNAMIC BASED ON FORMAT) ---
+  let qf1, qf2, qf3, qf4, sf1, sf2, finalMain;
+  let qfC1, qfC2, qfC3, qfC4, sfC1, sfC2, finalCons;
+
+  // Rounds for display logic
+  let roundQF, roundSF, roundFinal, roundFinalCons;
+
+  if (isMini10) {
+      // --- LOGIC 10 PAIRS ---
+      // Playoffs start at Round 4
+      roundQF = 4; roundSF = 5; roundFinal = 6; roundFinalCons = 4;
+
+      // Main Bracket (Cross A vs B)
+      qf1 = { ...getMatchData(4, 1), p1: getGroupPosName('A',1), p2: getGroupPosName('B',4) }; // 1A vs 4B
+      qf2 = { ...getMatchData(4, 2), p1: getGroupPosName('B',1), p2: getGroupPosName('A',4) }; // 1B vs 4A
+      qf3 = { ...getMatchData(4, 3), p1: getGroupPosName('A',2), p2: getGroupPosName('B',3) }; // 2A vs 3B
+      qf4 = { ...getMatchData(4, 4), p1: getGroupPosName('B',2), p2: getGroupPosName('A',3) }; // 2B vs 3A
+      
+      sf1 = getMatchData(5, 1);
+      sf2 = getMatchData(5, 2);
+      finalMain = getMatchData(6, 1);
+
+      // Consolation (Direct Final in Round 4, Court 5)
+      finalCons = { ...getMatchData(4, 5), p1: getGroupPosName('A',5), p2: getGroupPosName('B',5) };
+
+  } else {
+      // --- LOGIC 16 PAIRS (DEFAULT) ---
+      // Playoffs start at Round 5
+      roundQF = 5; roundSF = 6; roundFinal = 7; roundFinalCons = 8;
+
+      // Main Bracket (Cross A vs C, B vs D)
+      qf1 = { ...getMatchData(5, 1), p1: getGroupPosName('A',1), p2: getGroupPosName('C',2) };
+      qf2 = { ...getMatchData(5, 2), p1: getGroupPosName('C',1), p2: getGroupPosName('A',2) };
+      qf3 = { ...getMatchData(5, 3), p1: getGroupPosName('B',1), p2: getGroupPosName('D',2) };
+      qf4 = { ...getMatchData(5, 4), p1: getGroupPosName('D',1), p2: getGroupPosName('B',2) };
+      
+      sf1 = getMatchData(6, 1);
+      sf2 = getMatchData(6, 2);
+      finalMain = getMatchData(7, 1);
+
+      // Consolation Bracket
+      qfC1 = { ...getMatchData(5, 5), p1: getGroupPosName('A',3), p2: getGroupPosName('C',4) };
+      qfC2 = { ...getMatchData(5, 6), p1: getGroupPosName('C',3), p2: getGroupPosName('A',4) };
+      // Turno 2 Consolación (R6)
+      qfC3 = { ...getMatchData(6, 3), p1: getGroupPosName('B',3), p2: getGroupPosName('D',4) };
+      qfC4 = { ...getMatchData(6, 4), p1: getGroupPosName('D',3), p2: getGroupPosName('B',4) };
+      
+      sfC1 = getMatchData(7, 2);
+      sfC2 = getMatchData(7, 3);
+      finalCons = getMatchData(8, 1);
+  }
+
 
   if (selectedGroup) {
       const group = state.groups.find(g => g.id === selectedGroup);
@@ -133,37 +190,6 @@ const Results: React.FC = () => {
       );
   }
 
-  // --- BRACKET DATA PREP ---
-  // Main Bracket
-  const qf1 = { ...getMatchData(5, 1), p1: getGroupPosName('A',1), p2: getGroupPosName('C',2) };
-  const qf2 = { ...getMatchData(5, 2), p1: getGroupPosName('C',1), p2: getGroupPosName('A',2) };
-  const qf3 = { ...getMatchData(5, 3), p1: getGroupPosName('B',1), p2: getGroupPosName('D',2) };
-  const qf4 = { ...getMatchData(5, 4), p1: getGroupPosName('D',1), p2: getGroupPosName('B',2) };
-  
-  // Semifinales Main (Ronda 6)
-  const sf1 = getMatchData(6, 1);
-  const sf2 = getMatchData(6, 2);
-  
-  // Final Main (Ronda 7)
-  const finalMain = getMatchData(7, 1);
-
-  // Consolation Bracket
-  // QF Cons Turno 1 (R5, Pistas 5 y 6)
-  const qfC1 = { ...getMatchData(5, 5), p1: getGroupPosName('A',3), p2: getGroupPosName('C',4) };
-  const qfC2 = { ...getMatchData(5, 6), p1: getGroupPosName('C',3), p2: getGroupPosName('A',4) };
-  
-  // QF Cons Turno 2 (R6, Pistas 3 y 4) - Desplazados desde Pista 0
-  const qfC3 = { ...getMatchData(6, 3), p1: getGroupPosName('B',3), p2: getGroupPosName('D',4) };
-  const qfC4 = { ...getMatchData(6, 4), p1: getGroupPosName('D',3), p2: getGroupPosName('B',4) };
-  
-  // Semis Consolación (Ronda 7, Pistas 2 y 3)
-  const sfC1 = getMatchData(7, 2);
-  const sfC2 = getMatchData(7, 3);
-  
-  // Final Consolación (Ronda 8, Pista 1)
-  const finalCons = getMatchData(8, 1);
-
-
   return (
     <div className="space-y-6 pb-20">
       <div className="flex items-center justify-between">
@@ -184,9 +210,9 @@ const Results: React.FC = () => {
                     </div>
                     <div className="divide-y divide-slate-100">
                         {getSortedGroupPairs(group.id).map((pair, idx) => (
-                            <div key={pair.id} className={`flex justify-between items-center p-4 ${idx < 2 ? 'bg-emerald-50/30' : ''}`}>
+                            <div key={pair.id} className={`flex justify-between items-center p-4 ${idx < (isMini10 ? 4 : 2) ? 'bg-emerald-50/30' : ''}`}>
                                 <div className="flex items-center gap-3">
-                                    <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center ${idx < 2 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{idx + 1}</span>
+                                    <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center ${idx < (isMini10 ? 4 : 2) ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{idx + 1}</span>
                                     <span className="text-sm font-bold text-slate-800">{getPairName(pair.id)}</span>
                                 </div>
                                 <div className="flex gap-4 text-sm font-mono mr-1">
@@ -217,7 +243,7 @@ const Results: React.FC = () => {
                       </div>
                       
                       {/* SF */}
-                      {state.currentRound >= 6 && (
+                      {state.currentRound >= roundSF && (
                           <div className="animate-fade-in">
                               <p className="text-xs text-slate-400 font-bold mb-2">SEMIFINALES</p>
                               <BracketMatch title="SF1" {...sf1} />
@@ -226,7 +252,7 @@ const Results: React.FC = () => {
                       )}
 
                       {/* FINAL */}
-                      {state.currentRound >= 7 && (
+                      {state.currentRound >= roundFinal && (
                           <div className="animate-fade-in">
                               <p className="text-xs text-emerald-600 font-bold mb-2 flex items-center gap-1"><Trophy size={12}/> GRAN FINAL</p>
                               <div className="border-2 border-emerald-100 rounded-lg shadow-sm">
@@ -241,32 +267,46 @@ const Results: React.FC = () => {
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                   <h3 className="text-blue-500 font-bold mb-4 text-center flex items-center justify-center gap-2"><Grid size={18}/> Consolación</h3>
                   <div className="space-y-6 relative">
-                      {/* QF */}
-                      <div>
-                          <p className="text-xs text-slate-400 font-bold mb-2">CUARTOS DE FINAL</p>
-                          <BracketMatch title="QF C1" {...qfC1} />
-                          <BracketMatch title="QF C2" {...qfC2} />
-                          <BracketMatch title="QF C3" {...qfC3} />
-                          <BracketMatch title="QF C4" {...qfC4} />
-                      </div>
-
-                      {/* SF */}
-                      {state.currentRound >= 7 && (
-                          <div className="animate-fade-in">
-                              <p className="text-xs text-slate-400 font-bold mb-2">SEMIFINALES</p>
-                              <BracketMatch title="SF C1" {...sfC1} />
-                              <BracketMatch title="SF C2" {...sfC2} />
-                          </div>
-                      )}
-
-                       {/* FINAL */}
-                       {state.currentRound >= 8 && (
-                          <div className="animate-fade-in">
+                      
+                      {isMini10 ? (
+                          /* --- MINI 10 CONSOLATION (Direct Final) --- */
+                          <div>
                               <p className="text-xs text-blue-600 font-bold mb-2 flex items-center gap-1"><Trophy size={12}/> FINAL CONSOLACIÓN</p>
                               <div className="border-2 border-blue-100 rounded-lg shadow-sm">
                                   <BracketMatch title="FINAL CONS." {...finalCons} />
                               </div>
                           </div>
+                      ) : (
+                          /* --- MINI 16 CONSOLATION (Full Bracket) --- */
+                          <>
+                            {/* QF */}
+                            <div>
+                                <p className="text-xs text-slate-400 font-bold mb-2">CUARTOS DE FINAL</p>
+                                <BracketMatch title="QF C1" {...qfC1} />
+                                <BracketMatch title="QF C2" {...qfC2} />
+                                <BracketMatch title="QF C3" {...qfC3} />
+                                <BracketMatch title="QF C4" {...qfC4} />
+                            </div>
+
+                            {/* SF */}
+                            {state.currentRound >= 7 && (
+                                <div className="animate-fade-in">
+                                    <p className="text-xs text-slate-400 font-bold mb-2">SEMIFINALES</p>
+                                    <BracketMatch title="SF C1" {...sfC1} />
+                                    <BracketMatch title="SF C2" {...sfC2} />
+                                </div>
+                            )}
+
+                             {/* FINAL */}
+                             {state.currentRound >= 8 && (
+                                <div className="animate-fade-in">
+                                    <p className="text-xs text-blue-600 font-bold mb-2 flex items-center gap-1"><Trophy size={12}/> FINAL CONSOLACIÓN</p>
+                                    <div className="border-2 border-blue-100 rounded-lg shadow-sm">
+                                        <BracketMatch title="FINAL CONS." {...finalCons} />
+                                    </div>
+                                </div>
+                            )}
+                          </>
                       )}
                   </div>
               </div>

@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { useHistory } from '../store/HistoryContext';
 import { ArrowLeft, Trophy, Medal, Edit2, Save, Calendar, User, Smartphone, Mail, Activity, BarChart2, Hash } from 'lucide-react';
-import { TournamentState } from '../types';
+import { TournamentState, Match } from '../types';
 import { calculateDisplayRanking, manualToElo } from '../utils/Elo';
 
 const PlayerProfile: React.FC = () => {
@@ -21,6 +21,18 @@ const PlayerProfile: React.FC = () => {
   const stats = useMemo(() => {
       if (!playerId) return null;
       const result = { matchesPlayed: 0, wins: 0, losses: 0, mainTitles: 0, consTitles: 0, matchHistory: [] as any[] };
+
+      const getRoundLabel = (m: Match) => {
+          let label = '';
+          if (m.phase === 'group') label = `R${m.round}`;
+          else if (m.phase === 'qf') label = 'Cuartos';
+          else if (m.phase === 'sf') label = 'Semis';
+          else if (m.phase === 'final') label = 'Final';
+          else label = `R${m.round}`;
+
+          if (m.bracket === 'consolation') return `${label} Cons.`;
+          return label;
+      };
 
       const processTournamentData = (tData: TournamentState, date: string) => {
           const playerPairs = tData.pairs.filter(p => p.player1Id === playerId || p.player2Id === playerId);
@@ -53,7 +65,7 @@ const PlayerProfile: React.FC = () => {
                        oppNames = `${formatPlayerName(p1)} & ${formatPlayerName(p2)}`;
                    }
                    result.matchHistory.push({
-                       id: m.id, date: date, roundLabel: m.round <= 4 ? `R${m.round}` : 'PO',
+                       id: m.id, date: date, roundLabel: getRoundLabel(m),
                        partner: partnerName, opponent: oppNames, score: `${m.scoreA}-${m.scoreB}`, result: won ? 'W' : 'L'
                    });
                });
@@ -76,6 +88,23 @@ const PlayerProfile: React.FC = () => {
   const rawStatsElo = player.global_rating || 1200;
   const manualVal = player.manual_rating || 5;
 
+  // --- AVATAR LOGIC ---
+  const getInitials = (name: string) => {
+    return name.trim().split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  };
+  
+  const getAvatarColor = (name: string) => {
+    const colors = [
+        'bg-rose-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 
+        'bg-indigo-500', 'bg-purple-500', 'bg-teal-500', 'bg-cyan-500'
+    ];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+        hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  };
+
   return (
     <div className="space-y-6 pb-20">
        <div className="flex items-center justify-between">
@@ -86,14 +115,23 @@ const PlayerProfile: React.FC = () => {
 
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm relative overflow-hidden">
           <div className="absolute top-0 right-0 p-4"><button onClick={() => setIsEditing(true)} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-lg"><Edit2 size={20} /></button></div>
-          <div className="flex flex-col items-center text-center mb-6">
-               <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 mb-4 border-4 border-slate-50 shadow-inner"><User size={40} /></div>
-               <h1 className="text-2xl font-black text-slate-900">{formatPlayerName(player)}</h1> {/* Use helper */}
-               <div className="mt-2 flex flex-wrap justify-center gap-2">{player.categories?.map(c => <span key={c} className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-bold uppercase">{c}</span>)}</div>
+          
+          <div className="flex items-center gap-6">
+               <div className={`w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-black shadow-inner border-4 border-slate-50 ${getAvatarColor(player.name)}`}>
+                   {getInitials(player.name)}
+               </div>
+               <div className="flex flex-col items-start">
+                   <h1 className="text-3xl font-black text-slate-900 leading-none mb-1">{player.nickname || player.name.split(' ')[0]}</h1>
+                   <div className="text-sm font-bold text-slate-400 mb-3">{player.name}</div>
+                   <div className="flex flex-wrap gap-2">
+                       {player.categories?.map(c => <span key={c} className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold uppercase tracking-wider border border-slate-200">{c}</span>)}
+                   </div>
+               </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-600 border-t border-slate-100 pt-4">
-               <div className="flex items-center gap-3 p-2"><Smartphone size={18} className="text-emerald-500"/><span>{player.phone || 'Sin teléfono'}</span></div>
-               <div className="flex items-center gap-3 p-2"><Mail size={18} className="text-blue-500"/><span className="truncate">{player.email || 'Sin email'}</span></div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-600 border-t border-slate-100 pt-6 mt-6">
+               <div className="flex items-center gap-3 p-2 bg-slate-50 rounded-xl"><Smartphone size={18} className="text-emerald-500"/><span>{player.phone || 'Sin teléfono'}</span></div>
+               <div className="flex items-center gap-3 p-2 bg-slate-50 rounded-xl"><Mail size={18} className="text-blue-500"/><span className="truncate">{player.email || 'Sin email'}</span></div>
           </div>
       </div>
 
@@ -133,15 +171,11 @@ const PlayerProfile: React.FC = () => {
                   <span className="text-[10px] uppercase font-bold text-slate-400 text-center">Partidos</span>
               </div>
 
-              {/* Win Rate */}
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between col-span-1">
-                   <div className="flex justify-between items-start mb-2">
-                       <div className="text-rose-600"><Activity size={20}/></div>
-                       <span className="text-[10px] font-bold text-slate-400 uppercase">Win Rate</span>
-                   </div>
-                   <div className="flex items-end gap-1">
-                       <span className="text-2xl font-black text-slate-900">{stats.matchesPlayed > 0 ? Math.round((stats.wins / stats.matchesPlayed) * 100) : 0}%</span>
-                   </div>
+              {/* Win Rate (UNIFIED DESIGN) */}
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center">
+                   <Activity size={24} className="text-rose-500 mb-2"/>
+                   <span className="text-2xl font-black text-slate-900">{stats.matchesPlayed > 0 ? Math.round((stats.wins / stats.matchesPlayed) * 100) : 0}%</span>
+                   <span className="text-[10px] uppercase font-bold text-slate-400 text-center">Win Rate</span>
               </div>
               
               <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center"><Trophy size={24} className="text-emerald-500 mb-2"/><span className="text-2xl font-black text-slate-900">{stats.mainTitles}</span><span className="text-[10px] uppercase font-bold text-slate-400 text-center">Campeón</span></div>
@@ -155,12 +189,21 @@ const PlayerProfile: React.FC = () => {
               {stats?.matchHistory.map((match, idx) => (
                   <div key={idx} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex justify-between items-center">
                       <div>
-                          <div className="flex items-center gap-2 mb-1"><span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${match.result === 'W' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{match.result === 'W' ? 'Victoria' : 'Derrota'}</span><span className="text-xs text-slate-400 font-medium">{new Date(match.date).toLocaleDateString()}</span></div>
-                          <div className="text-sm font-bold text-slate-800"><span className="text-slate-400 font-normal">con</span> {match.partner} <span className="text-slate-400 font-normal">vs</span> {match.opponent}</div>
+                          <div className="flex items-center gap-2 mb-1">
+                              <span className="text-[10px] font-bold bg-slate-800 text-white px-2 py-0.5 rounded-full uppercase">{match.roundLabel}</span>
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${match.result === 'W' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{match.result === 'W' ? 'Victoria' : 'Derrota'}</span>
+                              <span className="text-xs text-slate-400 font-medium">{new Date(match.date).toLocaleDateString()}</span>
+                          </div>
+                          <div className="text-sm font-bold text-slate-800 mt-1"><span className="text-slate-400 font-normal">con</span> {match.partner} <span className="text-slate-400 font-normal">vs</span> {match.opponent}</div>
                       </div>
                       <div className="text-xl font-black text-slate-900 tracking-tight">{match.score}</div>
                   </div>
               ))}
+              {stats?.matchHistory.length === 0 && (
+                  <div className="text-center py-8 text-slate-400 italic bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                      No hay partidos registrados aún.
+                  </div>
+              )}
           </div>
       </div>
 

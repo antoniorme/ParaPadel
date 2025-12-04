@@ -1,11 +1,114 @@
-import React, { useState } from 'react';
-import { useTournament, GenerationMethod } from '../store/TournamentContext';
+
+import React, { useState, useEffect } from 'react';
+import { useTournament } from '../store/TournamentContext';
 import { useTimer } from '../store/TimerContext';
-import { ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock, Shuffle, Coffee, CheckCircle, XCircle, Trophy, Medal } from 'lucide-react';
+import { TournamentFormat, Player, Pair, GenerationMethod } from '../types';
+import { ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock, Shuffle, Coffee, CheckCircle, XCircle, Trophy, Medal, Check, Settings, Users, RotateCcw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+// --- MANUAL WIZARD COMPONENT (Moved from Registration) ---
+interface WizardProps {
+    pairs: Pair[];
+    players: Player[];
+    onComplete: (orderedPairs: Pair[]) => void;
+    onCancel: () => void;
+    formatName: (p?: Player) => string;
+    limit: number; 
+}
+
+const ManualGroupingWizard: React.FC<WizardProps> = ({ pairs, players, onComplete, onCancel, formatName, limit }) => {
+    const [currentGroupIdx, setCurrentGroupIdx] = useState(0); 
+    const [orderedPairs, setOrderedPairs] = useState<Pair[]>([]);
+    
+    // Group logic depends on limit
+    const groupNames = limit === 10 ? ['A', 'B'] : ['A', 'B', 'C', 'D'];
+    const groupSize = limit === 10 ? 5 : 4;
+    
+    const currentGroup = groupNames[currentGroupIdx];
+    
+    const assignedIds = new Set(orderedPairs.map(p => p.id));
+    const availablePairs = pairs.filter(p => !assignedIds.has(p.id));
+    
+    const [selectedForGroup, setSelectedForGroup] = useState<string[]>([]);
+
+    const toggleSelection = (id: string) => {
+        if (selectedForGroup.includes(id)) {
+            setSelectedForGroup(selectedForGroup.filter(pid => pid !== id));
+        } else {
+            if (selectedForGroup.length < groupSize) {
+                setSelectedForGroup([...selectedForGroup, id]);
+            }
+        }
+    };
+
+    const confirmGroup = () => {
+        if (selectedForGroup.length !== groupSize) return;
+        
+        const newGroupPairs = selectedForGroup.map(id => pairs.find(p => p.id === id)!);
+        const newOrder = [...orderedPairs, ...newGroupPairs];
+        setOrderedPairs(newOrder);
+        setSelectedForGroup([]);
+
+        if (currentGroupIdx < groupNames.length - 1) {
+            setCurrentGroupIdx(currentGroupIdx + 1);
+        } else {
+            onComplete(newOrder);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[100] flex flex-col items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-6 w-full max-w-lg shadow-2xl h-[85vh] flex flex-col">
+                <div className="text-center mb-4">
+                    <h3 className="text-2xl font-black text-slate-900">Configurar Grupo {currentGroup}</h3>
+                    <p className="text-slate-500 text-sm">Selecciona {groupSize} parejas de la lista</p>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto pr-2 space-y-2 mb-4 custom-scrollbar">
+                    {availablePairs.map(pair => {
+                        const p1 = players.find(p => p.id === pair.player1Id);
+                        const p2 = players.find(p => p.id === pair.player2Id);
+                        const isSelected = selectedForGroup.includes(pair.id);
+                        
+                        return (
+                            <div 
+                                key={pair.id} 
+                                onClick={() => toggleSelection(pair.id)}
+                                className={`p-3 rounded-xl border-2 flex justify-between items-center cursor-pointer transition-all ${isSelected ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 bg-white hover:border-slate-300'}`}
+                            >
+                                <div>
+                                    <div className="font-bold text-slate-800 text-sm">{formatName(p1)}</div>
+                                    <div className="font-bold text-slate-800 text-sm">& {formatName(p2)}</div>
+                                </div>
+                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
+                                    {isSelected && <Check size={14} className="text-white" strokeWidth={3}/>}
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+
+                <div className="flex flex-col gap-3 pt-4 border-t border-slate-100">
+                    <div className="text-center font-bold text-emerald-600 mb-2">
+                        Seleccionadas: {selectedForGroup.length} / {groupSize}
+                    </div>
+                    <button 
+                        onClick={confirmGroup}
+                        disabled={selectedForGroup.length !== groupSize}
+                        className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-2 ${selectedForGroup.length === groupSize ? 'bg-emerald-600 text-white animate-pulse' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                    >
+                        {currentGroupIdx === groupNames.length - 1 ? 'Finalizar y Empezar' : `Confirmar Grupo ${currentGroup} >`}
+                    </button>
+                    <button onClick={onCancel} className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 const ActiveTournament: React.FC = () => {
-  const { state, updateScoreDB, nextRoundDB, startTournamentDB, formatPlayerName } = useTournament();
+  const { state, dispatch, updateScoreDB, nextRoundDB, startTournamentDB, resetToSetupDB, formatPlayerName } = useTournament();
   const { resetTimer, startTimer } = useTimer();
   const navigate = useNavigate();
   
@@ -14,7 +117,7 @@ const ActiveTournament: React.FC = () => {
   const [scoreA, setScoreA] = useState('');
   const [scoreB, setScoreB] = useState('');
   
-  // Updated Info State to support "Eliminated" status
+  // Info prediction state
   const [nextMatchInfo, setNextMatchInfo] = useState<{ 
       pA_Name: string, pA_Status: string, pA_Next: string, pA_Won: boolean,
       pB_Name: string, pB_Status: string, pB_Next: string, pB_Won: boolean
@@ -25,18 +128,28 @@ const ActiveTournament: React.FC = () => {
   const [showRoundConfirm, setShowRoundConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
+  // SETUP STATES
   const [generationMethod, setGenerationMethod] = useState<GenerationMethod>('elo-balanced');
+  const [selectedFormat, setSelectedFormat] = useState<TournamentFormat>('16_mini');
+  const [showManualWizard, setShowManualWizard] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  // Sync format with global state on load
+  useEffect(() => {
+      if(state.format) setSelectedFormat(state.format);
+  }, [state.format]);
+
+  const handleFormatChange = (fmt: TournamentFormat) => {
+      setSelectedFormat(fmt);
+      dispatch({ type: 'SET_FORMAT', payload: fmt });
+  };
 
   // --- DATA FILTERING & LOGIC ---
   const currentMatches = state.matches.filter(m => m.round === state.currentRound);
   
-  // 1. Identificar partidos duplicados (Technical Rest) vs Jugables
   const sortedMatchesPriority = [...currentMatches].sort((a, b) => {
-      // Pista 0 al final
       if (a.courtId === 0 && b.courtId !== 0) return 1;
       if (a.courtId !== 0 && b.courtId === 0) return -1;
-
-      // Si comparten pista, Main va primero
       if (a.courtId === b.courtId) {
           if (a.bracket === 'main' && b.bracket !== 'main') return -1;
           if (b.bracket === 'main' && a.bracket !== 'main') return 1;
@@ -46,7 +159,6 @@ const ActiveTournament: React.FC = () => {
 
   const playableMatchIds = new Set<string>();
   const seenCourts = new Set<number>();
-
   sortedMatchesPriority.forEach(m => {
       if (m.courtId > 0) {
           if (!seenCourts.has(m.courtId)) {
@@ -56,11 +168,8 @@ const ActiveTournament: React.FC = () => {
       }
   });
 
-  // 2. Calcular estado de finalización
-  // EXCEPCIÓN: Si estamos en modo "Setup" o "Finished", no calculamos esto igual
   const activePlayableMatches = currentMatches.filter(m => playableMatchIds.has(m.id));
   const finishedPlayableMatches = activePlayableMatches.filter(m => m.isFinished).length;
-  // Aceptamos avanzar si todos los jugables están terminados.
   const allMatchesFinished = activePlayableMatches.length > 0 && activePlayableMatches.length === finishedPlayableMatches;
 
   const isTournamentFinished = state.status === 'finished' || state.currentRound > 8;
@@ -89,62 +198,10 @@ const ActiveTournament: React.FC = () => {
       return 'Playoff';
   };
 
-  // --- PREDICTION LOGIC ---
-  const predictNextRoundInfo = (matchId: string, sA: number, sB: number) => {
-      const match = state.matches.find(m => m.id === matchId);
-      if (!match) return null;
-
-      const pA_Won = sA > sB;
-      const round = state.currentRound;
-      
-      const getNextInfo = (isWinner: boolean, currentCourt: number, bracket: string | null) => {
-          if (!isWinner) return { status: 'Eliminado', next: '' };
-          
-          if (round === 7 && bracket === 'main') return { status: '¡CAMPEÓN!', next: '🏆' }; 
-          if (round === 8) return { status: '¡CAMPEÓN!', next: '🏆' };
-
-          if (round === 5) { 
-              if (bracket === 'main') {
-                  if (currentCourt === 1 || currentCourt === 3) return { status: 'Clasificado a Semis', next: 'Pista 1' };
-                  if (currentCourt === 2 || currentCourt === 4) return { status: 'Clasificado a Semis', next: 'Pista 2' };
-              } else {
-                  if (currentCourt === 5) return { status: 'Clasificado a Semis', next: 'Pista 2 (R7)' };
-                  if (currentCourt === 6) return { status: 'Clasificado a Semis', next: 'Pista 3 (R7)' };
-              }
-          }
-          
-          if (round === 6) { 
-              if (bracket === 'main') return { status: 'Clasificado a Final', next: 'Pista 1' };
-              if (currentCourt === 3) return { status: 'Clasificado a Semis', next: 'Pista 2 (R7)' };
-              if (currentCourt === 4) return { status: 'Clasificado a Semis', next: 'Pista 3 (R7)' };
-          }
-          
-          if (round === 7 && bracket === 'consolation') {
-              return { status: 'Clasificado a Final', next: 'Pista 1 (R8)' };
-          }
-
-          return { status: 'Clasificado', next: 'Siguiente Ronda' };
-      };
-
-      const infoA = getNextInfo(pA_Won, match.courtId, match.bracket as any);
-      const infoB = getNextInfo(!pA_Won, match.courtId, match.bracket as any);
-
-      return {
-          pA_Name: getPairName(match.pairAId),
-          pA_Status: infoA.status,
-          pA_Next: infoA.next,
-          pA_Won: pA_Won,
-          pB_Name: getPairName(match.pairBId),
-          pB_Status: infoB.status,
-          pB_Next: infoB.next,
-          pB_Won: !pA_Won
-      };
-  };
-
   // --- HANDLERS ---
   const handleStart = async () => {
       if (generationMethod === 'manual') {
-          navigate('/registration');
+          setShowManualWizard(true);
           return;
       }
       try {
@@ -156,20 +213,28 @@ const ActiveTournament: React.FC = () => {
       }
   };
 
+  const handleResetToSetup = async () => {
+      await resetToSetupDB();
+      setShowResetConfirm(false);
+  };
+
+  const handleManualWizardComplete = async (orderedPairs: Pair[]) => {
+      setShowManualWizard(false);
+      try {
+          await startTournamentDB('manual', orderedPairs);
+          resetTimer();
+          startTimer();
+      } catch (e: any) {
+          setErrorMessage(e.message || "Error al iniciar el torneo manual.");
+      }
+  };
+
   const handleSaveScore = () => {
     if (selectedMatchId && scoreA !== '' && scoreB !== '') {
         const valA = parseInt(scoreA);
         const valB = parseInt(scoreB);
         if (valA === valB) return alert("El partido no puede terminar en empate.");
-
         updateScoreDB(selectedMatchId, valA, valB);
-        
-        const info = predictNextRoundInfo(selectedMatchId, valA, valB);
-        if (info) {
-            setNextMatchInfo(info);
-            setLastEditedMatchId(selectedMatchId);
-        }
-
         setSelectedMatchId(null); setScoreA(''); setScoreB('');
     }
   };
@@ -180,14 +245,9 @@ const ActiveTournament: React.FC = () => {
       setScoreB(currentScoreB !== null ? currentScoreB.toString() : '');
   };
 
-  const handleCloseInfoModal = () => {
-      setNextMatchInfo(null);
-  };
-
   const handleNextRoundClick = () => {
       if (!allMatchesFinished && !isTournamentFinished) {
           const remaining = activePlayableMatches.length - finishedPlayableMatches;
-          // Robustez: Si el sistema falla y no detecta bien, permitir avanzar si es R7+
           if (state.currentRound < 7) {
             return alert(`No se puede avanzar ronda. Faltan ${remaining} partido(s) activos por finalizar.`);
           }
@@ -201,26 +261,20 @@ const ActiveTournament: React.FC = () => {
           resetTimer(); 
           await nextRoundDB();
       } catch (e: any) {
-          console.error("Error advancing round:", e);
           setErrorMessage(`Error al avanzar: ${e.message || e}`);
       }
   };
 
-  // --- CALCULATE CHAMPIONS (For Finished View) ---
+  // --- CHAMPIONS LOGIC ---
   const getChampions = () => {
-      // Logic to find winners of Final Main (R7 Court 1) and Final Cons (R8 Court 1)
-      const finalMain = state.matches.find(m => m.round === 7 && m.courtId === 1 && m.bracket === 'main');
-      const finalCons = state.matches.find(m => m.round === 8 && m.courtId === 1 && m.bracket === 'consolation');
+      const finalMain = state.matches.find(m => m.round === (state.format === '16_mini' ? 7 : 6) && m.bracket === 'main' && m.courtId === 1);
+      const finalCons = state.matches.find(m => m.round === (state.format === '16_mini' ? 8 : 4) && m.bracket === 'consolation'); // R4 is cons final for 10mini
 
       const getWinnerName = (m?: any) => {
           if(!m || !m.isFinished) return 'Pendiente';
           return (m.scoreA > m.scoreB) ? getPairName(m.pairAId) : getPairName(m.pairBId);
       };
-
-      return {
-          main: getWinnerName(finalMain),
-          cons: getWinnerName(finalCons)
-      };
+      return { main: getWinnerName(finalMain), cons: getWinnerName(finalCons) };
   };
 
   const PairDetailContent = ({ pairId }: { pairId: string }) => {
@@ -249,7 +303,7 @@ const ActiveTournament: React.FC = () => {
                           <div key={m.id} className={`p-3 rounded-xl border ${resultClass} flex justify-between items-center`}>
                               <div>
                                   <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">
-                                      Ronda {m.round} - Pista {m.courtId}
+                                      R{m.round} - P{m.courtId}
                                   </div>
                                   <div className="font-bold text-slate-800 text-sm">vs {opponentName}</div>
                               </div>
@@ -259,55 +313,84 @@ const ActiveTournament: React.FC = () => {
                           </div>
                       )
                   })}
-                  {matches.length === 0 && <p className="text-center text-slate-400 text-sm">No hay partidos asignados.</p>}
               </div>
           </div>
       );
   };
 
-  // --- VIEW: SETUP (BEFORE START) ---
+  // --- VIEW: SETUP (3 BLOCKS) ---
   if (state.status === 'setup') {
-      const canStart = state.pairs.filter(p => !p.isReserve).length === 16;
+      const limit = selectedFormat === '10_mini' ? 10 : 16;
+      // We check TOTAL pairs, not filtered by isReserve, because reserves are decided at start
+      const totalPairs = state.pairs.length;
+      const canStart = totalPairs >= limit;
+      const reservesCount = Math.max(0, totalPairs - limit);
+
       return (
-          <div className="flex flex-col items-center justify-center h-[70vh] p-6 text-center space-y-8">
-              <div className="bg-slate-100 p-6 rounded-full animate-pulse">
-                  <Play size={48} className="text-slate-400 ml-1" />
-              </div>
-              <div>
-                  <h2 className="text-2xl font-bold text-slate-800 mb-2">Torneo Listo</h2>
-                  <p className="text-slate-500 max-w-xs mx-auto">
-                      Hay {state.pairs.length} parejas registradas. {canStart ? 'Todo listo.' : 'Necesitas 16 parejas titulares.'}
-                  </p>
-              </div>
-              
-              {canStart && (
-                  <div className="w-full max-w-xs space-y-2">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Configurar Grupos</p>
-                      <div className="grid grid-cols-4 gap-2">
-                          <button onClick={() => setGenerationMethod('arrival')} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${generationMethod === 'arrival' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400 bg-white'}`}>
-                              <Clock size={18} className="mb-1"/>
-                              <span className="text-[9px] font-bold uppercase text-center leading-tight">Llegada</span>
-                          </button>
-                          <button onClick={() => setGenerationMethod('manual')} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${generationMethod === 'manual' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400 bg-white'}`}>
-                              <ListOrdered size={18} className="mb-1"/>
-                              <span className="text-[9px] font-bold uppercase text-center leading-tight">Manual</span>
-                          </button>
-                          <button onClick={() => setGenerationMethod('elo-balanced')} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${generationMethod === 'elo-balanced' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400 bg-white'}`}>
-                              <TrendingUp size={18} className="mb-1"/>
-                              <span className="text-[9px] font-bold uppercase text-center leading-tight">Nivel</span>
-                          </button>
-                          <button onClick={() => setGenerationMethod('elo-mixed')} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${generationMethod === 'elo-mixed' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-400 bg-white'}`}>
-                              <Shuffle size={18} className="mb-1"/>
-                              <span className="text-[9px] font-bold uppercase text-center leading-tight">Mix</span>
-                          </button>
-                      </div>
+          <div className="flex flex-col h-full space-y-6 pb-20">
+              <div className="text-center mb-4">
+                  <div className="inline-block p-4 bg-emerald-100 rounded-full mb-4 animate-pulse">
+                      <Settings size={40} className="text-emerald-600" />
                   </div>
-              )}
+                  <h2 className="text-3xl font-black text-slate-900">Torneo Listo</h2>
+                  <p className="text-slate-500">Configura los parámetros finales</p>
+              </div>
+
+              {/* BLOCK 1: PAIRS COUNT */}
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <div>
+                      <h3 className="text-sm font-bold text-slate-400 uppercase">Parejas Inscritas</h3>
+                      <p className="text-xs text-slate-400">Titulares: {limit} {reservesCount > 0 && `(+${reservesCount} Reservas)`}</p>
+                  </div>
+                  <div className={`text-4xl font-black ${canStart ? 'text-emerald-500' : 'text-orange-500'}`}>
+                      {totalPairs}<span className="text-xl text-slate-300">/{limit}</span>
+                  </div>
+              </div>
+
+              {/* BLOCK 2: MINI TYPE */}
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-400 uppercase mb-4">Tipo de Mini</h3>
+                  <div className="grid grid-cols-4 gap-2">
+                      <button 
+                          onClick={() => handleFormatChange('16_mini')}
+                          className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '16_mini' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}
+                      >
+                          16
+                      </button>
+                      <button 
+                           onClick={() => handleFormatChange('10_mini')}
+                           className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '10_mini' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}
+                      >
+                          10
+                      </button>
+                      <button disabled className="py-3 rounded-xl font-bold border-2 border-slate-50 bg-slate-50 text-slate-300 cursor-not-allowed">12</button>
+                      <button disabled className="py-3 rounded-xl font-bold border-2 border-slate-50 bg-slate-50 text-slate-300 cursor-not-allowed">8</button>
+                  </div>
+              </div>
+
+              {/* BLOCK 3: GENERATION */}
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-400 uppercase mb-4">Generación de Grupos</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                      <button onClick={() => setGenerationMethod('arrival')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'arrival' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500'}`}>
+                          <Clock size={18}/> <span className="text-xs font-bold uppercase">Llegada</span>
+                      </button>
+                      <button onClick={() => setGenerationMethod('manual')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'manual' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500'}`}>
+                          <ListOrdered size={18}/> <span className="text-xs font-bold uppercase">Manual</span>
+                      </button>
+                      <button onClick={() => setGenerationMethod('elo-balanced')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'elo-balanced' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500'}`}>
+                          <TrendingUp size={18}/> <span className="text-xs font-bold uppercase">Nivel</span>
+                      </button>
+                      <button onClick={() => setGenerationMethod('elo-mixed')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'elo-mixed' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500'}`}>
+                          <Shuffle size={18}/> <span className="text-xs font-bold uppercase">Mix</span>
+                      </button>
+                  </div>
+              </div>
 
               <button 
                 onClick={handleStart} 
                 disabled={!canStart}
-                className={`w-full max-w-xs px-8 py-5 rounded-xl font-bold text-lg shadow-xl flex items-center justify-center gap-2 transition-all ${canStart ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white active:scale-95 hover:shadow-2xl' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                className={`w-full py-5 rounded-2xl font-bold text-lg shadow-xl flex items-center justify-center gap-2 transition-all ${canStart ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white active:scale-95 hover:shadow-2xl' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
               >
                   <Play size={24} fill="currentColor" /> EMPEZAR TORNEO
               </button>
@@ -323,6 +406,17 @@ const ActiveTournament: React.FC = () => {
                           <button onClick={() => setErrorMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Entendido</button>
                       </div>
                   </div>
+              )}
+
+              {showManualWizard && (
+                  <ManualGroupingWizard 
+                    pairs={state.pairs.filter(p => !p.isReserve).slice(0, limit)} 
+                    players={state.players}
+                    onCancel={() => setShowManualWizard(false)}
+                    onComplete={handleManualWizardComplete}
+                    formatName={formatPlayerName}
+                    limit={limit}
+                  />
               )}
           </div>
       )
@@ -374,11 +468,16 @@ const ActiveTournament: React.FC = () => {
   return (
     <div className="space-y-6 pb-32">
       {/* Header */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex items-center justify-between">
-          <h2 className="text-xl font-bold text-slate-900">Ronda {state.currentRound}</h2>
-          <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold uppercase tracking-wider">
-              {state.currentRound <= 4 ? 'Fase de Grupos' : 'Playoffs'}
-          </span>
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex items-center justify-between sticky top-16 z-20">
+          <div className="flex items-center gap-2">
+              <h2 className="text-xl font-bold text-slate-900">Ronda {state.currentRound}</h2>
+              <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold uppercase tracking-wider">
+                  {state.currentRound <= 4 ? 'Fase de Grupos' : 'Playoffs'}
+              </span>
+          </div>
+          <button onClick={() => setShowResetConfirm(true)} className="p-2 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200">
+              <Settings size={20}/>
+          </button>
       </div>
 
       {/* Matches List */}
@@ -387,11 +486,9 @@ const ActiveTournament: React.FC = () => {
             <div className="text-center py-10 text-slate-400 italic">Cargando partidos...</div>
         ) : (
             sortedMatchesPriority.map(match => {
-                // LÓGICA DE VISUALIZACIÓN
                 const isWaiting = match.courtId === 0;
-                // Es "Blocked" si NO es Playable (es un duplicado de pista de consolación)
                 const isPlayable = playableMatchIds.has(match.id);
-                const isTechnicalRest = !isPlayable && !isWaiting; // Si no es jugable y no es Court 0, es un descanso técnico
+                const isTechnicalRest = !isPlayable && !isWaiting;
 
                 return (
                 <div key={match.id} className={`relative rounded-2xl border overflow-hidden ${isWaiting ? 'bg-slate-50 border-slate-300' : isTechnicalRest ? 'bg-slate-100 opacity-60' : match.isFinished ? 'border-emerald-200 bg-emerald-50/30' : 'bg-white border-slate-200 shadow-sm'}`}>
@@ -464,7 +561,7 @@ const ActiveTournament: React.FC = () => {
         )}
       </div>
 
-      {/* Floating Action Button for Next Round - CENTERED IN CONTAINER */}
+      {/* Floating Action Button for Next Round */}
       {!isTournamentFinished && (
           <div className="fixed bottom-24 left-0 right-0 z-30 pointer-events-none">
             <div className="max-w-3xl mx-auto relative px-4 text-center pointer-events-auto">
@@ -526,6 +623,26 @@ const ActiveTournament: React.FC = () => {
         </div>
       )}
 
+      {/* MODAL: RESET CONFIGURATION (PANIC BUTTON) */}
+      {showResetConfirm && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600">
+                      <RotateCcw size={32} />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 mb-2">¿Reiniciar Configuración?</h3>
+                  <p className="text-slate-500 mb-6 text-sm">
+                      Se borrarán todos los partidos generados y volverás a la pantalla de configuración. 
+                      <strong className="block mt-2 text-slate-800">Las parejas inscritas NO se borrarán.</strong>
+                  </p>
+                  <div className="flex gap-3">
+                      <button onClick={() => setShowResetConfirm(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold">Cancelar</button>
+                      <button onClick={handleResetToSetup} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold shadow-lg">Reiniciar</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* MODAL: NEXT MATCH INFO */}
       {nextMatchInfo && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
@@ -536,7 +653,6 @@ const ActiveTournament: React.FC = () => {
                   <h3 className="text-xl font-black text-slate-900 mb-4">Resultado Playoff</h3>
                   
                   <div className="space-y-3 mb-6 text-left">
-                      {/* PAIR A */}
                       <div className={`p-3 rounded-xl border ${nextMatchInfo.pA_Won ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
                           <div className="flex justify-between items-center mb-1">
                               <p className="text-xs font-bold text-slate-400 uppercase">Pareja 1</p>
@@ -548,7 +664,6 @@ const ActiveTournament: React.FC = () => {
                           </div>
                       </div>
 
-                      {/* PAIR B */}
                       <div className={`p-3 rounded-xl border ${nextMatchInfo.pB_Won ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
                           <div className="flex justify-between items-center mb-1">
                               <p className="text-xs font-bold text-slate-400 uppercase">Pareja 2</p>
@@ -561,7 +676,7 @@ const ActiveTournament: React.FC = () => {
                       </div>
                   </div>
 
-                  <button onClick={handleCloseInfoModal} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Continuar</button>
+                  <button onClick={() => setNextMatchInfo(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Continuar</button>
               </div>
           </div>
       )}
@@ -575,7 +690,7 @@ const ActiveTournament: React.FC = () => {
                   </div>
                   <h3 className="text-2xl font-black text-slate-900 mb-2">¿Avanzar Ronda?</h3>
                   <p className="text-slate-500 mb-8">
-                      {state.currentRound === 5 
+                      {state.currentRound === (state.format === '16_mini' ? 5 : 4)
                         ? "Se activarán las Semifinales del Principal y los partidos de Consolación pendientes."
                         : "Se generarán los siguientes partidos. Asegúrate de que todos los resultados estén correctos."}
                   </p>

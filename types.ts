@@ -1,3 +1,4 @@
+
 export interface Player {
   id: string; // UUID
   user_id?: string;
@@ -58,10 +59,15 @@ export interface Group {
   pairIds: string[];
 }
 
+export type TournamentFormat = '16_mini' | '10_mini';
+
+export type GenerationMethod = 'elo-balanced' | 'elo-mixed' | 'manual' | 'arrival';
+
 export interface TournamentState {
   id?: string; 
   status: 'setup' | 'checkin' | 'active' | 'finished';
   currentRound: number; 
+  format: TournamentFormat; // NEW: Format definition
   players: Player[]; 
   pairs: Pair[]; 
   matches: Match[]; 
@@ -84,6 +90,7 @@ export interface PastTournament {
     winnerMain?: string; 
     winnerConsolation?: string; 
     playerCount: number;
+    format?: TournamentFormat;
     data?: TournamentState; // Made optional as history list often doesn't have full data
 }
 
@@ -94,4 +101,5 @@ export type TournamentAction =
   | { type: 'TOGGLE_BALLS'; payload: number }
   | { type: 'TOGGLE_WATER'; payload: string }
   | { type: 'TOGGLE_PAID'; payload: string }
-  | { type: 'LOAD_DEMO_DATA'; };
+  | { type: 'LOAD_DEMO_DATA'; }
+  | { type: 'SET_FORMAT'; payload: TournamentFormat };

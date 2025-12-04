@@ -1,16 +1,17 @@
+
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
-import { TournamentState, TournamentAction, Player, Pair, Match, Group } from '../types';
+import { TournamentState, TournamentAction, Player, Pair, Match, Group, TournamentFormat, GenerationMethod } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
-import { getMatchRating, calculateEloDelta, calculateDisplayRanking, manualToElo } from '../utils/Elo';
+import { useHistory } from './HistoryContext'; // Import HistoryContext to access Club Data
+import { calculateDisplayRanking } from '../utils/Elo';
 
-const GROUP_NAMES = ['A', 'B', 'C', 'D'];
+const GROUP_NAMES_16 = ['A', 'B', 'C', 'D'];
+const GROUP_NAMES_10 = ['A', 'B'];
 const STORAGE_KEY = 'padelpro_local_db_v3'; 
 export const TOURNAMENT_CATEGORIES = ['Iniciación', '5ª CAT', '4ª CAT', '3ª CAT', '2ª CAT', '1ª CAT'];
 
-export type GenerationMethod = 'elo-balanced' | 'elo-mixed' | 'manual' | 'arrival';
-
-// --- Logic Helpers ---
+// --- HELPERS ---
 
 export const getPairElo = (pair: Pair, players: Player[]): number => {
     const p1 = players.find(p => p.id === pair.player1Id);
@@ -20,86 +21,86 @@ export const getPairElo = (pair: Pair, players: Player[]): number => {
     return score1 + score2;
 };
 
-const generateGroupsHelper = (pairs: Pair[], players: Player[], method: GenerationMethod = 'manual'): Group[] => {
-  let activePairs = pairs.filter(p => !p.isReserve);
+const sortPairsByMethod = (pairs: Pair[], players: Player[], method: GenerationMethod): Pair[] => {
+    let activePairs = pairs; 
+    
+    if (method === 'arrival') {
+        return [...activePairs].sort((a, b) => (a.id > b.id ? 1 : -1)); 
+    } 
+    
+    if (method === 'elo-balanced') {
+        return [...activePairs].sort((a, b) => {
+            const eloA = getPairElo(a, players);
+            const eloB = getPairElo(b, players);
+            return eloB - eloA;
+        });
+    } 
+    
+    if (method === 'elo-mixed') {
+        return [...activePairs].sort((a, b) => {
+            const eloA = getPairElo(a, players);
+            const eloB = getPairElo(b, players);
+            return eloB - eloA;
+        });
+    }
+
+    return activePairs; 
+};
+
+// --- GROUP GENERATOR ---
+const generateGroupsHelper = (pairs: Pair[], players: Player[], method: GenerationMethod = 'manual', format: TournamentFormat = '16_mini'): Group[] => {
+  const limit = format === '10_mini' ? 10 : 16;
   
-  if (method === 'arrival') {
-      activePairs = [...activePairs].sort((a, b) => (a.id > b.id ? 1 : -1));
-  } else if (method === 'elo-balanced') {
-      activePairs = [...activePairs].sort((a, b) => {
-          const eloA = getPairElo(a, players);
-          const eloB = getPairElo(b, players);
-          return eloB - eloA;
-      });
-  } else if (method === 'elo-mixed') {
-      const rankedPairs = [...activePairs].sort((a, b) => {
-          const eloA = getPairElo(a, players);
-          const eloB = getPairElo(b, players);
-          return eloB - eloA;
-      });
-
-      const pot1 = rankedPairs.slice(0, 4);   
-      const pot2 = rankedPairs.slice(4, 8);   
-      const pot3 = rankedPairs.slice(8, 12);  
-      const pot4 = rankedPairs.slice(12, 16); 
-
-      const groupA_Pairs = [pot1[0], pot2[0], pot3[0], pot4[0]];
-      const groupB_Pairs = [pot1[1], pot2[1], pot3[1], pot4[1]];
-      const groupC_Pairs = [pot1[2], pot2[2], pot3[2], pot4[2]];
-      const groupD_Pairs = [pot1[3], pot2[3], pot3[3], pot4[3]];
-
-      activePairs = [...groupA_Pairs, ...groupB_Pairs, ...groupC_Pairs, ...groupD_Pairs];
-  }
-
-  activePairs = activePairs.slice(0, 16);
+  let sortedPairs = sortPairsByMethod(pairs, players, method);
+  const titularPairs = sortedPairs.slice(0, limit);
 
   const groups: Group[] = [];
-  for (let i = 0; i < 4; i++) {
-    groups.push({
-      id: GROUP_NAMES[i],
-      pairIds: activePairs.slice(i * 4, (i + 1) * 4).map(p => p.id)
-    });
+  
+  if (format === '16_mini') {
+      if (method === 'elo-mixed') {
+        const pot1 = titularPairs.slice(0, 4);   
+        const pot2 = titularPairs.slice(4, 8);   
+        const pot3 = titularPairs.slice(8, 12);  
+        const pot4 = titularPairs.slice(12, 16); 
+        // Snake / Pot distribution: One from each strength tier to each group
+        groups.push({ id: 'A', pairIds: [pot1[0], pot2[0], pot3[0], pot4[0]].filter(Boolean).map(p=>p.id) });
+        groups.push({ id: 'B', pairIds: [pot1[1], pot2[1], pot3[1], pot4[1]].filter(Boolean).map(p=>p.id) });
+        groups.push({ id: 'C', pairIds: [pot1[2], pot2[2], pot3[2], pot4[2]].filter(Boolean).map(p=>p.id) });
+        groups.push({ id: 'D', pairIds: [pot1[3], pot2[3], pot3[3], pot4[3]].filter(Boolean).map(p=>p.id) });
+      } else {
+        // Balanced / Arrival / Manual: Sequential fill
+        // A gets best 4, B gets next 4...
+        for (let i = 0; i < 4; i++) {
+            groups.push({
+                id: GROUP_NAMES_16[i],
+                pairIds: titularPairs.slice(i * 4, (i + 1) * 4).map(p => p.id)
+            });
+        }
+      }
+  } else if (format === '10_mini') {
+      if (method === 'elo-mixed') {
+          // Cremallera: 1->A, 2->B, 3->A, 4->B...
+          const groupA: Pair[] = [];
+          const groupB: Pair[] = [];
+          titularPairs.forEach((p, idx) => {
+              if (idx % 2 === 0) groupA.push(p); 
+              else groupB.push(p); 
+          });
+          groups.push({ id: 'A', pairIds: groupA.map(p => p.id) });
+          groups.push({ id: 'B', pairIds: groupB.map(p => p.id) });
+      } else {
+          // Balanced: Top 5 to A, Bottom 5 to B
+          groups.push({ id: 'A', pairIds: titularPairs.slice(0, 5).map(p => p.id) });
+          groups.push({ id: 'B', pairIds: titularPairs.slice(5, 10).map(p => p.id) });
+      }
   }
+
   return groups;
 };
 
-const reconstructGroupsFromMatches = (pairs: Pair[], matches: Match[], players: Player[]): Group[] => {
-    const groupMap: Record<string, Set<string>> = {
-        'A': new Set(), 'B': new Set(), 'C': new Set(), 'D': new Set()
-    };
+// --- MATCH GENERATORS ---
 
-    matches.forEach(m => {
-        if (m.phase !== 'group') return;
-        
-        let targetGroup = '';
-        if (m.round === 1) {
-            if (m.courtId === 1 || m.courtId === 2) targetGroup = 'A';
-            else if (m.courtId === 3 || m.courtId === 4) targetGroup = 'B';
-            else if (m.courtId === 5 || m.courtId === 6) targetGroup = 'C';
-        } else if (m.round === 2) {
-             if (m.courtId === 5 || m.courtId === 6) targetGroup = 'D';
-        }
-
-        if (targetGroup && groupMap[targetGroup]) {
-            groupMap[targetGroup].add(m.pairAId);
-            groupMap[targetGroup].add(m.pairBId);
-        }
-    });
-
-    const groups: Group[] = GROUP_NAMES.map(name => ({
-        id: name,
-        pairIds: Array.from(groupMap[name])
-    }));
-
-    const totalAssigned = groups.reduce((acc, g) => acc + g.pairIds.length, 0);
-    if (totalAssigned < 16 && matches.length === 0) {
-        return generateGroupsHelper(pairs, players, 'elo-balanced');
-    }
-
-    return groups;
-};
-
-const generateGroupMatchesHelper = (groups: Group[]): Partial<Match>[] => {
+const generateMatches16 = (groups: Group[], courtCount: number): Partial<Match>[] => {
   const matches: Partial<Match>[] = [];
   const createMatches = (groupId: string, round: number, idxs: number[][], court: number) => {
       const g = groups.find(x => x.id === groupId);
@@ -113,21 +114,144 @@ const generateGroupMatchesHelper = (groups: Group[]): Partial<Match>[] => {
           };
       }).filter(Boolean) as Partial<Match>[];
   };
+
+  // LOGIC FORK: 8+ COURTS = SIMULTANEOUS (No Breaks)
+  if (courtCount >= 8) {
+      // Round 1 (All groups play internal matches)
+      // A on 1-2, B on 3-4, C on 5-6, D on 7-8
+      matches.push(...createMatches('A', 1, [[0,1], [2,3]], 1));
+      matches.push(...createMatches('B', 1, [[0,1], [2,3]], 3));
+      matches.push(...createMatches('C', 1, [[0,1], [2,3]], 5));
+      matches.push(...createMatches('D', 1, [[0,1], [2,3]], 7));
+
+      // Round 2
+      matches.push(...createMatches('A', 2, [[0,2], [1,3]], 1));
+      matches.push(...createMatches('B', 2, [[0,2], [1,3]], 3));
+      matches.push(...createMatches('C', 2, [[0,2], [1,3]], 5));
+      matches.push(...createMatches('D', 2, [[0,2], [1,3]], 7));
+
+      // Round 3
+      matches.push(...createMatches('A', 3, [[0,3], [1,2]], 1));
+      matches.push(...createMatches('B', 3, [[0,3], [1,2]], 3));
+      matches.push(...createMatches('C', 3, [[0,3], [1,2]], 5));
+      matches.push(...createMatches('D', 3, [[0,3], [1,2]], 7));
+
+      return matches;
+  }
   
+  // LOGIC FALLBACK: < 8 COURTS = ROTATING (With Breaks)
+  // Hardcoded Americano 16 Logic for 6 courts
   matches.push(...createMatches('A', 1, [[0,1], [2,3]], 1));
   matches.push(...createMatches('B', 1, [[0,1], [2,3]], 3));
   matches.push(...createMatches('C', 1, [[0,1], [2,3]], 5));
+  
   matches.push(...createMatches('A', 2, [[0,2], [1,3]], 1));
   matches.push(...createMatches('B', 2, [[0,2], [1,3]], 3));
   matches.push(...createMatches('D', 2, [[0,1], [2,3]], 5));
+  
   matches.push(...createMatches('A', 3, [[0,3], [1,2]], 1));
   matches.push(...createMatches('C', 3, [[0,2], [1,3]], 3));
   matches.push(...createMatches('D', 3, [[0,2], [1,3]], 5));
+  
   matches.push(...createMatches('B', 4, [[0,3], [1,2]], 1));
   matches.push(...createMatches('C', 4, [[0,3], [1,2]], 3));
   matches.push(...createMatches('D', 4, [[0,3], [1,2]], 5));
 
   return matches;
+};
+
+const generateMatches10 = (groups: Group[]): Partial<Match>[] => {
+    const matches: Partial<Match>[] = [];
+    const gA = groups.find(g => g.id === 'A')?.pairIds || [];
+    const gB = groups.find(g => g.id === 'B')?.pairIds || [];
+
+    if (gA.length !== 5 || gB.length !== 5) return [];
+
+    const mk = (r: number, c: number, idA: string, idB: string) => ({
+        round: r, phase: 'group' as const, bracket: null, courtId: c,
+        pairAId: idA, pairBId: idB, scoreA: null, scoreB: null, isFinished: false
+    });
+
+    // ROUND 1
+    matches.push(mk(1, 1, gA[0], gA[1])); 
+    matches.push(mk(1, 2, gA[2], gA[3]));
+    matches.push(mk(1, 3, gA[4], gB[0])); // Cross
+    matches.push(mk(1, 4, gB[1], gB[2]));
+    matches.push(mk(1, 5, gB[3], gB[4]));
+
+    // ROUND 2
+    matches.push(mk(2, 1, gA[0], gA[2])); 
+    matches.push(mk(2, 2, gA[1], gA[4])); 
+    matches.push(mk(2, 3, gA[3], gB[1])); // Cross
+    matches.push(mk(2, 4, gB[0], gB[2])); 
+    matches.push(mk(2, 5, gB[4], gB[3])); 
+
+    // ROUND 3
+    matches.push(mk(3, 1, gA[0], gA[3])); 
+    matches.push(mk(3, 2, gA[1], gA[2])); 
+    matches.push(mk(3, 3, gA[4], gB[2])); // Cross
+    matches.push(mk(3, 4, gB[0], gB[4])); 
+    matches.push(mk(3, 5, gB[1], gB[3])); 
+
+    return matches;
+};
+
+// --- DATA RECONSTRUCTION ---
+
+const reconstructGroupsFromMatches = (pairs: Pair[], matches: Match[], players: Player[], format: TournamentFormat): Group[] => {
+    const groupMap: Record<string, Set<string>> = {
+        'A': new Set(), 'B': new Set(), 'C': new Set(), 'D': new Set()
+    };
+
+    if (format === '10_mini') {
+        // Try to infer from Round 1 Court IDs for persistence logic
+        // Court 1,2 -> A. Court 4,5 -> B. Court 3 -> A(pairA) B(pairB)
+        const round1 = matches.filter(m => m.round === 1);
+        
+        if (round1.length > 0) {
+            round1.forEach(m => {
+                if (m.courtId === 1 || m.courtId === 2) {
+                    groupMap['A'].add(m.pairAId);
+                    groupMap['A'].add(m.pairBId);
+                } else if (m.courtId === 4 || m.courtId === 5) {
+                    groupMap['B'].add(m.pairAId);
+                    groupMap['B'].add(m.pairBId);
+                } else if (m.courtId === 3) {
+                    groupMap['A'].add(m.pairAId); // In generation, pairA is from group A
+                    groupMap['B'].add(m.pairBId); // In generation, pairB is from group B
+                }
+            });
+            return GROUP_NAMES_10.map(name => ({ id: name, pairIds: Array.from(groupMap[name]) }));
+        }
+
+        // Fallback if no matches found yet
+        return generateGroupsHelper(pairs, players, 'elo-balanced', '10_mini');
+    }
+
+    // 16_mini Reconstruction
+    matches.forEach(m => {
+        if (m.phase !== 'group') return;
+        let targetGroup = '';
+        if (m.round === 1) {
+            if (m.courtId === 1 || m.courtId === 2) targetGroup = 'A';
+            else if (m.courtId === 3 || m.courtId === 4) targetGroup = 'B';
+            else if (m.courtId === 5 || m.courtId === 6) targetGroup = 'C';
+            else if (m.courtId === 7 || m.courtId === 8) targetGroup = 'D'; 
+        } 
+        if (targetGroup && groupMap[targetGroup]) {
+            groupMap[targetGroup].add(m.pairAId);
+            groupMap[targetGroup].add(m.pairBId);
+        }
+    });
+
+    const groups: Group[] = GROUP_NAMES_16.map(name => ({
+        id: name, pairIds: Array.from(groupMap[name])
+    }));
+
+    if (groups.reduce((acc, g) => acc + g.pairIds.length, 0) < 16 && matches.length === 0) {
+        return generateGroupsHelper(pairs, players, 'elo-balanced', '16_mini');
+    }
+    return groups;
 };
 
 const recalculateStats = (pairs: Pair[], matches: Match[]) => {
@@ -138,9 +262,11 @@ const recalculateStats = (pairs: Pair[], matches: Match[]) => {
         if (!m.isFinished || m.scoreA === null || m.scoreB === null) return;
         if (!statsMap[m.pairAId]) statsMap[m.pairAId] = { played: 0, won: 0, gameDiff: 0 };
         if (!statsMap[m.pairBId]) statsMap[m.pairBId] = { played: 0, won: 0, gameDiff: 0 };
+        
         statsMap[m.pairAId].played += 1;
         statsMap[m.pairAId].gameDiff += (m.scoreA - m.scoreB);
         if (m.scoreA > m.scoreB) statsMap[m.pairAId].won += 1;
+        
         statsMap[m.pairBId].played += 1;
         statsMap[m.pairBId].gameDiff += (m.scoreB - m.scoreA);
         if (m.scoreB > m.scoreA) statsMap[m.pairBId].won += 1;
@@ -158,22 +284,19 @@ const getRankedPairsForGroup = (pairs: Pair[], groups: Group[], groupId: string)
     });
 };
 
-const inferMatchCategory = (players: Player[]): string => {
-    const p = players[0];
-    return p?.main_category || p?.categories?.[0] || '4ª CAT';
-};
-
 const initialState: TournamentState = {
   status: 'setup',
   currentRound: 0,
+  format: '16_mini',
   players: [],
   pairs: [],
   matches: [],
   groups: [],
-  courts: Array.from({ length: 6 }, (_, i) => ({ id: i + 1, ballsGiven: false })),
+  courts: [], 
   loading: true
 };
 
+// --- CONTEXT ---
 interface TournamentContextType {
     state: TournamentState;
     dispatch: React.Dispatch<TournamentAction>;
@@ -187,6 +310,7 @@ interface TournamentContextType {
     nextRoundDB: () => Promise<void>;
     deletePairDB: (pairId: string) => Promise<void>;
     archiveAndResetDB: () => Promise<void>;
+    resetToSetupDB: () => Promise<void>; 
     regenerateMatchesDB: () => Promise<string>;
     hardResetDB: () => Promise<void>;
     formatPlayerName: (p?: Player) => string;
@@ -205,6 +329,7 @@ const TournamentContext = createContext<TournamentContextType>({
     nextRoundDB: async () => {},
     deletePairDB: async () => {},
     archiveAndResetDB: async () => {},
+    resetToSetupDB: async () => {},
     regenerateMatchesDB: async () => "",
     hardResetDB: async () => {},
     formatPlayerName: () => ''
@@ -213,16 +338,17 @@ const TournamentContext = createContext<TournamentContextType>({
 const reducer = (state: TournamentState, action: TournamentAction): TournamentState => {
     switch (action.type) {
         case 'SET_STATE': return { ...state, ...action.payload };
+        case 'SET_FORMAT': return { ...state, format: action.payload };
         case 'SET_LOADING': return { ...state, loading: action.payload };
         case 'RESET_LOCAL': return initialState;
         case 'TOGGLE_BALLS': return { ...state, courts: state.courts.map(c => c.id === action.payload ? { ...c, ballsGiven: !c.ballsGiven } : c) };
         case 'TOGGLE_WATER': return { ...state, pairs: state.pairs.map(p => p.id === action.payload ? { ...p, waterReceived: !p.waterReceived } : p) };
         case 'TOGGLE_PAID': return { ...state, pairs: state.pairs.map(p => { if (p.player1Id === action.payload) return { ...p, paidP1: !p.paidP1 }; if (p.player2Id === action.payload) return { ...p, paidP2: !p.paidP2 }; return p; }) };
         case 'LOAD_DEMO_DATA':
-             const demoPlayers: Player[] = Array.from({ length: 32 }, (_, i) => ({ id: `demo-p-${i}`, name: `Jugador ${i+1}`, categories: ['4ª CAT'], user_id: 'dev', global_rating: 1200 - (i * 20), main_category: '4ª CAT', category_ratings: { '4ª CAT': 1200 } }));
+             const demoPlayers: Player[] = Array.from({ length: 32 }, (_, i) => ({ id: `demo-p-${i}`, name: `Jugador ${i+1}`, categories: ['4ª CAT'], user_id: 'dev' }));
              const demoPairs: Pair[] = [];
              for(let i=0; i<16; i++) { demoPairs.push({ id: `pair-${i}`, player1Id: demoPlayers[i*2].id, player2Id: demoPlayers[i*2+1].id, name: 'Pareja', waterReceived: false, paidP1: false, paidP2: false, stats: {played:0, won:0, gameDiff:0}, isReserve: false }); }
-             return { ...state, players: demoPlayers, pairs: demoPairs, status: 'setup' };
+             return { ...state, players: demoPlayers, pairs: demoPairs, status: 'setup', format: '16_mini' };
         default: return state;
     }
 };
@@ -230,6 +356,7 @@ const reducer = (state: TournamentState, action: TournamentAction): TournamentSt
 export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(reducer, initialState);
     const { user, isOfflineMode } = useAuth();
+    const { clubData } = useHistory(); // Access club data to get court count
 
     const formatPlayerName = useCallback((p?: Player) => {
         if (!p) return 'Jugador';
@@ -248,12 +375,17 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         if (!user) return;
         dispatch({ type: 'SET_LOADING', payload: true });
 
+        // Dynamic Courts based on Club Data
+        const courts = Array.from({ length: clubData.courtCount }, (_, i) => ({ id: i + 1, ballsGiven: false }));
+
         if (isOfflineMode) {
             const localData = localStorage.getItem(STORAGE_KEY);
             if (localData) {
-                dispatch({ type: 'SET_STATE', payload: JSON.parse(localData) });
+                const parsed = JSON.parse(localData);
+                // Ensure courts are updated even if loaded from local state (to reflect club changes)
+                dispatch({ type: 'SET_STATE', payload: { ...parsed, courts: courts } });
             } else {
-                dispatch({ type: 'SET_STATE', payload: { players: [], pairs: [], status: 'setup' } });
+                dispatch({ type: 'SET_STATE', payload: { players: [], pairs: [], status: 'setup', courts: courts } });
             }
             dispatch({ type: 'SET_LOADING', payload: false });
             return;
@@ -265,506 +397,376 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             const activeTournament = tournaments?.[0];
 
             if (!activeTournament) {
-                dispatch({ type: 'SET_STATE', payload: { id: undefined, status: 'setup', players: players || [], pairs: [], matches: [], groups: [] } });
+                dispatch({ type: 'SET_STATE', payload: { id: undefined, status: 'setup', players: players || [], pairs: [], matches: [], groups: [], courts } });
             } else {
                 const { data: pairs } = await supabase.from('tournament_pairs').select('*').eq('tournament_id', activeTournament.id).order('created_at', { ascending: true });
                 const { data: matches } = await supabase.from('matches').select('*').eq('tournament_id', activeTournament.id);
                 
+                const format: TournamentFormat = activeTournament.format || '16_mini';
+                const limit = format === '10_mini' ? 10 : 16;
+
                 let mappedPairs: Pair[] = (pairs || []).map(p => ({
                     id: p.id, tournament_id: p.tournament_id, player1Id: p.player1_id, player2Id: p.player2_id,
                     name: p.name || 'Pareja', waterReceived: p.water_received, paidP1: p.paid_p1, paidP2: p.paid_p2,
                     stats: { played: 0, won: 0, gameDiff: 0 }, 
                     isReserve: false 
                 }));
-
-                mappedPairs = mappedPairs.map((p, idx) => ({ ...p, isReserve: idx >= 16 }));
+                
+                mappedPairs = mappedPairs.map((p, idx) => ({ ...p, isReserve: idx >= limit }));
 
                 const mappedMatches: Match[] = (matches || []).map(m => ({
                     id: m.id, round: m.round, 
                     phase: m.phase || (m.round <= 4 ? 'group' : m.round === 5 ? 'qf' : m.round === 6 ? 'sf' : 'final'), 
                     bracket: m.bracket as any,
                     courtId: m.court_id, pairAId: m.pair_a_id, pairBId: m.pair_b_id,
-                    scoreA: m.score_a, scoreB: m.score_b, isFinished: m.is_finished,
-                    elo_processed: (m as any).elo_processed
+                    scoreA: m.score_a, scoreB: m.score_b, isFinished: m.is_finished
                 }));
 
                 mappedPairs = recalculateStats(mappedPairs, mappedMatches);
                 
                 let groups: Group[] = [];
                 if (mappedMatches.length > 0) {
-                    groups = reconstructGroupsFromMatches(mappedPairs, mappedMatches, players || []);
+                    groups = reconstructGroupsFromMatches(mappedPairs, mappedMatches, players || [], format);
                 } else {
                     const isSetup = activeTournament.status === 'setup';
-                    groups = generateGroupsHelper(mappedPairs, players || [], isSetup ? 'manual' : 'elo-balanced');
+                    // NOTE: This fallback generates default Balanced/Manual groups if no matches exist yet.
+                    groups = generateGroupsHelper(mappedPairs, players || [], isSetup ? 'manual' : 'elo-balanced', format);
                 }
 
-                if (activeTournament.current_round > 0 && mappedMatches.length === 0) {
-                     console.warn("CORRUPTED STATE DETECTED. Resetting tournament to setup.");
-                     await supabase.from('matches').delete().eq('tournament_id', activeTournament.id);
-                     await supabase.from('tournaments').update({ status: 'setup', current_round: 0 }).eq('id', activeTournament.id);
-                     dispatch({ type: 'SET_STATE', payload: { 
-                        id: activeTournament.id, status: 'setup', currentRound: 0, players: players || [], pairs: mappedPairs, matches: [], groups: groups 
-                     }});
-                } else {
-                    dispatch({ type: 'SET_STATE', payload: {
-                        id: activeTournament.id, status: activeTournament.status as any, currentRound: activeTournament.current_round || 0,
-                        players: players || [], pairs: mappedPairs, matches: mappedMatches, groups: groups
-                    }});
-                }
+                dispatch({ type: 'SET_STATE', payload: {
+                    id: activeTournament.id, status: activeTournament.status as any, currentRound: activeTournament.current_round || 0,
+                    players: players || [], pairs: mappedPairs, matches: mappedMatches, groups: groups, format, courts
+                }});
             }
         } catch (e) {
             console.warn("Supabase load error:", e);
         } finally {
             dispatch({ type: 'SET_LOADING', payload: false });
         }
-    }, [user, isOfflineMode]);
+    }, [user, isOfflineMode, clubData.courtCount]); // Re-load if court count changes
 
     useEffect(() => { loadData(); }, [loadData]);
 
-    useEffect(() => {
-        if(isOfflineMode && state.players.length > 0) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-        }
-    }, [state, isOfflineMode]);
+    const saveLocal = (newState: TournamentState) => {
+        if (isOfflineMode) localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
+    };
 
-    // --- ACTIONS ---
-
-    const addPlayerToDB = async (p: Partial<Player>): Promise<string | null> => {
-        const initialElo = p.manual_rating ? manualToElo(p.manual_rating) : 1200;
-
-        const newP = { 
-            ...p, 
-            global_rating: initialElo, 
-            category_ratings: {}, 
-            main_category: p.categories?.[0] || 'Iniciación', 
-            matches_played: 0 
-        };
-
+    // --- DB ACTIONS ---
+    const addPlayerToDB = async (p: Partial<Player>) => {
         if (isOfflineMode) {
-            const newId = `local-${Date.now()}`;
-            dispatch({ type: 'SET_STATE', payload: { players: [...state.players, { ...newP, id: newId } as Player] } });
-            return newId;
+             const newPlayer = { ...p, id: `local-${Date.now()}`, created_at: new Date().toISOString() } as Player;
+             const newState = { ...state, players: [...state.players, newPlayer] };
+             dispatch({ type: 'SET_STATE', payload: newState });
+             saveLocal(newState);
+             return newPlayer.id;
         }
-        
-        const { data, error } = await supabase.from('players').insert({ 
-            user_id: user!.id, name: p.name, nickname: p.nickname, email: p.email, phone: p.phone, categories: p.categories,
-            global_rating: initialElo, main_category: newP.main_category, category_ratings: {}, manual_rating: p.manual_rating
-        }).select().single();
-        
-        if(error || !data) return null;
-        loadData();
+        const { data, error } = await supabase.from('players').insert([{ ...p, user_id: user?.id }]).select().single();
+        if (error) { alert(error.message); return null; }
+        await loadData();
         return data.id;
     };
 
     const updatePlayerInDB = async (p: Partial<Player>) => {
         if (isOfflineMode) {
-             const updated = state.players.map(pl => pl.id === p.id ? { ...pl, ...p } as Player : pl);
-             dispatch({ type: 'SET_STATE', payload: { players: updated } });
-             return;
-        }
-        if(!p.id) return;
-        await supabase.from('players').update({ name: p.name, nickname: p.nickname, email: p.email, phone: p.phone, categories: p.categories, manual_rating: p.manual_rating }).eq('id', p.id);
-        loadData();
-    }
-
-    const createPairInDB = async (p1: string, p2: string) => {
-        const activePairCount = state.pairs.length;
-        const isReserve = activePairCount >= 16;
-
-        if (isOfflineMode) {
-            const newPair = { 
-                id: `pair-${Date.now()}`, player1Id: p1, player2Id: p2, name: 'Pareja', 
-                waterReceived: false, paidP1: false, paidP2: false, 
-                stats: { played: 0, won: 0, gameDiff: 0 }, 
-                isReserve 
-            };
-            dispatch({ type: 'SET_STATE', payload: { pairs: [...state.pairs, newPair] } });
+            const newState = { ...state, players: state.players.map(x => x.id === p.id ? { ...x, ...p } as Player : x) };
+            dispatch({ type: 'SET_STATE', payload: newState });
+            saveLocal(newState);
             return;
         }
-        let tId = state.id;
-        if (!tId) {
-            const { data } = await supabase.from('tournaments').insert({ user_id: user!.id, status: 'setup', current_round: 0 }).select().single();
-            if(data) tId = data.id;
+        await supabase.from('players').update(p).eq('id', p.id);
+        await loadData();
+    };
+
+    const createPairInDB = async (p1: string, p2: string) => {
+        if (isOfflineMode) {
+            const newPair: Pair = { id: `pair-${Date.now()}`, player1Id: p1, player2Id: p2, name: 'Pareja', waterReceived: false, paidP1: false, paidP2: false, stats: {played:0, won:0, gameDiff:0}, isReserve: false };
+            const limit = state.format === '10_mini' ? 10 : 16;
+            newPair.isReserve = state.pairs.length >= limit;
+            const newState = { ...state, pairs: [...state.pairs, newPair] };
+            dispatch({ type: 'SET_STATE', payload: newState });
+            saveLocal(newState);
+            return;
         }
-        if(tId) {
-            await supabase.from('tournament_pairs').insert({ 
-                tournament_id: tId, player1_id: p1, player2_id: p2, name: `Pareja`
-            });
-            loadData();
+        
+        let tournamentId = state.id;
+        if (!tournamentId) {
+             const { data: t } = await supabase.from('tournaments').insert([{ user_id: user?.id, status: 'setup', format: state.format }]).select().single();
+             tournamentId = t.id;
         }
+        await supabase.from('tournament_pairs').insert([{ tournament_id: tournamentId, player1_id: p1, player2_id: p2 }]);
+        await loadData();
     };
 
     const updatePairDB = async (pairId: string, p1: string, p2: string) => {
         if (isOfflineMode) {
-            const updatedPairs = state.pairs.map(p => p.id === pairId ? { ...p, player1Id: p1, player2Id: p2 } : p);
-            dispatch({ type: 'SET_STATE', payload: { pairs: updatedPairs } });
-            return;
+             const newState = { ...state, pairs: state.pairs.map(p => p.id === pairId ? { ...p, player1Id: p1, player2Id: p2 } : p) };
+             dispatch({ type: 'SET_STATE', payload: newState });
+             saveLocal(newState);
+             return;
         }
         await supabase.from('tournament_pairs').update({ player1_id: p1, player2_id: p2 }).eq('id', pairId);
-        loadData();
+        await loadData();
     };
 
     const deletePairDB = async (pairId: string) => {
         if (isOfflineMode) {
-            const filtered = state.pairs.filter(p => p.id !== pairId);
-            const reindexed = filtered.map((p, idx) => ({ ...p, isReserve: idx >= 16 }));
-            dispatch({ type: 'SET_STATE', payload: { pairs: reindexed } });
+            const remaining = state.pairs.filter(p => p.id !== pairId);
+            const limit = state.format === '10_mini' ? 10 : 16;
+            const reindexed = remaining.map((p, idx) => ({ ...p, isReserve: idx >= limit }));
+            const newState = { ...state, pairs: reindexed };
+            dispatch({ type: 'SET_STATE', payload: newState });
+            saveLocal(newState);
             return;
         }
         await supabase.from('tournament_pairs').delete().eq('id', pairId);
-        
-        const filtered = state.pairs.filter(p => p.id !== pairId);
-        const reindexed = filtered.map((p, idx) => ({ ...p, isReserve: idx >= 16 }));
-        dispatch({ type: 'SET_STATE', payload: { pairs: reindexed } });
-
-        loadData();
-    }
-
-    const regenerateMatchesDB = async (): Promise<string> => {
-        if (isOfflineMode || !state.id) return "Offline";
-        const groups = generateGroupsHelper(state.pairs, state.players, 'manual'); 
-        const matches = generateGroupMatchesHelper(groups);
-        const { data: existingMatches } = await supabase.from('matches').select('round, pair_a_id, pair_b_id').eq('tournament_id', state.id);
-        const matchesToInsert = matches.filter(m => {
-            const exists = existingMatches?.some(ex => ex.round === m.round && ((ex.pair_a_id === m.pairAId && ex.pair_b_id === m.pairBId) || (ex.pair_a_id === m.pairBId && ex.pair_b_id === m.pairAId)));
-            return !exists;
-        });
-        if (matchesToInsert.length > 0) {
-            const dbMatches = matchesToInsert.map(m => ({
-                tournament_id: state.id!, round: m.round, court_id: m.courtId, pair_a_id: m.pairAId, pair_b_id: m.pairBId, is_finished: false, phase: m.phase
-            }));
-            
-            const { error } = await supabase.from('matches').insert(dbMatches);
-            if (error) {
-                 if (error.message.includes('phase') || error.code === 'PGRST204') {
-                     const dbMatchesLegacy = dbMatches.map(({ phase, ...rest }) => rest);
-                     await supabase.from('matches').insert(dbMatchesLegacy);
-                 } else {
-                     return `Error: ${error.message}`;
-                 }
-            }
-
-            loadData();
-            return `Regenerados ${matchesToInsert.length} partidos.`;
-        } else {
-            return "No se detectaron partidos faltantes.";
-        }
+        await loadData();
     };
 
     const startTournamentDB = async (method: GenerationMethod, customOrderedPairs?: Pair[]) => {
-        let activePairs = state.pairs.filter(p => !p.isReserve);
-        if (activePairs.length !== 16) {
-            throw new Error(`Se necesitan 16 parejas titulares. Tienes ${activePairs.length}.`);
+        const limit = state.format === '10_mini' ? 10 : 16;
+        const allPairs = state.pairs; 
+        
+        if (allPairs.length < limit) throw new Error(`Se necesitan al menos ${limit} parejas para este formato.`);
+
+        let orderedPairs = customOrderedPairs || allPairs;
+        if (method !== 'manual' && !customOrderedPairs) {
+             orderedPairs = sortPairsByMethod(allPairs, state.players, method);
         }
 
-        if (method === 'manual' && customOrderedPairs) {
-            activePairs = customOrderedPairs;
-        }
+        // FIX: Pass the actual method here, not 'manual' hardcoded, 
+        // to trigger the correct Pot distribution for 'elo-mixed'
+        const groups = generateGroupsHelper(orderedPairs, state.players, method, state.format);
         
-        const groups = generateGroupsHelper(activePairs, state.players, method);
-        const matches = generateGroupMatchesHelper(groups);
+        const matches = state.format === '10_mini' ? generateMatches10(groups) : generateMatches16(groups, clubData.courtCount);
+
+        const reindexedPairs = orderedPairs.map((p, idx) => ({ ...p, isReserve: idx >= limit }));
 
         if (isOfflineMode) {
-            const localMatches = matches.map((m, i) => ({ ...m, id: `match-${i}`, scoreA: null, scoreB: null, isFinished: false } as Match));
-            dispatch({ type: 'SET_STATE', payload: { status: 'active', currentRound: 1, groups, matches: localMatches } });
+            const newState: TournamentState = { ...state, status: 'active', currentRound: 1, groups, matches: matches as Match[], pairs: reindexedPairs };
+            dispatch({ type: 'SET_STATE', payload: newState });
+            saveLocal(newState);
             return;
         }
-        
-        if (!state.id) {
-            throw new Error("No se encontró ID del torneo. Por favor, recarga la página.");
-        }
-        
-        const { error: deleteError } = await supabase.from('matches').delete().eq('tournament_id', state.id);
-        if (deleteError) {
-             throw new Error(`Error limpiando partidos anteriores: ${deleteError.message}`);
-        }
 
-        const dbMatches = matches.map(m => ({
-            tournament_id: state.id!, round: m.round, court_id: m.courtId,
-            pair_a_id: m.pairAId, pair_b_id: m.pairBId, is_finished: false,
-            phase: m.phase 
-        }));
+        if (!state.id) throw new Error("ID de torneo perdido. Recarga.");
         
-        const { error: insertError } = await supabase.from('matches').insert(dbMatches);
-        if (insertError) {
-            if (insertError.message.includes('phase') || insertError.code === 'PGRST204') {
-                console.warn("Schema mismatch detected (phase column missing). Retrying with legacy schema...");
-                const dbMatchesLegacy = dbMatches.map(({ phase, ...rest }) => rest);
-                const { error: retryError } = await supabase.from('matches').insert(dbMatchesLegacy);
-                if (retryError) throw new Error(`Error guardando partidos (Legacy): ${retryError.message}`);
-            } else {
-                throw new Error(`Error guardando partidos: ${insertError.message}`);
-            }
-        }
+        await supabase.from('tournaments').update({ status: 'active', current_round: 1, format: state.format }).eq('id', state.id);
+        
+        const { error } = await supabase.from('matches').insert(matches.map(m => ({ tournament_id: state.id, ...m })));
+        if (error && error.message.includes('phase')) {
+             await supabase.from('matches').insert(matches.map(m => { const { phase, ...rest } = m; return { tournament_id: state.id, ...rest }; }));
+        } else if (error) { throw error; }
 
-        const { error: updateError } = await supabase.from('tournaments').update({ status: 'active', current_round: 1 }).eq('id', state.id);
-        if (updateError) {
-             throw new Error(`Error actualizando estado del torneo: ${updateError.message}`);
-        }
-
-        loadData();
+        await loadData();
     };
 
     const updateScoreDB = async (matchId: string, sA: number, sB: number) => {
         if (isOfflineMode) {
-            const newMatches = state.matches.map(m => m.id === matchId ? { ...m, scoreA: sA, scoreB: sB, isFinished: true } : m);
-            const newPairs = recalculateStats(state.pairs, newMatches);
-            dispatch({ type: 'SET_STATE', payload: { matches: newMatches, pairs: newPairs } });
-            return;
+             const newMatches = state.matches.map(m => m.id === matchId ? { ...m, scoreA: sA, scoreB: sB, isFinished: true } : m);
+             const newPairs = recalculateStats(state.pairs, newMatches);
+             const newState = { ...state, matches: newMatches, pairs: newPairs };
+             dispatch({ type: 'SET_STATE', payload: newState });
+             saveLocal(newState);
+             return;
         }
-
         await supabase.from('matches').update({ score_a: sA, score_b: sB, is_finished: true }).eq('id', matchId);
-        
-        const newMatches = state.matches.map(m => m.id === matchId ? { ...m, scoreA: sA, scoreB: sB, isFinished: true } : m);
-        const newPairs = recalculateStats(state.pairs, newMatches);
-        dispatch({ type: 'SET_STATE', payload: { matches: newMatches, pairs: newPairs } });
-
-        const match = state.matches.find(m => m.id === matchId);
-        if (match && !match.elo_processed) {
-            const pairA = state.pairs.find(p => p.id === match.pairAId);
-            const pairB = state.pairs.find(p => p.id === match.pairBId);
-            if (pairA && pairB) {
-                const p1 = state.players.find(p => p.id === pairA.player1Id);
-                const p2 = state.players.find(p => p.id === pairA.player2Id);
-                const p3 = state.players.find(p => p.id === pairB.player1Id);
-                const p4 = state.players.find(p => p.id === pairB.player2Id);
-
-                if (p1 && p2 && p3 && p4) {
-                    const matchCategory = inferMatchCategory([p1, p2, p3, p4]);
-                    const r1 = getMatchRating(p1, matchCategory);
-                    const r2 = getMatchRating(p2, matchCategory);
-                    const r3 = getMatchRating(p3, matchCategory);
-                    const r4 = getMatchRating(p4, matchCategory);
-
-                    const avgEloA = (r1 + r2) / 2;
-                    const avgEloB = (r3 + r4) / 2;
-                    const delta = calculateEloDelta(avgEloA, avgEloB, sA, sB);
-
-                    const applyUpdate = async (p: Player, d: number) => {
-                        const newRatings = { ...p.category_ratings } || {};
-                        const currentCatRating = newRatings[matchCategory] || (p.global_rating || 1200);
-                        newRatings[matchCategory] = Math.round(currentCatRating + d);
-                        const newGlobal = Math.round((p.global_rating || 1200) + (d * 0.25)); 
-                        await supabase.from('players').update({ global_rating: newGlobal, category_ratings: newRatings, matches_played: (p.matches_played || 0) + 1 }).eq('id', p.id);
-                    };
-
-                    await Promise.all([applyUpdate(p1, delta), applyUpdate(p2, delta), applyUpdate(p3, -delta), applyUpdate(p4, -delta)]);
-                    await supabase.from('matches').update({ elo_processed: true } as any).eq('id', matchId);
-                }
-            }
-        }
+        await loadData();
     };
 
     const nextRoundDB = async () => {
-        const nextR = state.currentRound + 1;
-        let playoffMatches: Partial<Match>[] = [];
+        if (state.format === '10_mini') {
+            await nextRound10();
+        } else {
+            await nextRound16();
+        }
+        await loadData();
+    };
 
-        if (state.currentRound < 4) {
-             if (isOfflineMode) {
-                 dispatch({ type: 'SET_STATE', payload: { currentRound: nextR } });
-                 return;
-             }
-             const { error } = await supabase.from('tournaments').update({ current_round: nextR }).eq('id', state.id);
-             if (error) throw new Error(`Error actualizando ronda: ${error.message}`);
-             loadData();
+    const nextRound16 = async () => {
+        const nextRound = state.currentRound + 1;
+        const isSimultaneous = clubData.courtCount >= 8;
+        const qfStartRound = isSimultaneous ? 4 : 5; 
+
+        if (state.currentRound < qfStartRound - 1) {
+            if (isOfflineMode) {
+                const newState = { ...state, currentRound: nextRound };
+                dispatch({ type: 'SET_STATE', payload: newState });
+                saveLocal(newState);
+                return;
+            }
+            await supabase.from('tournaments').update({ current_round: nextRound }).eq('id', state.id);
+            return;
+        }
+
+        let newMatches: any[] = [];
+        
+        if (state.currentRound === qfStartRound - 1) { 
+            const sortedA = getRankedPairsForGroup(state.pairs, state.groups, 'A');
+            const sortedB = getRankedPairsForGroup(state.pairs, state.groups, 'B');
+            const sortedC = getRankedPairsForGroup(state.pairs, state.groups, 'C');
+            const sortedD = getRankedPairsForGroup(state.pairs, state.groups, 'D');
+
+            const mk = (c: number, p1: string, p2: string, b: string) => ({
+                tournament_id: state.id, round: nextRound, phase: 'qf', bracket: b, court_id: c, pair_a_id: p1, pair_b_id: p2, is_finished: false
+            });
+
+            newMatches.push(mk(1, sortedA[0].id, sortedC[1].id, 'main'));
+            newMatches.push(mk(2, sortedC[0].id, sortedA[1].id, 'main'));
+            newMatches.push(mk(3, sortedB[0].id, sortedD[1].id, 'main'));
+            newMatches.push(mk(4, sortedD[0].id, sortedB[1].id, 'main'));
+
+            newMatches.push(mk(5, sortedA[2].id, sortedC[3].id, 'consolation'));
+            newMatches.push(mk(6, sortedC[2].id, sortedA[3].id, 'consolation'));
+            newMatches.push(mk(0, sortedB[2].id, sortedD[3].id, 'consolation')); 
+            newMatches.push(mk(0, sortedD[2].id, sortedB[3].id, 'consolation')); 
+        } 
+        else if (state.currentRound === qfStartRound) { 
+             const qfMain = state.matches.filter(m => m.round === state.currentRound && m.bracket === 'main');
+             const getW = (court: number) => { const m = qfMain.find(x => x.courtId === court); return m ? (m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId) : null; };
+             
+             newMatches.push({ tournament_id: state.id, round: nextRound, phase: 'sf', bracket: 'main', court_id: 1, pair_a_id: getW(1), pair_b_id: getW(3), is_finished: false });
+             newMatches.push({ tournament_id: state.id, round: nextRound, phase: 'sf', bracket: 'main', court_id: 2, pair_a_id: getW(2), pair_b_id: getW(4), is_finished: false });
+
+             const waitingMatches = state.matches.filter(m => m.round === state.currentRound && m.courtId === 0);
+             waitingMatches.forEach((m, idx) => {
+                 newMatches.push({
+                     tournament_id: state.id, round: nextRound, phase: 'qf', bracket: 'consolation',
+                     court_id: 3 + idx, pair_a_id: m.pairAId, pair_b_id: m.pairBId, is_finished: false
+                 });
+             });
+        }
+        else if (state.currentRound === qfStartRound + 1) { 
+             const sfMain = state.matches.filter(m => m.round === state.currentRound && m.bracket === 'main');
+             const getW = (court: number) => { const m = sfMain.find(x => x.courtId === court); return m ? (m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId) : null; };
+             newMatches.push({ tournament_id: state.id, round: nextRound, phase: 'final', bracket: 'main', court_id: 1, pair_a_id: getW(1), pair_b_id: getW(2), is_finished: false });
+
+             const getW_Prev = (court: number) => { const m = state.matches.find(x => x.round === state.currentRound - 1 && x.courtId === court); return m ? (m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId) : null; };
+             const getW_Curr = (court: number) => { const m = state.matches.find(x => x.round === state.currentRound && x.courtId === court); return m ? (m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId) : null; };
+
+             newMatches.push({ tournament_id: state.id, round: nextRound, phase: 'sf', bracket: 'consolation', court_id: 2, pair_a_id: getW_Prev(5), pair_b_id: getW_Curr(3), is_finished: false });
+             newMatches.push({ tournament_id: state.id, round: nextRound, phase: 'sf', bracket: 'consolation', court_id: 3, pair_a_id: getW_Prev(6), pair_b_id: getW_Curr(4), is_finished: false });
+        }
+        else if (state.currentRound === qfStartRound + 2) { 
+             const sfCons = state.matches.filter(m => m.round === state.currentRound && m.bracket === 'consolation');
+             const getW = (court: number) => { const m = sfCons.find(x => x.courtId === court); return m ? (m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId) : null; };
+             newMatches.push({ tournament_id: state.id, round: nextRound, phase: 'final', bracket: 'consolation', court_id: 1, pair_a_id: getW(2), pair_b_id: getW(3), is_finished: false });
+        }
+
+        if (newMatches.length > 0 && !isOfflineMode) {
+            await supabase.from('matches').insert(newMatches);
+        }
+        if (!isOfflineMode) {
+            await supabase.from('tournaments').update({ current_round: nextRound }).eq('id', state.id);
+        }
+    };
+
+    const nextRound10 = async () => {
+        const nextRound = state.currentRound + 1;
+        if (state.currentRound < 3) {
+             if (!isOfflineMode) await supabase.from('tournaments').update({ current_round: nextRound }).eq('id', state.id);
              return;
         }
 
-        if (state.currentRound === 4) {
-            const pairsWithStats = recalculateStats(state.pairs, state.matches);
-            const rankingsA = getRankedPairsForGroup(pairsWithStats, state.groups, 'A');
-            const rankingsB = getRankedPairsForGroup(pairsWithStats, state.groups, 'B');
-            const rankingsC = getRankedPairsForGroup(pairsWithStats, state.groups, 'C');
-            const rankingsD = getRankedPairsForGroup(pairsWithStats, state.groups, 'D');
+        let newMatches: any[] = [];
 
-            const safeGet = (arr: Pair[], idx: number) => arr[idx] || arr[0] || state.pairs[0];
+        if (state.currentRound === 3) { // R3 -> R4 (QF + Cons Final)
+            const sortedA = getRankedPairsForGroup(state.pairs, state.groups, 'A');
+            const sortedB = getRankedPairsForGroup(state.pairs, state.groups, 'B');
 
-            playoffMatches.push({ round: 5, bracket: 'main', phase: 'qf', courtId: 1, pairAId: safeGet(rankingsA, 0).id, pairBId: safeGet(rankingsC, 1).id }); 
-            playoffMatches.push({ round: 5, bracket: 'main', phase: 'qf', courtId: 2, pairAId: safeGet(rankingsC, 0).id, pairBId: safeGet(rankingsA, 1).id }); 
-            playoffMatches.push({ round: 5, bracket: 'main', phase: 'qf', courtId: 3, pairAId: safeGet(rankingsB, 0).id, pairBId: safeGet(rankingsD, 1).id }); 
-            playoffMatches.push({ round: 5, bracket: 'main', phase: 'qf', courtId: 4, pairAId: safeGet(rankingsD, 0).id, pairBId: safeGet(rankingsB, 1).id }); 
+            const mk = (c: number, p1: string, p2: string, b: string) => ({
+                tournament_id: state.id, round: 4, phase: b === 'main' ? 'qf' : 'final', bracket: b, court_id: c,
+                pair_a_id: p1, pair_b_id: p2, is_finished: false
+            });
 
-            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 5, pairAId: safeGet(rankingsA, 2).id, pairBId: safeGet(rankingsC, 3).id }); 
-            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 6, pairAId: safeGet(rankingsC, 2).id, pairBId: safeGet(rankingsA, 3).id }); 
-            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 0, pairAId: safeGet(rankingsB, 2).id, pairBId: safeGet(rankingsD, 3).id }); 
-            playoffMatches.push({ round: 5, bracket: 'consolation', phase: 'qf', courtId: 0, pairAId: safeGet(rankingsD, 2).id, pairBId: safeGet(rankingsB, 3).id }); 
+            newMatches.push(mk(1, sortedA[0].id, sortedB[3].id, 'main')); // 1A vs 4B
+            newMatches.push(mk(2, sortedB[0].id, sortedA[3].id, 'main')); // 1B vs 4A
+            newMatches.push(mk(3, sortedA[1].id, sortedB[2].id, 'main')); // 2A vs 3B
+            newMatches.push(mk(4, sortedB[1].id, sortedA[2].id, 'main')); // 2B vs 3A
+
+            // Consolation Final (Direct 5th vs 5th)
+            newMatches.push(mk(5, sortedA[4].id, sortedB[4].id, 'consolation'));
         }
+        else if (state.currentRound === 4) { // QF -> SF
+             const qfMatches = state.matches.filter(m => m.round === 4 && m.bracket === 'main');
+             const getW = (court: number) => { const m = qfMatches.find(x => x.courtId === court); return m ? (m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId) : null; };
 
-        else if (state.currentRound === 5) {
-            // ROBUST FIX: Find any unfinished consolation match from R5, regardless of court ID
-            const waitingMatches = state.matches.filter(m => m.round === 5 && m.bracket === 'consolation' && !m.isFinished);
-            
-            if (waitingMatches.length > 0 && !isOfflineMode) {
-                const updates = [
-                    supabase.from('matches').update({ round: 6, court_id: 3 }).eq('id', waitingMatches[0].id),
-                    waitingMatches[1] ? supabase.from('matches').update({ round: 6, court_id: 4 }).eq('id', waitingMatches[1].id) : Promise.resolve()
-                ];
-                await Promise.all(updates);
-            }
-
-            const qfMatches = state.matches.filter(m => m.round === 5 && m.isFinished && m.bracket === 'main');
-            
-            const getWinner = (court: number) => {
-                const m = qfMatches.find(m => m.courtId === court);
-                return m ? ((m.scoreA||0)>(m.scoreB||0)?m.pairAId:m.pairBId) : null;
-            };
-
-            const wMain1 = getWinner(1);
-            const wMain2 = getWinner(2);
-            const wMain3 = getWinner(3);
-            const wMain4 = getWinner(4);
-
-            if (wMain1 && wMain3) playoffMatches.push({ round: 6, bracket: 'main', phase: 'sf', courtId: 1, pairAId: wMain1, pairBId: wMain3 });
-            if (wMain2 && wMain4) playoffMatches.push({ round: 6, bracket: 'main', phase: 'sf', courtId: 2, pairAId: wMain2, pairBId: wMain4 });
-            
-            if (isOfflineMode) {
-                 waitingMatches.forEach((m, idx) => {
-                     playoffMatches.push({ ...m, round: 6, courtId: 3 + idx, id: `moved-${m.id}` });
-                 });
-            }
+             newMatches.push({ tournament_id: state.id, round: 5, phase: 'sf', bracket: 'main', court_id: 1, pair_a_id: getW(1), pair_b_id: getW(3), is_finished: false });
+             newMatches.push({ tournament_id: state.id, round: 5, phase: 'sf', bracket: 'main', court_id: 2, pair_a_id: getW(2), pair_b_id: getW(4), is_finished: false });
         }
-
-        else if (state.currentRound === 6) {
-             const sfMatches = state.matches.filter(m => m.round === 6 && m.bracket === 'main');
-             const getWinnerSF = (court: number) => {
-                 const m = sfMatches.find(m => m.courtId === court);
-                 return m ? ((m.scoreA || 0) > (m.scoreB || 0) ? m.pairAId : m.pairBId) : null;
-             };
-             const wSF1 = getWinnerSF(1);
-             const wSF2 = getWinnerSF(2);
-             if (wSF1 && wSF2) playoffMatches.push({ round: 7, bracket: 'main', phase: 'final', courtId: 1, pairAId: wSF1, pairBId: wSF2 });
-
-             const consQF_R5 = state.matches.filter(m => m.round === 5 && m.bracket === 'consolation' && m.isFinished);
-             const consQF_R6 = state.matches.filter(m => m.round === 6 && m.bracket === 'consolation' && m.isFinished); 
+        else if (state.currentRound === 5) { // SF -> Final
+             const sfMatches = state.matches.filter(m => m.round === 5 && m.bracket === 'main');
+             const getW = (court: number) => { const m = sfMatches.find(x => x.courtId === court); return m ? (m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId) : null; };
              
-             const getConsWinner = (matches: Match[], court: number) => {
-                  const m = matches.find(m => m.courtId === court);
-                  return m ? ((m.scoreA || 0) > (m.scoreB || 0) ? m.pairAId : m.pairBId) : null;
-             };
-
-             const wC1 = getConsWinner(consQF_R5, 5); 
-             const wC2 = getConsWinner(consQF_R5, 6); 
-             const wC3 = getConsWinner(consQF_R6, 3); 
-             const wC4 = getConsWinner(consQF_R6, 4); 
-
-             if (wC1 && wC3) playoffMatches.push({ round: 7, bracket: 'consolation', phase: 'sf', courtId: 2, pairAId: wC1, pairBId: wC3 });
-             if (wC2 && wC4) playoffMatches.push({ round: 7, bracket: 'consolation', phase: 'sf', courtId: 3, pairAId: wC2, pairBId: wC4 });
+             newMatches.push({ tournament_id: state.id, round: 6, phase: 'final', bracket: 'main', court_id: 1, pair_a_id: getW(1), pair_b_id: getW(2), is_finished: false });
         }
 
-        else if (state.currentRound === 7) {
-            const sfCons = state.matches.filter(m => m.round === 7 && m.bracket === 'consolation');
-            const getWinner = (court: number) => {
-                 const m = sfCons.find(m => m.courtId === court);
-                 return m ? ((m.scoreA || 0) > (m.scoreB || 0) ? m.pairAId : m.pairBId) : null;
-             };
-             const wSFC1 = getWinner(2);
-             const wSFC2 = getWinner(3);
-
-             if (wSFC1 && wSFC2) playoffMatches.push({ round: 8, bracket: 'consolation', phase: 'final', courtId: 1, pairAId: wSFC1, pairBId: wSFC2 });
+        if (newMatches.length > 0 && !isOfflineMode) {
+            await supabase.from('matches').insert(newMatches);
         }
-
-        if (playoffMatches.length > 0) {
-             const dbMatches = playoffMatches.map(m => ({
-                tournament_id: state.id!, round: m.round, court_id: m.courtId,
-                pair_a_id: m.pairAId, pair_b_id: m.pairBId, is_finished: false, bracket: m.bracket,
-                phase: m.phase 
-             }));
-             
-             if (isOfflineMode) {
-                 const keptMatches = state.matches.filter(m => !(m.round === 5 && m.courtId === 0)); 
-                 const newMatches = [...keptMatches, ...playoffMatches.map((m, i) => ({ ...m, id: `po-${Date.now()}-${i}`, scoreA: null, scoreB: null, isFinished: false } as Match))];
-                 dispatch({ type: 'SET_STATE', payload: { currentRound: nextR, matches: newMatches } });
-             } else {
-                 const { error } = await supabase.from('matches').insert(dbMatches);
-                 if (error) {
-                     if (error.message.includes('phase') || error.code === 'PGRST204') {
-                        const dbMatchesLegacy = dbMatches.map(({ phase, ...rest }) => rest);
-                        const { error: retryError } = await supabase.from('matches').insert(dbMatchesLegacy);
-                        if (retryError) throw new Error(`Error: ${retryError.message}`);
-                     } else {
-                        throw new Error(`Error: ${error.message}`);
-                     }
-                 }
-
-                 await supabase.from('tournaments').update({ current_round: nextR }).eq('id', state.id);
-                 loadData();
-             }
-        } else {
-             if (state.currentRound >= 8) {
-                 if(isOfflineMode) {
-                     dispatch({ type: 'SET_STATE', payload: { status: 'finished' } });
-                 } else {
-                    await supabase.from('tournaments').update({ status: 'finished' }).eq('id', state.id);
-                    loadData();
-                 }
-             }
+        if (!isOfflineMode) {
+            await supabase.from('tournaments').update({ current_round: nextRound }).eq('id', state.id);
         }
     };
 
     const archiveAndResetDB = async () => {
-         if (isOfflineMode) {
-             dispatch({ type: 'RESET_LOCAL' });
+        let wMain = 'Desconocido';
+        let wCons = 'Desconocido';
+
+        const getLastWinner = (round: number, bracket: string) => {
+             const m = state.matches.find(x => x.round === round && x.bracket === bracket);
+             if (m && m.isFinished) {
+                 const wid = m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId;
+                 const pair = state.pairs.find(p => p.id === wid);
+                 if (pair) {
+                     const p1 = state.players.find(p => p.id === pair.player1Id);
+                     const p2 = state.players.find(p => p.id === pair.player2Id);
+                     return `${formatPlayerName(p1)} & ${formatPlayerName(p2)}`;
+                 }
+             }
+             return null;
+        };
+
+        if (state.format === '16_mini') {
+            wMain = getLastWinner(7, 'main') || getLastWinner(6, 'main') || wMain;
+            wCons = getLastWinner(8, 'consolation') || getLastWinner(7, 'consolation') || wCons;
+        } else {
+            wMain = getLastWinner(6, 'main') || wMain;
+            wCons = getLastWinner(4, 'consolation') || wCons;
+        }
+
+        if (!isOfflineMode) {
+            await supabase.from('tournaments').update({ status: 'finished', winner_main: wMain, winner_consolation: wCons }).eq('id', state.id);
+        }
+        dispatch({ type: 'RESET_LOCAL' });
+    };
+
+    const resetToSetupDB = async () => {
+        if (isOfflineMode) {
+             const newState: TournamentState = { ...state, status: 'setup', currentRound: 0, matches: [], groups: [] };
+             dispatch({ type: 'SET_STATE', payload: newState });
+             saveLocal(newState);
              return;
-         }
-         if (state.id) {
-             // 1. Calculate Winners
-             let winnerMainName = 'Desconocido';
-             let winnerConsName = 'Desconocido';
+        }
 
-             // Main Final (R7, Court 1)
-             const mainFinal = state.matches.find(m => m.round === 7 && m.courtId === 1 && m.bracket === 'main');
-             if (mainFinal && mainFinal.isFinished) {
-                 const wId = (mainFinal.scoreA || 0) > (mainFinal.scoreB || 0) ? mainFinal.pairAId : mainFinal.pairBId;
-                 const p = state.pairs.find(pair => pair.id === wId);
-                 if(p) {
-                      const p1 = state.players.find(pl => pl.id === p.player1Id);
-                      const p2 = state.players.find(pl => pl.id === p.player2Id);
-                      winnerMainName = `${formatPlayerName(p1)} & ${formatPlayerName(p2)}`;
-                 }
-             }
+        if (!state.id) return;
 
-             // Consolation Final (R8, Court 1)
-             const consFinal = state.matches.find(m => m.round === 8 && m.courtId === 1 && m.bracket === 'consolation');
-             if (consFinal && consFinal.isFinished) {
-                 const wId = (consFinal.scoreA || 0) > (consFinal.scoreB || 0) ? consFinal.pairAId : consFinal.pairBId;
-                  const p = state.pairs.find(pair => pair.id === wId);
-                 if(p) {
-                      const p1 = state.players.find(pl => pl.id === p.player1Id);
-                      const p2 = state.players.find(pl => pl.id === p.player2Id);
-                      winnerConsName = `${formatPlayerName(p1)} & ${formatPlayerName(p2)}`;
-                 }
-             }
-
-             // 2. Update DB with Winners
-             await supabase.from('tournaments').update({ 
-                 status: 'finished',
-                 winner_main: winnerMainName,
-                 winner_consolation: winnerConsName
-             }).eq('id', state.id);
-
-             dispatch({ type: 'RESET_LOCAL' });
-         }
+        // 1. Reset tournament status
+        await supabase.from('tournaments').update({ status: 'setup', current_round: 0 }).eq('id', state.id);
+        // 2. Delete matches
+        await supabase.from('matches').delete().eq('tournament_id', state.id);
+        
+        await loadData();
     };
 
-    const hardResetDB = async () => { 
-        if(isOfflineMode) {
-            localStorage.removeItem(STORAGE_KEY);
-            window.location.reload();
-            return;
-        }
-        if(state.id) {
-             await supabase.from('matches').delete().eq('tournament_id', state.id);
-             await supabase.from('tournament_pairs').delete().eq('tournament_id', state.id);
-             await supabase.from('tournaments').delete().eq('id', state.id);
-             loadData();
-        }
-    };
+    const regenerateMatchesDB = async () => { return "Not implemented"; };
+    const hardResetDB = async () => { dispatch({ type: 'RESET_LOCAL' }); };
 
     return (
         <TournamentContext.Provider value={{
-            state, dispatch, loadData, addPlayerToDB, updatePlayerInDB, createPairInDB, updatePairDB,
-            startTournamentDB, updateScoreDB, nextRoundDB, deletePairDB, archiveAndResetDB, regenerateMatchesDB,
-            hardResetDB, formatPlayerName
+            state, dispatch, loadData,
+            addPlayerToDB, updatePlayerInDB, createPairInDB, updatePairDB, startTournamentDB,
+            updateScoreDB, nextRoundDB, deletePairDB, archiveAndResetDB, resetToSetupDB, regenerateMatchesDB, hardResetDB,
+            formatPlayerName
         }}>
             {children}
         </TournamentContext.Provider>

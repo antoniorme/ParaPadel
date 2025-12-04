@@ -1,9 +1,10 @@
+
 import React from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { TournamentProvider } from './store/TournamentContext';
 import { AuthProvider, useAuth } from './store/AuthContext';
-import { HistoryProvider } from './store/HistoryContext';
-import { TimerProvider } from './store/TimerContext'; // New Import
+import { HistoryProvider, useHistory } from './store/HistoryContext';
+import { TimerProvider } from './store/TimerContext';
 import { Layout } from './components/Layout';
 
 // Pages
@@ -19,11 +20,23 @@ import History from './pages/History';
 import ClubProfile from './pages/ClubProfile';
 import Help from './pages/Help';
 import PlayerProfile from './pages/PlayerProfile';
+import Onboarding from './pages/Onboarding'; 
 
+// Protected Route Wrapper
 const ProtectedRoute = ({ children }: React.PropsWithChildren) => {
   const { user, loading } = useAuth();
+  const { clubData } = useHistory();
+  const location = useLocation();
+
   if (loading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Cargando...</div>;
+  
   if (!user) return <Navigate to="/" replace />;
+  
+  // Force Onboarding if default name matches
+  if (clubData.name === 'Mi Club de Padel' && location.pathname !== '/onboarding') {
+      return <Navigate to="/onboarding" replace />;
+  }
+
   return <>{children}</>;
 };
 
@@ -35,6 +48,8 @@ const AppRoutes = () => {
       <Routes>
         <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
         <Route path="/auth" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage />} />
+        
+        <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
 
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/registration" element={<ProtectedRoute><Registration /></ProtectedRoute>} />
@@ -42,7 +57,6 @@ const AppRoutes = () => {
         <Route path="/active" element={<ProtectedRoute><ActiveTournament /></ProtectedRoute>} />
         <Route path="/results" element={<ProtectedRoute><Results /></ProtectedRoute>} />
         
-        {/* Menu Routes */}
         <Route path="/players" element={<ProtectedRoute><PlayerManager /></ProtectedRoute>} />
         <Route path="/players/:playerId" element={<ProtectedRoute><PlayerProfile /></ProtectedRoute>} />
         <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
@@ -60,7 +74,7 @@ const App: React.FC = () => {
     <AuthProvider>
       <HistoryProvider>
         <TournamentProvider>
-            <TimerProvider> {/* Wrap app with Timer Context */}
+            <TimerProvider>
                 <HashRouter>
                 <AppRoutes />
                 </HashRouter>
