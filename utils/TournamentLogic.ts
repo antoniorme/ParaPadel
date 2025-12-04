@@ -1,4 +1,3 @@
-
 import { Pair, Player, Match, Group, TournamentFormat, GenerationMethod, TournamentState } from '../types';
 import { calculateDisplayRanking } from './Elo';
 
@@ -84,41 +83,26 @@ const createMatches = (groups: Group[], groupId: string, round: number, idxs: nu
       if(!g) return [];
       return idxs.map((pairIdx, i) => {
           if (!g.pairIds[pairIdx[0]] || !g.pairIds[pairIdx[1]]) return null;
-          return {
-              round, phase: 'group' as const, bracket: null, courtId: court + i,
-              pairAId: g.pairIds[pairIdx[0]], pairBId: g.pairIds[pairIdx[1]],
-              scoreA: null, scoreB: null, isFinished: false
-          };
+          return { round, phase: 'group' as const, bracket: null, courtId: court + i, pairAId: g.pairIds[pairIdx[0]], pairBId: g.pairIds[pairIdx[1]], scoreA: null, scoreB: null, isFinished: false };
       }).filter(Boolean) as Partial<Match>[];
 };
 
 export const generateMatches16 = (groups: Group[], courtCount: number): Partial<Match>[] => {
   const matches: Partial<Match>[] = [];
   const sim = courtCount >= 8;
-  // R1
   matches.push(...createMatches(groups, 'A', 1, [[0,1], [2,3]], 1));
   matches.push(...createMatches(groups, 'B', 1, [[0,1], [2,3]], 3));
   matches.push(...createMatches(groups, 'C', 1, [[0,1], [2,3]], 5));
   if(sim) matches.push(...createMatches(groups, 'D', 1, [[0,1], [2,3]], 7));
-  // R2
   matches.push(...createMatches(groups, 'A', 2, [[0,2], [1,3]], 1));
   matches.push(...createMatches(groups, 'B', 2, [[0,2], [1,3]], 3));
-  if(sim) matches.push(...createMatches(groups, 'C', 2, [[0,2], [1,3]], 5));
-  else matches.push(...createMatches(groups, 'D', 2, [[0,1], [2,3]], 5)); 
+  if(sim) matches.push(...createMatches(groups, 'C', 2, [[0,2], [1,3]], 5)); else matches.push(...createMatches(groups, 'D', 2, [[0,1], [2,3]], 5)); 
   if(sim) matches.push(...createMatches(groups, 'D', 2, [[0,2], [1,3]], 7));
-  // R3
   matches.push(...createMatches(groups, 'A', 3, [[0,3], [1,2]], 1));
-  if(sim) matches.push(...createMatches(groups, 'B', 3, [[0,3], [1,2]], 3));
-  else matches.push(...createMatches(groups, 'C', 3, [[0,2], [1,3]], 3)); 
-  if(sim) matches.push(...createMatches(groups, 'C', 3, [[0,3], [1,2]], 5));
-  else matches.push(...createMatches(groups, 'D', 3, [[0,2], [1,3]], 5)); 
+  if(sim) matches.push(...createMatches(groups, 'B', 3, [[0,3], [1,2]], 3)); else matches.push(...createMatches(groups, 'C', 3, [[0,2], [1,3]], 3)); 
+  if(sim) matches.push(...createMatches(groups, 'C', 3, [[0,3], [1,2]], 5)); else matches.push(...createMatches(groups, 'D', 3, [[0,2], [1,3]], 5)); 
   if(sim) matches.push(...createMatches(groups, 'D', 3, [[0,3], [1,2]], 7));
-  // R4
-  if (!sim) {
-      matches.push(...createMatches(groups, 'B', 4, [[0,3], [1,2]], 1));
-      matches.push(...createMatches(groups, 'C', 4, [[0,3], [1,2]], 3));
-      matches.push(...createMatches(groups, 'D', 4, [[0,3], [1,2]], 5));
-  }
+  if (!sim) { matches.push(...createMatches(groups, 'B', 4, [[0,3], [1,2]], 1)); matches.push(...createMatches(groups, 'C', 4, [[0,3], [1,2]], 3)); matches.push(...createMatches(groups, 'D', 4, [[0,3], [1,2]], 5)); }
   return matches;
 };
 
@@ -130,8 +114,7 @@ export const generateMatches12 = (groups: Group[], courtCount: number): Partial<
         return { round: r, phase: 'group' as const, bracket: null, courtId: c === 0 ? 0 : c, pairAId: g.pairIds[p1I], pairBId: g.pairIds[p2I], scoreA: null, scoreB: null, isFinished: false };
     };
     [1, 2, 3].forEach(r => {
-        const p1 = r===1?[0,2]:r===2?[0,1]:[0,1]; 
-        const p2 = r===1?[1,3]:r===2?[2,3]:[3,2]; 
+        const p1 = r===1?[0,2]:r===2?[0,1]:[0,1]; const p2 = r===1?[1,3]:r===2?[2,3]:[3,2]; 
         matches.push(mk('A', r, p1[0], p2[0], cA)!, mk('A', r, p1[1], p2[1], cA+1)!);
         matches.push(mk('B', r, p1[0], p2[0], cB)!, mk('B', r, p1[1], p2[1], cB+1)!);
         matches.push(mk('C', r, p1[0], p2[0], cC)!, mk('C', r, p1[1], p2[1], cC===0?0:cC+1)!);

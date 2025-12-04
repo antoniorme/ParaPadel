@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { useTimer } from '../store/TimerContext';
 import { TournamentFormat, Player, Pair, GenerationMethod } from '../types';
-import { ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock, Shuffle, Coffee, CheckCircle, XCircle, Trophy, Medal, Check, Settings, Users, RotateCcw } from 'lucide-react';
+import { ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock, Shuffle, Coffee, CheckCircle, XCircle, Trophy, Medal, Check, Settings, RotateCcw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface WizardProps {
