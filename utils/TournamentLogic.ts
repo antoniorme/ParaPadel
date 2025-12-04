@@ -1,3 +1,4 @@
+
 import { Pair, Player, Match, Group, TournamentFormat, GenerationMethod, TournamentState } from '../types';
 import { calculateDisplayRanking } from './Elo';
 
@@ -94,7 +95,6 @@ const createMatches = (groups: Group[], groupId: string, round: number, idxs: nu
 export const generateMatches16 = (groups: Group[], courtCount: number): Partial<Match>[] => {
   const matches: Partial<Match>[] = [];
   const sim = courtCount >= 8;
-  const rounds = sim ? 3 : 4;
   // R1
   matches.push(...createMatches(groups, 'A', 1, [[0,1], [2,3]], 1));
   matches.push(...createMatches(groups, 'B', 1, [[0,1], [2,3]], 3));
@@ -104,16 +104,16 @@ export const generateMatches16 = (groups: Group[], courtCount: number): Partial<
   matches.push(...createMatches(groups, 'A', 2, [[0,2], [1,3]], 1));
   matches.push(...createMatches(groups, 'B', 2, [[0,2], [1,3]], 3));
   if(sim) matches.push(...createMatches(groups, 'C', 2, [[0,2], [1,3]], 5));
-  else matches.push(...createMatches(groups, 'D', 2, [[0,1], [2,3]], 5)); // Rotated D
+  else matches.push(...createMatches(groups, 'D', 2, [[0,1], [2,3]], 5)); 
   if(sim) matches.push(...createMatches(groups, 'D', 2, [[0,2], [1,3]], 7));
   // R3
   matches.push(...createMatches(groups, 'A', 3, [[0,3], [1,2]], 1));
   if(sim) matches.push(...createMatches(groups, 'B', 3, [[0,3], [1,2]], 3));
-  else matches.push(...createMatches(groups, 'C', 3, [[0,2], [1,3]], 3)); // Rotated C
+  else matches.push(...createMatches(groups, 'C', 3, [[0,2], [1,3]], 3)); 
   if(sim) matches.push(...createMatches(groups, 'C', 3, [[0,3], [1,2]], 5));
-  else matches.push(...createMatches(groups, 'D', 3, [[0,2], [1,3]], 5)); // Rotated D
+  else matches.push(...createMatches(groups, 'D', 3, [[0,2], [1,3]], 5)); 
   if(sim) matches.push(...createMatches(groups, 'D', 3, [[0,3], [1,2]], 7));
-  // R4 (Only if Rotating)
+  // R4
   if (!sim) {
       matches.push(...createMatches(groups, 'B', 4, [[0,3], [1,2]], 1));
       matches.push(...createMatches(groups, 'C', 4, [[0,3], [1,2]], 3));
@@ -168,7 +168,6 @@ export const generateNextRoundMatches = (state: TournamentState, courtCount: num
     const sA = getRankedPairsForGroup(state.pairs, state.groups, 'A'); const sB = getRankedPairsForGroup(state.pairs, state.groups, 'B');
     const sC = getRankedPairsForGroup(state.pairs, state.groups, 'C'); const sD = getRankedPairsForGroup(state.pairs, state.groups, 'D');
 
-    // HELPER: Get Winner/Loser of prev round match
     const getW = (round: number, bracket: string, court: number) => { 
         const m = state.matches.find(x => x.round === round && x.bracket === bracket && x.courtId === court); 
         return m ? (m.scoreA! > m.scoreB! ? m.pairAId : m.pairBId) : 'TBD'; 
@@ -188,7 +187,6 @@ export const generateNextRoundMatches = (state: TournamentState, courtCount: num
         } else if (state.currentRound === qfStart) { // QF -> SF
             matches.push({ round: nextRound, phase: 'sf', bracket: 'main', courtId: 1, pairAId: getW(qfStart, 'main', 1), pairBId: getW(qfStart, 'main', 3), isFinished: false });
             matches.push({ round: nextRound, phase: 'sf', bracket: 'main', courtId: 2, pairAId: getW(qfStart, 'main', 2), pairBId: getW(qfStart, 'main', 4), isFinished: false });
-            // Waiting Consolation
             const waiting = state.matches.filter(m => m.round === state.currentRound && m.courtId === 0);
             waiting.forEach((m, i) => matches.push({ round: nextRound, phase: 'qf', bracket: 'consolation', courtId: 3 + i, pairAId: m.pairAId, pairBId: m.pairBId, isFinished: false }));
         } else if (state.currentRound === qfStart + 1) { // SF -> Final
@@ -277,7 +275,6 @@ export const reconstructGroupsFromMatches = (pairs: Pair[], matches: Match[], pl
          }
          return generateGroupsHelper(pairs, players, 'elo-balanced', '8_mini');
     }
-    // 16
     round1.forEach(m => {
         if ([1,2].includes(m.courtId)) { groupMap['A'].add(m.pairAId); groupMap['A'].add(m.pairBId); }
         if ([3,4].includes(m.courtId)) { groupMap['B'].add(m.pairAId); groupMap['B'].add(m.pairBId); }

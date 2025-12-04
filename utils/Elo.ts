@@ -1,5 +1,5 @@
+
 import { Player } from '../types';
-import { TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 
 // --- CONSTANTES ---
 const K_BASE = 32; 
