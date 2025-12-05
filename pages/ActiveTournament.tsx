@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { useTimer } from '../store/TimerContext';
 import { TournamentFormat, Player, Pair, GenerationMethod } from '../types';
-import { ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock, Shuffle, Coffee, CheckCircle, XCircle, Trophy, Medal, Settings, RotateCcw, Check, ArrowRight } from 'lucide-react';
+import { ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock, Shuffle, Coffee, CheckCircle, XCircle, Trophy, Medal, Settings, RotateCcw, Check, ArrowRight, Archive } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface WizardProps {
@@ -78,7 +78,7 @@ interface NextMatchInfo {
 }
 
 const ActiveTournament: React.FC = () => {
-  const { state, updateScoreDB, nextRoundDB, startTournamentDB, resetToSetupDB, formatPlayerName, setTournamentFormat, finishTournamentDB } = useTournament();
+  const { state, updateScoreDB, nextRoundDB, startTournamentDB, resetToSetupDB, formatPlayerName, setTournamentFormat, finishTournamentDB, archiveAndResetDB } = useTournament();
   const { resetTimer, startTimer } = useTimer();
   const navigate = useNavigate();
   
@@ -97,6 +97,7 @@ const ActiveTournament: React.FC = () => {
   const [selectedFormat, setSelectedFormat] = useState<TournamentFormat>('16_mini');
   const [showManualWizard, setShowManualWizard] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
 
   useEffect(() => { if(state.format) setSelectedFormat(state.format); }, [state.format]);
 
@@ -160,6 +161,11 @@ const ActiveTournament: React.FC = () => {
   };
 
   const handleResetToSetup = async () => { await resetToSetupDB(); setShowResetConfirm(false); };
+  
+  const handleArchive = async () => {
+      await archiveAndResetDB();
+      navigate('/dashboard');
+  };
 
   const handleManualWizardComplete = async (orderedPairs: Pair[]) => {
       setShowManualWizard(false);
@@ -318,9 +324,54 @@ const ActiveTournament: React.FC = () => {
       const champions = getChampions();
       return (
           <div className="space-y-6 pb-20 pt-10 text-center animate-fade-in">
-              <div className="inline-block p-6 bg-emerald-100 rounded-full shadow-lg mb-4 animate-bounce"><Trophy size={64} className="text-emerald-600" /></div><h2 className="text-3xl font-black text-slate-900 mb-2">¡Torneo Finalizado!</h2><p className="text-slate-500 max-w-xs mx-auto mb-10">Enhorabuena a todos los participantes. Aquí están los resultados finales.</p>
-              <div className="grid grid-cols-1 gap-6 max-w-md mx-auto"><div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 text-white shadow-xl transform hover:scale-105 transition-transform"><div className="flex justify-center mb-4"><Trophy size={32} className="text-yellow-300"/></div><h3 className="text-xs font-bold uppercase tracking-widest text-emerald-100 mb-2">Campeones Principales</h3><div className="text-2xl font-black">{champions.main}</div></div><div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-lg transform hover:scale-105 transition-transform"><div className="flex justify-center mb-4"><Medal size={32} className="text-blue-500"/></div><h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">Campeones Consolación</h3><div className="text-2xl font-black text-slate-800">{champions.cons}</div></div></div>
-              <div className="mt-12 bg-slate-50 p-6 rounded-2xl border border-slate-200"><p className="text-sm text-slate-500 mb-4">Para archivar este torneo y comenzar uno nuevo, ve al panel de inicio.</p><button onClick={() => navigate('/dashboard')} className="px-8 py-3 bg-slate-800 text-white rounded-xl font-bold shadow-lg">Ir al Panel de Control</button></div>
+              <h2 className="text-3xl font-black text-slate-900 mb-2">¡Torneo Finalizado!</h2>
+              <p className="text-slate-500 max-w-xs mx-auto mb-10">Enhorabuena a todos los participantes. Aquí están los resultados finales.</p>
+              
+              <div className="grid grid-cols-1 gap-6 max-w-md mx-auto">
+                <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 text-white shadow-xl transform hover:scale-105 transition-transform">
+                    <div className="flex justify-center mb-4"><Trophy size={32} className="text-yellow-300"/></div>
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-emerald-100 mb-2">Campeones Principales</h3>
+                    <div className="text-2xl font-black">{champions.main}</div>
+                </div>
+                <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-lg transform hover:scale-105 transition-transform">
+                    <div className="flex justify-center mb-4"><Medal size={32} className="text-blue-500"/></div>
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">Campeones Consolación</h3>
+                    <div className="text-2xl font-black text-slate-800">{champions.cons}</div>
+                </div>
+              </div>
+
+              <div className="mt-12 bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                <p className="text-sm text-slate-500 mb-4">Guardar resultados en el historial y preparar un nuevo torneo.</p>
+                <button 
+                    onClick={() => setShowArchiveConfirm(true)} 
+                    className="w-full px-8 py-4 bg-slate-900 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors"
+                >
+                    <Archive size={20} /> Archivar y Cerrar Torneo
+                </button>
+              </div>
+
+              {/* Archive Confirmation Modal */}
+              {showArchiveConfirm && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600">
+                            <Archive size={32} />
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 mb-2">¿Archivar Torneo?</h3>
+                        <p className="text-slate-500 mb-6 text-sm">
+                            El torneo actual se guardará en el historial y la aplicación quedará lista para un nuevo registro.
+                        </p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setShowArchiveConfirm(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200">
+                                Cancelar
+                            </button>
+                            <button onClick={handleArchive} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg hover:bg-blue-700">
+                                Confirmar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+              )}
           </div>
       );
   }
