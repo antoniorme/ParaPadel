@@ -195,7 +195,12 @@ const Results: React.FC = () => {
   return (
     <div className="space-y-6 pb-20">
       <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-slate-900">Resultados</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-bold text-slate-900">Resultados</h2>
+            <div className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold uppercase tracking-wider border border-slate-200">
+                Ronda {state.currentRound}
+            </div>
+          </div>
           <div className="flex bg-slate-200 p-1 rounded-lg">
               <button onClick={() => setTab('groups')} className={`p-2 rounded-md transition-all ${tab === 'groups' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}><Grid size={20}/></button>
               <button onClick={() => setTab('bracket')} className={`p-2 rounded-md transition-all ${tab === 'bracket' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}><GitMerge size={20}/></button>
