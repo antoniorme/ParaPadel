@@ -210,51 +210,41 @@ export const generateNextRoundMatches = (state: TournamentState, courtCount: num
 
 export const reconstructGroupsFromMatches = (pairs: Pair[], matches: Match[], players: Player[], format: TournamentFormat): Group[] => {
     const groupMap: Record<string, Set<string>> = { 'A': new Set(), 'B': new Set(), 'C': new Set(), 'D': new Set() };
-    const round1 = matches.filter(m => m.round === 1);
     
     // Explicit 10 Pair Logic
     if (format === '10_mini') {
-        if (round1.length > 0) {
-            round1.forEach(m => {
-                // In Mini 10 R1: Courts 1,2 -> A; Courts 4,5 -> B; Court 3 -> Cross A/B
-                if ([1,2].includes(m.courtId)) { groupMap['A'].add(m.pairAId); groupMap['A'].add(m.pairBId); }
-                else if ([4,5].includes(m.courtId)) { groupMap['B'].add(m.pairAId); groupMap['B'].add(m.pairBId); }
-                else if (m.courtId === 3) { groupMap['A'].add(m.pairAId); groupMap['B'].add(m.pairBId); }
-            });
-            // If matches exist but reconstruction fails (e.g. empty), fallback to logic gen
-            if (groupMap['A'].size > 0) return GROUP_NAMES_10.map(id => ({ id, pairIds: Array.from(groupMap[id]) }));
-        }
+        matches.filter(m => m.round === 1).forEach(m => {
+             if ([1,2].includes(m.courtId)) { groupMap['A'].add(m.pairAId); groupMap['A'].add(m.pairBId); }
+             else if ([4,5].includes(m.courtId)) { groupMap['B'].add(m.pairAId); groupMap['B'].add(m.pairBId); }
+             else if (m.courtId === 3) { groupMap['A'].add(m.pairAId); groupMap['B'].add(m.pairBId); }
+        });
+        if (groupMap['A'].size > 0) return GROUP_NAMES_10.map(id => ({ id, pairIds: Array.from(groupMap[id]) }));
         return generateGroupsHelper(pairs, players, 'elo-balanced', '10_mini');
     }
 
     // Explicit 12 Pair Logic
     if (format === '12_mini') {
-        if(round1.length > 0) {
-             round1.forEach(m => {
-                 if([1,2].includes(m.courtId)) { groupMap['A'].add(m.pairAId); groupMap['A'].add(m.pairBId); }
-                 if([3,4].includes(m.courtId)) { groupMap['B'].add(m.pairAId); groupMap['B'].add(m.pairBId); }
-                 if([5,6,0].includes(m.courtId)) { groupMap['C'].add(m.pairAId); groupMap['C'].add(m.pairBId); }
-             });
-             return GROUP_NAMES_12.map(id => ({ id, pairIds: Array.from(groupMap[id]) }));
-        }
-        return generateGroupsHelper(pairs, players, 'elo-balanced', '12_mini');
+         matches.filter(m => m.round === 1).forEach(m => {
+             if([1,2].includes(m.courtId)) { groupMap['A'].add(m.pairAId); groupMap['A'].add(m.pairBId); }
+             if([3,4].includes(m.courtId)) { groupMap['B'].add(m.pairAId); groupMap['B'].add(m.pairBId); }
+             if([5,6,0].includes(m.courtId)) { groupMap['C'].add(m.pairAId); groupMap['C'].add(m.pairBId); }
+         });
+         if (groupMap['A'].size > 0) return GROUP_NAMES_12.map(id => ({ id, pairIds: Array.from(groupMap[id]) }));
+         return generateGroupsHelper(pairs, players, 'elo-balanced', '12_mini');
     }
 
     // Explicit 8 Pair Logic
     if (format === '8_mini') {
-         if(round1.length > 0) {
-             round1.forEach(m => {
-                 if([1,2].includes(m.courtId)) { groupMap['A'].add(m.pairAId); groupMap['A'].add(m.pairBId); }
-                 if([3,4].includes(m.courtId)) { groupMap['B'].add(m.pairAId); groupMap['B'].add(m.pairBId); }
-             });
-             return GROUP_NAMES_8.map(id => ({ id, pairIds: Array.from(groupMap[id]) }));
-         }
+         matches.filter(m => m.round === 1).forEach(m => {
+             if([1,2].includes(m.courtId)) { groupMap['A'].add(m.pairAId); groupMap['A'].add(m.pairBId); }
+             if([3,4].includes(m.courtId)) { groupMap['B'].add(m.pairAId); groupMap['B'].add(m.pairBId); }
+         });
+         if (groupMap['A'].size > 0) return GROUP_NAMES_8.map(id => ({ id, pairIds: Array.from(groupMap[id]) }));
          return generateGroupsHelper(pairs, players, 'elo-balanced', '8_mini');
     }
     
     // Default 16_mini logic (Simultaneous vs Rotativo)
-    // IMPORTANT: Check court count implicitly via matches.
-    // If Court 7 or 8 is used in Round 1, it's Simultaneous.
+    // IMPORTANT: In Rotativo, Group D plays in Round 2. We scan Round 1 AND Round 2.
     const hasCourt7or8 = matches.some(m => m.round === 1 && m.courtId >= 7);
     
     matches.forEach(m => {
@@ -262,12 +252,13 @@ export const reconstructGroupsFromMatches = (pairs: Pair[], matches: Match[], pl
         let targetGroup = '';
         
         if (hasCourt7or8) {
-            // Simultaneous (>= 8 courts)
-            // R1 assigns all: A(1,2), B(3,4), C(5,6), D(7,8)
-            if ([1,2].includes(m.courtId)) targetGroup = 'A';
-            else if ([3,4].includes(m.courtId)) targetGroup = 'B';
-            else if ([5,6].includes(m.courtId)) targetGroup = 'C';
-            else if ([7,8].includes(m.courtId)) targetGroup = 'D'; 
+            // Simultaneous (>= 8 courts) - R1 is enough
+            if (m.round === 1) {
+                if ([1,2].includes(m.courtId)) targetGroup = 'A';
+                else if ([3,4].includes(m.courtId)) targetGroup = 'B';
+                else if ([5,6].includes(m.courtId)) targetGroup = 'C';
+                else if ([7,8].includes(m.courtId)) targetGroup = 'D'; 
+            }
         } else {
             // Rotativo (< 8 courts)
             // R1: A(1,2), B(3,4), C(5,6)
@@ -276,7 +267,7 @@ export const reconstructGroupsFromMatches = (pairs: Pair[], matches: Match[], pl
                 else if ([3,4].includes(m.courtId)) targetGroup = 'B';
                 else if ([5,6].includes(m.courtId)) targetGroup = 'C';
             }
-            // R2: A(1,2), B(3,4), D(5,6) -> Group D enters in R2!
+            // R2: A(1,2), B(3,4), D(5,6) - D starts here!
             else if (m.round === 2) {
                  if ([5,6].includes(m.courtId)) targetGroup = 'D';
             }
@@ -289,8 +280,7 @@ export const reconstructGroupsFromMatches = (pairs: Pair[], matches: Match[], pl
     });
 
     const groups = GROUP_NAMES_16.map(id => ({ id, pairIds: Array.from(groupMap[id]) }));
-    // Safety check: if reconstruction failed (e.g. groups empty), regen
-    if(groups[0].pairIds.length < 4 && round1.length === 0) return generateGroupsHelper(pairs, players, 'elo-balanced', '16_mini');
+    if(groups[0].pairIds.length < 4) return generateGroupsHelper(pairs, players, 'elo-balanced', '16_mini');
     return groups;
 };
 
