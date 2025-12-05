@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { useTimer } from '../store/TimerContext';
 import { TournamentFormat, Player, Pair, GenerationMethod } from '../types';
-import { ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock, Shuffle, Coffee, CheckCircle, XCircle, Trophy, Medal, Check, Settings, RotateCcw } from 'lucide-react';
+import { ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock, Shuffle, Coffee, CheckCircle, XCircle, Trophy, Medal, Settings, RotateCcw, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface WizardProps {
@@ -199,7 +199,10 @@ const ActiveTournament: React.FC = () => {
       const totalPairs = state.pairs.length; const canStart = totalPairs >= limit; const reservesCount = Math.max(0, totalPairs - limit);
       return (
           <div className="flex flex-col h-full space-y-6 pb-20">
-              <div className="text-center mb-4"><div className="inline-block p-4 bg-emerald-100 rounded-full mb-4 animate-pulse"><Settings size={40} className="text-emerald-600" /></div><h2 className="text-3xl font-black text-slate-900">Torneo Listo</h2><p className="text-slate-500">Configura los parámetros finales</p></div>
+              <div className="text-center mb-4">
+                  <h2 className="text-3xl font-black text-slate-900">Configuración de Torneo</h2>
+                  <p className="text-slate-500">Ajusta los parámetros finales</p>
+              </div>
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between"><div><h3 className="text-sm font-bold text-slate-400 uppercase">Parejas Inscritas</h3><p className="text-xs text-slate-400">Titulares: {limit} {reservesCount > 0 && `(+${reservesCount} Reservas)`}</p></div><div className={`text-4xl font-black ${canStart ? 'text-emerald-500' : 'text-orange-500'}`}>{totalPairs}<span className="text-xl text-slate-300">/{limit}</span></div></div>
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm"><h3 className="text-sm font-bold text-slate-400 uppercase mb-4">Tipo de Mini</h3><div className="grid grid-cols-4 gap-2"><button onClick={() => handleFormatChange('16_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '16_mini' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>16</button><button onClick={() => handleFormatChange('12_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '12_mini' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>12</button><button onClick={() => handleFormatChange('10_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '10_mini' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>10</button><button onClick={() => handleFormatChange('8_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '8_mini' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>8</button></div></div>
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm"><h3 className="text-sm font-bold text-slate-400 uppercase mb-4">Generación de Grupos</h3><div className="grid grid-cols-2 gap-3"><button onClick={() => setGenerationMethod('arrival')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'arrival' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500'}`}><Clock size={18}/> <span className="text-xs font-bold uppercase">Llegada</span></button><button onClick={() => setGenerationMethod('manual')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'manual' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500'}`}><ListOrdered size={18}/> <span className="text-xs font-bold uppercase">Manual</span></button><button onClick={() => setGenerationMethod('elo-balanced')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'elo-balanced' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500'}`}><TrendingUp size={18}/> <span className="text-xs font-bold uppercase">Nivel</span></button><button onClick={() => setGenerationMethod('elo-mixed')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'elo-mixed' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 text-slate-500'}`}><Shuffle size={18}/> <span className="text-xs font-bold uppercase">Mix</span></button></div></div>
@@ -254,3 +257,4 @@ const ActiveTournament: React.FC = () => {
 };
 
 export default ActiveTournament;
+    

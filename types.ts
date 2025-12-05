@@ -82,6 +82,7 @@ export interface ClubData {
     courtCount: number;
     address?: string;
     phone?: string;
+    logoUrl?: string;
 }
 
 export interface PastTournament {

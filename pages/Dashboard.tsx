@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { useHistory } from '../store/HistoryContext';
-import { Users, PlayCircle, CheckCircle, Clock, Archive, Play, Trophy, AlertTriangle } from 'lucide-react';
+import { Users, PlayCircle, CheckCircle, Clock, Archive, Play, Trophy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const Dashboard: React.FC = () => {
@@ -26,24 +26,20 @@ const Dashboard: React.FC = () => {
   const StatCard = ({ title, value, subValue, icon: Icon, color, onClick }: any) => (
     <div 
       onClick={onClick}
-      className="bg-white p-5 rounded-2xl border border-slate-200 cursor-pointer hover:border-emerald-300 transition-all hover:shadow-md shadow-sm h-full flex flex-col justify-between relative overflow-hidden group"
+      className="bg-white p-5 rounded-2xl border border-slate-200 cursor-pointer hover:border-emerald-300 transition-all hover:shadow-md shadow-sm h-full flex flex-col justify-between group"
     >
-      <div className={`absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform ${color.replace('text-', 'text-')}`}>
-          <Icon size={64} />
-      </div>
-      
-      <div className="flex items-start justify-between mb-3 relative z-10">
+      <div className="flex items-start justify-between mb-3">
         <div className={`p-2.5 rounded-xl ${color.replace('text-', 'bg-').replace('400', '50')} ${color.replace('400', '600')}`}>
           <Icon size={24} />
         </div>
         {subValue && (
-            <span className="text-[10px] font-black bg-slate-100 px-2 py-1 rounded-full text-slate-500 border border-slate-200">
+            <span className="text-[10px] font-black bg-slate-100 px-2 py-1 rounded-full text-slate-500 border border-slate-200 whitespace-nowrap">
                 {subValue}
             </span>
         )}
       </div>
-      <div className="relative z-10">
-          <div className="text-3xl font-black text-slate-800 tracking-tight">{value}</div>
+      <div>
+          <div className="text-2xl font-black text-slate-800 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis">{value}</div>
           <h3 className="text-slate-400 font-bold uppercase text-[10px] tracking-wider mt-1">{title}</h3>
       </div>
     </div>

@@ -79,9 +79,14 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       {/* Main Header (Boxed) - Sticky */}
       <div className="bg-slate-50 pt-2 px-2 md:pt-4 sticky top-0 z-40">
           <header className="max-w-3xl mx-auto bg-white p-4 flex justify-between items-center border border-slate-200 rounded-2xl shadow-sm">
-            <h1 className="text-lg font-bold bg-gradient-to-r from-emerald-600 to-teal-700 bg-clip-text text-transparent truncate max-w-[200px]">
-                {clubData.name || 'PadelPro'}
-            </h1>
+            <div className="flex items-center gap-3 overflow-hidden">
+                {clubData.logoUrl && (
+                    <img src={clubData.logoUrl} alt="Club Logo" className="w-8 h-8 object-contain" />
+                )}
+                <h1 className="text-lg font-bold bg-gradient-to-r from-emerald-600 to-teal-700 bg-clip-text text-transparent truncate">
+                    {clubData.name || 'PadelPro'}
+                </h1>
+            </div>
             <button onClick={() => setIsMenuOpen(true)} className="text-slate-700 hover:text-emerald-600 p-2 rounded-full hover:bg-slate-100 transition-colors">
               <Menu size={24} />
             </button>

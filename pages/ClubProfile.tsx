@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useHistory } from '../store/HistoryContext';
-import { Save, Building } from 'lucide-react';
+import { Save, Building, Image as ImageIcon, Upload } from 'lucide-react';
 
 const ClubProfile: React.FC = () => {
   const { clubData, updateClubData } = useHistory();
@@ -11,6 +11,17 @@ const ClubProfile: React.FC = () => {
       e.preventDefault();
       updateClubData(form);
       alert("Datos guardados correctamente");
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              setForm(prev => ({ ...prev, logoUrl: reader.result as string }));
+          };
+          reader.readAsDataURL(file);
+      }
   };
 
   return (
@@ -27,6 +38,26 @@ const ClubProfile: React.FC = () => {
           </div>
 
           <form onSubmit={handleSave} className="space-y-5">
+              
+              {/* LOGO UPLOAD SECTION */}
+              <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Logo del Club</label>
+                  <div className="mt-2 flex items-center gap-4">
+                      <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center bg-slate-50 overflow-hidden relative">
+                          {form.logoUrl ? (
+                              <img src={form.logoUrl} alt="Club Logo" className="w-full h-full object-contain" />
+                          ) : (
+                              <ImageIcon size={24} className="text-slate-300" />
+                          )}
+                      </div>
+                      <label className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 cursor-pointer shadow-sm transition-colors">
+                          <Upload size={16} />
+                          <span>Subir Imagen</span>
+                          <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                      </label>
+                  </div>
+              </div>
+
               <div>
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Nombre del Club</label>
                   <input 
