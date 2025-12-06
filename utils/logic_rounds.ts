@@ -173,7 +173,11 @@ export const generateNextRoundMatches = (state: TournamentState, courtCount: num
         if (state.currentRound === 3) {
              const sA = getRankedPairsForGroup(state.pairs, state.groups, 'A'); const sB = getRankedPairsForGroup(state.pairs, state.groups, 'B');
              const mk = (c: number, p1: string, p2: string) => ({ round: 4, phase: 'qf' as const, bracket: 'main' as any, courtId: c, pairAId: p1, pairBId: p2, isFinished: false });
-             matches.push(mk(1, sA[0].id, sB[3].id)); matches.push(mk(2, sB[0].id, sA[3].id)); matches.push(mk(3, sA[1].id, sB[2].id)); matches.push(mk(4, sB[1].id, sA[2].id));
+             // Modified Logic for Mini 8: 1A vs 2B, 1B vs 2A, 3A vs 4B, 3B vs 4A
+             matches.push(mk(1, sA[0].id, sB[1].id)); // 1A vs 2B
+             matches.push(mk(2, sB[0].id, sA[1].id)); // 1B vs 2A
+             matches.push(mk(3, sA[2].id, sB[3].id)); // 3A vs 4B
+             matches.push(mk(4, sB[2].id, sA[3].id)); // 3B vs 4A
         } else if (state.currentRound === 4) {
              matches.push({ round: 5, phase: 'sf', bracket: 'main', courtId: 1, pairAId: getW(4, 'main', 1)!, pairBId: getW(4, 'main', 3)!, isFinished: false });
              matches.push({ round: 5, phase: 'sf', bracket: 'main', courtId: 2, pairAId: getW(4, 'main', 2)!, pairBId: getW(4, 'main', 4)!, isFinished: false });

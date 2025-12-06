@@ -112,10 +112,10 @@ const Results: React.FC = () => {
   } 
   else if (isMini8) {
       roundQF = 4; roundSF = 5; roundFinal = 6; roundFinalCons = 6;
-      qf1 = { ...getMatchData(4, 1), p1: getGroupPosName('A',1), p2: getGroupPosName('B',4) }; 
-      qf2 = { ...getMatchData(4, 2), p1: getGroupPosName('B',1), p2: getGroupPosName('A',4) }; 
-      qf3 = { ...getMatchData(4, 3), p1: getGroupPosName('A',2), p2: getGroupPosName('B',3) }; 
-      qf4 = { ...getMatchData(4, 4), p1: getGroupPosName('B',2), p2: getGroupPosName('A',3) }; 
+      qf1 = { ...getMatchData(4, 1), p1: getGroupPosName('A',1), p2: getGroupPosName('B',2) }; 
+      qf2 = { ...getMatchData(4, 2), p1: getGroupPosName('B',1), p2: getGroupPosName('A',2) }; 
+      qf3 = { ...getMatchData(4, 3), p1: getGroupPosName('A',3), p2: getGroupPosName('B',4) }; 
+      qf4 = { ...getMatchData(4, 4), p1: getGroupPosName('B',3), p2: getGroupPosName('A',4) }; 
       sf1 = getMatchData(5, 1); sf2 = getMatchData(5, 2); finalMain = getMatchData(6, 1);
       sfC1 = getMatchData(5, 3); sfC2 = getMatchData(5, 4); finalCons = getMatchData(6, 2);
   }
