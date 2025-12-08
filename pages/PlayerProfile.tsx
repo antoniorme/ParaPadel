@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { useHistory } from '../store/HistoryContext';
-import { ArrowLeft, Trophy, Medal, Edit2, Save, Calendar, User, Smartphone, Mail, Activity, BarChart2, Hash } from 'lucide-react';
+import { ArrowLeft, Trophy, Medal, Edit2, Save, Calendar, User, Smartphone, Mail, Activity, BarChart2, Hash, Trash2 } from 'lucide-react';
 import { TournamentState, Match } from '../types';
 import { calculateDisplayRanking, manualToElo, calculateInitialElo, getPairTeamElo, calculateMatchDelta } from '../utils/Elo';
 import { THEME } from '../utils/theme';
@@ -11,10 +11,11 @@ import { THEME } from '../utils/theme';
 const PlayerProfile: React.FC = () => {
   const { playerId } = useParams<{ playerId: string }>();
   const navigate = useNavigate();
-  const { state, updatePlayerInDB, formatPlayerName } = useTournament(); 
+  const { state, updatePlayerInDB, deletePlayerDB, formatPlayerName } = useTournament(); 
   const { pastTournaments } = useHistory();
   
   const [isEditing, setIsEditing] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const player = state.players.find(p => p.id === playerId);
   const [editForm, setEditForm] = useState(player || { name: '', nickname: '', categories: [] as string[], email: '', phone: '', id: '', manual_rating: 5 });
@@ -100,6 +101,16 @@ const PlayerProfile: React.FC = () => {
   if (!player) return <div className="p-6 text-center">Jugador no encontrado</div>;
 
   const handleSave = () => { updatePlayerInDB(editForm); setIsEditing(false); };
+  
+  const handleDelete = async () => {
+      try {
+          await deletePlayerDB(player.id);
+          navigate('/players');
+      } catch (e: any) {
+          alert("Error al eliminar: " + e.message);
+      }
+  };
+
   const toggleEditCategory = (cat: string) => { setEditForm(prev => { const cats = prev.categories || []; const exists = cats.includes(cat); return { ...prev, categories: exists ? cats.filter(c => c !== cat) : [...cats, cat] }; }); };
 
   // Calculate Ratings for Display
@@ -236,7 +247,12 @@ const PlayerProfile: React.FC = () => {
       {isEditing && (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
               <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto">
-                  <h3 className="text-xl font-bold mb-6 text-slate-900">Editar Perfil</h3>
+                  <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-xl font-bold text-slate-900">Editar Perfil</h3>
+                      <button onClick={() => setShowDeleteConfirm(true)} className="p-2 bg-rose-50 text-rose-600 rounded-full hover:bg-rose-100 transition-colors">
+                          <Trash2 size={20} />
+                      </button>
+                  </div>
                   <div className="space-y-4">
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Nombre</label><input value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" /></div>
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Apodo</label><input value={editForm.nickname || ''} onChange={e => setEditForm({...editForm, nickname: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" /></div>
@@ -285,6 +301,25 @@ const PlayerProfile: React.FC = () => {
                   </div>
               </div>
           </div>
+      )}
+
+      {/* CONFIRM DELETE MODAL */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-600">
+                    <Trash2 size={32} />
+                </div>
+                <h3 className="text-xl font-black text-slate-900 mb-2">¿Eliminar Jugador?</h3>
+                <p className="text-slate-500 mb-6 text-sm">
+                    Esta acción es irreversible. Se borrarán los datos del jugador de la base de datos del club.
+                </p>
+                <div className="flex gap-3">
+                    <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold">Cancelar</button>
+                    <button onClick={handleDelete} className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold shadow-lg">Eliminar</button>
+                </div>
+            </div>
+        </div>
       )}
     </div>
   );

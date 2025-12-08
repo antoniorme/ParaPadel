@@ -2,17 +2,18 @@
 import React, { useState } from 'react';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
-import { Search, Edit2, Save, Eye, Trophy, Activity, Plus, Check, X } from 'lucide-react';
+import { Search, Edit2, Save, Eye, Trophy, Activity, Plus, Check, X, Trash2 } from 'lucide-react';
 import { Player } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { calculateDisplayRanking, calculateInitialElo, manualToElo } from '../utils/Elo';
 
 const PlayerManager: React.FC = () => {
-  const { state, updatePlayerInDB, addPlayerToDB, formatPlayerName } = useTournament();
+  const { state, updatePlayerInDB, addPlayerToDB, deletePlayerDB, formatPlayerName } = useTournament();
   const navigate = useNavigate();
   const [filterCat, setFilterCat] = useState('all');
   const [search, setSearch] = useState('');
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   const [isCreating, setIsCreating] = useState(false);
   const [newPlayer, setNewPlayer] = useState({ name: '', nickname: '', categories: [] as string[], manual_rating: 5, email: '', phone: '' });
@@ -33,6 +34,17 @@ const PlayerManager: React.FC = () => {
           // Actualizamos global_rating para reiniciar al jugador en su nueva ancla
           updatePlayerInDB({ ...editingPlayer, global_rating: newElo });
           setEditingPlayer(null);
+      }
+  };
+
+  const handleDelete = async () => {
+      if (!editingPlayer) return;
+      try {
+          await deletePlayerDB(editingPlayer.id);
+          setEditingPlayer(null);
+          setShowDeleteConfirm(false);
+      } catch (e: any) {
+          alert("Error al eliminar: " + e.message);
       }
   };
   
@@ -182,7 +194,12 @@ const PlayerManager: React.FC = () => {
       {editingPlayer && (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
               <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto">
-                  <h3 className="text-xl font-bold mb-6 text-slate-900">Editar Jugador</h3>
+                  <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-xl font-bold text-slate-900">Editar Jugador</h3>
+                      <button onClick={() => setShowDeleteConfirm(true)} className="p-2 bg-rose-50 text-rose-600 rounded-full hover:bg-rose-100 transition-colors">
+                          <Trash2 size={20} />
+                      </button>
+                  </div>
                   <div className="space-y-4">
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Nombre Real</label><input value={editingPlayer.name} onChange={e => setEditingPlayer({...editingPlayer, name: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" /></div>
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Apodo</label><input value={editingPlayer.nickname || ''} onChange={e => setEditingPlayer({...editingPlayer, nickname: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" /></div>
@@ -232,6 +249,25 @@ const PlayerManager: React.FC = () => {
                   </div>
               </div>
           </div>
+      )}
+
+      {/* CONFIRM DELETE MODAL */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-600">
+                    <Trash2 size={32} />
+                </div>
+                <h3 className="text-xl font-black text-slate-900 mb-2">¿Eliminar Jugador?</h3>
+                <p className="text-slate-500 mb-6 text-sm">
+                    Esta acción es irreversible. Se borrarán los datos del jugador de la base de datos del club.
+                </p>
+                <div className="flex gap-3">
+                    <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold">Cancelar</button>
+                    <button onClick={handleDelete} className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold shadow-lg">Eliminar</button>
+                </div>
+            </div>
+        </div>
       )}
     </div>
   );

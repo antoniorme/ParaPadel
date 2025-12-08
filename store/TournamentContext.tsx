@@ -17,6 +17,7 @@ const initialState: TournamentState = {
 interface TournamentContextType {
     state: TournamentState; dispatch: React.Dispatch<TournamentAction>; loadData: () => Promise<void>;
     addPlayerToDB: (p: Partial<Player>) => Promise<string | null>; updatePlayerInDB: (p: Partial<Player>) => Promise<void>;
+    deletePlayerDB: (id: string) => Promise<void>;
     createPairInDB: (p1: string, p2: string) => Promise<void>; updatePairDB: (pairId: string, p1: string, p2: string) => Promise<void>;
     startTournamentDB: (method: GenerationMethod, customOrderedPairs?: Pair[]) => Promise<void>;
     updateScoreDB: (matchId: string, sA: number, sB: number) => Promise<void>; nextRoundDB: () => Promise<void>;
@@ -29,7 +30,8 @@ interface TournamentContextType {
 }
 
 const TournamentContext = createContext<TournamentContextType>({
-    state: initialState, dispatch: () => null, loadData: async () => {}, addPlayerToDB: async () => null, updatePlayerInDB: async () => {},
+    state: initialState, dispatch: () => null, loadData: async () => {}, 
+    addPlayerToDB: async () => null, updatePlayerInDB: async () => {}, deletePlayerDB: async () => {},
     createPairInDB: async () => {}, updatePairDB: async () => {}, startTournamentDB: async () => {}, updateScoreDB: async () => {}, nextRoundDB: async () => {},
     deletePairDB: async () => {}, archiveAndResetDB: async () => {}, resetToSetupDB: async () => {}, regenerateMatchesDB: async () => "", hardResetDB: async () => {},
     formatPlayerName: () => '', setTournamentFormat: async () => {}, getPairElo: () => 1200, substitutePairDB: async () => {},
@@ -157,6 +159,17 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const updatePlayerInDB = async (p: Partial<Player>) => {
         if (isOfflineMode) { const newState = { ...state, players: state.players.map(x => x.id === p.id ? { ...x, ...p } as Player : x) }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return; }
         await supabase.from('players').update(p).eq('id', p.id); await loadData();
+    };
+    const deletePlayerDB = async (id: string) => {
+        if (isOfflineMode) {
+             const newState = { ...state, players: state.players.filter(p => p.id !== id) };
+             dispatch({ type: 'SET_STATE', payload: newState });
+             saveLocal(newState);
+             return;
+        }
+        const { error } = await supabase.from('players').delete().eq('id', id);
+        if (error) throw error;
+        await loadData();
     };
     const createPairInDB = async (p1: string, p2: string) => {
         if (isOfflineMode) { const newPair: Pair = { id: `pair-${Date.now()}`, player1Id: p1, player2Id: p2, name: 'Pareja', waterReceived: false, paidP1: false, paidP2: false, stats: {played:0, won:0, gameDiff:0}, isReserve: false }; let limit = 16; if(state.format === '10_mini') limit = 10; if(state.format === '12_mini') limit = 12; if(state.format === '8_mini') limit = 8; newPair.isReserve = state.pairs.length >= limit; const newState = { ...state, pairs: [...state.pairs, newPair] }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return; }
@@ -339,7 +352,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     return (
         <TournamentContext.Provider value={{
             state, dispatch, loadData,
-            addPlayerToDB, updatePlayerInDB, createPairInDB, updatePairDB, startTournamentDB,
+            addPlayerToDB, updatePlayerInDB, deletePlayerDB, createPairInDB, updatePairDB, startTournamentDB,
             updateScoreDB, nextRoundDB, deletePairDB, archiveAndResetDB, resetToSetupDB, regenerateMatchesDB, hardResetDB,
             formatPlayerName, setTournamentFormat, getPairElo: Logic.getPairElo, substitutePairDB, finishTournamentDB
         }}>
