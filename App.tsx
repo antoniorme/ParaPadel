@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { TournamentProvider } from './store/TournamentContext';
@@ -5,6 +6,7 @@ import { AuthProvider, useAuth } from './store/AuthContext';
 import { HistoryProvider, useHistory } from './store/HistoryContext';
 import { TimerProvider } from './store/TimerContext';
 import { Layout } from './components/Layout';
+import { PlayerLayout } from './components/PlayerLayout';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -20,6 +22,9 @@ import ClubProfile from './pages/ClubProfile';
 import Help from './pages/Help';
 import PlayerProfile from './pages/PlayerProfile';
 import Onboarding from './pages/Onboarding'; 
+
+// Player Pages
+import PlayerDashboard from './pages/player/PlayerDashboard';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }: React.PropsWithChildren) => {
@@ -51,7 +56,21 @@ const AppRoutes = () => {
         {/* Fullscreen Onboarding (No Layout) */}
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
 
-        {/* Protected App Routes (With Layout) */}
+        {/* PLAYER APP ROUTES (New Branch) */}
+        {/* For Phase 1, these are accessible to see the UI. Later we will add specific Player Auth protection */}
+        <Route path="/p/*" element={
+            <PlayerLayout>
+                <Routes>
+                    <Route path="dashboard" element={<PlayerDashboard />} />
+                    {/* Placeholder routes for nav */}
+                    <Route path="tournaments" element={<div className="p-6 text-center text-slate-400">Próximamente: Torneos</div>} />
+                    <Route path="profile" element={<div className="p-6 text-center text-slate-400">Próximamente: Perfil</div>} />
+                    <Route path="*" element={<Navigate to="dashboard" replace />} />
+                </Routes>
+            </PlayerLayout>
+        } />
+
+        {/* Protected App Routes (With Admin Layout) */}
         <Route path="/*" element={
             <Layout>
                 <Routes>

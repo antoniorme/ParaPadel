@@ -1,7 +1,8 @@
 
 export interface Player {
   id: string; // UUID
-  user_id?: string;
+  user_id?: string; // ID del Club (Admin)
+  profile_user_id?: string; // NEW: ID del Usuario Jugador (App Jugadores)
   name: string;
   nickname?: string;
   email?: string;
