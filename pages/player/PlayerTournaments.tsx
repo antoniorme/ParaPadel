@@ -1,28 +1,37 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../../store/TournamentContext';
+import { useHistory } from '../../store/HistoryContext';
 import { THEME, getFormatColor } from '../../utils/theme';
-import { Calendar, Users, ArrowRight, Clock, CheckCircle, Search, UserPlus, X, Mail, Check, Trash2, AlertTriangle, User } from 'lucide-react';
+import { Calendar, Users, ArrowRight, Clock, CheckCircle, Search, UserPlus, X, Mail, Check, Trash2, AlertTriangle, User, Phone, AtSign, Edit2, RefreshCw, Heart, ChevronDown, ChevronUp, Gift, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { calculateInitialElo } from '../../utils/Elo';
 
 const PlayerTournaments: React.FC = () => {
-    const { state, createPairInDB, formatPlayerName, respondToInviteDB, deletePairDB, addPlayerToDB } = useTournament();
+    const { state, createPairInDB, updatePairDB, formatPlayerName, respondToInviteDB, deletePairDB, addPlayerToDB } = useTournament();
+    const { globalTournaments } = useHistory();
     const navigate = useNavigate();
 
     // Get current logged-in player ID from LocalStorage (Simulator)
     const [myPlayerId, setMyPlayerId] = useState<string>('');
     const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+    const [isEditingMode, setIsEditingMode] = useState(false); // NEW: Track if we are editing
     const [modalTab, setModalTab] = useState<'club' | 'guest'>('club');
     
+    // UI State for Card
+    const [isCardExpanded, setIsCardExpanded] = useState(false);
+
     // Club Search State
     const [selectedPartnerId, setSelectedPartnerId] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
 
     // Guest Creation State
     const [guestName, setGuestName] = useState('');
-    const [guestLevel, setGuestLevel] = useState(5);
-    const [guestCategory, setGuestCategory] = useState<string>('Iniciación');
+    const [guestPhone, setGuestPhone] = useState('');
+    const [guestEmail, setGuestEmail] = useState('');
+    // const [guestLevel, setGuestLevel] = useState(5); // REMOVED SLIDER STATE
+    const [guestCategories, setGuestCategories] = useState<string[]>([]);
     const [smartMatchWarning, setSmartMatchWarning] = useState<any[]>([]);
 
     useEffect(() => {
@@ -32,12 +41,10 @@ const PlayerTournaments: React.FC = () => {
     }, [navigate]);
 
     // CHECK REGISTRATION STATUS
-    // Find any pair I am part of, excluding rejected ones
     const myRegistration = state.pairs.find(p => (p.player1Id === myPlayerId || p.player2Id === myPlayerId) && p.status !== 'rejected');
     const isRegistered = !!myRegistration;
     const isPending = myRegistration?.status === 'pending';
     
-    // Am I the inviter or invitee? (Assumption: P1 is usually creator)
     const isInviter = myRegistration && myRegistration.player1Id === myPlayerId;
 
     // Resolve Partner Name if registered
@@ -55,30 +62,72 @@ const PlayerTournaments: React.FC = () => {
     const themeColor = getFormatColor(state.format);
     const formatLabel = state.format ? state.format.replace('_mini', '') : '16';
 
+    // Find rich data for the current tournament from globalTournaments
+    const richTournamentData = globalTournaments.find(t => t.id === state.id) || {
+        prizes: state.prizes,
+        price: state.price,
+        description: state.description
+    };
+
+    const formatDate = () => {
+        return new Date().toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+    };
+
     // --- ACTIONS ---
+
+    const openRegisterModal = (editing: boolean = false) => {
+        setIsEditingMode(editing);
+        setSelectedPartnerId('');
+        setGuestName('');
+        setSearchTerm('');
+        setGuestCategories([]);
+        setIsRegisterModalOpen(true);
+    };
 
     const handleInviteClubPlayer = async () => {
         if (!selectedPartnerId) return;
-        // Create as PENDING
-        await createPairInDB(myPlayerId, selectedPartnerId, 'pending');
+        
+        if (isEditingMode && myRegistration) {
+            await updatePairDB(myRegistration.id, myPlayerId, selectedPartnerId);
+        } else {
+            await createPairInDB(myPlayerId, selectedPartnerId, 'pending');
+        }
         setIsRegisterModalOpen(false);
+    };
+
+    const toggleGuestCategory = (cat: string) => {
+        setGuestCategories(prev => 
+            prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+        );
     };
 
     const handleCreateGuest = async () => {
         if (!guestName) return;
-        // 1. Create Guest Player with explicitly set NICKNAME to ensure display works in admin
-        const initialElo = calculateInitialElo([guestCategory, 'Invitado'], guestLevel);
+        
+        // CRITICAL: Find the Owner ID (Club ID) for the current tournament so the guest is visible to the Club
+        // In local mode, we might fallback, but in real usage this links the guest to the club.
+        const tournamentOwnerId = richTournamentData.clubId || 'local-admin';
+
+        // 1. Create Guest Player - Auto calc ELO based on Categories, manual rating fixed to 5 (neutral)
+        // We include 'Invitado' tag but calculating ELO based on selected categories is key
+        const initialElo = calculateInitialElo([...guestCategories, 'Invitado'], 5);
+        
         const newId = await addPlayerToDB({
             name: guestName + ' (Invitado)',
-            nickname: guestName, // IMPORTANT: Set nickname to the input name for clean display
-            categories: [guestCategory, 'Invitado'],
-            manual_rating: guestLevel,
+            nickname: guestName,
+            phone: guestPhone,
+            email: guestEmail,
+            categories: [...guestCategories, 'Invitado'],
+            manual_rating: 5, // Default neutral
             global_rating: initialElo
-        });
+        }, tournamentOwnerId); // PASS CLUB ID HERE
 
         if (newId) {
-            // 2. Create Confirmed Pair (Since I control the guest)
-            await createPairInDB(myPlayerId, newId, 'confirmed');
+            if (isEditingMode && myRegistration) {
+                await updatePairDB(myRegistration.id, myPlayerId, newId);
+            } else {
+                await createPairInDB(myPlayerId, newId, 'confirmed');
+            }
             setIsRegisterModalOpen(false);
         }
     };
@@ -90,8 +139,6 @@ const PlayerTournaments: React.FC = () => {
     const handleRejectInvite = async () => {
         if (myRegistration) {
             await respondToInviteDB(myRegistration.id, 'reject');
-            // If rejected, usually we want to delete it to clear the view or keep history
-            // For MVP, rejecting deletes the pair so user can be invited again or invite others
             await deletePairDB(myRegistration.id); 
         }
     };
@@ -100,17 +147,14 @@ const PlayerTournaments: React.FC = () => {
         if (myRegistration) await deletePairDB(myRegistration.id);
     };
 
-    // Filter available partners: Not me, Not already registered/pending
+    // Filter available partners (Strictly exclude self)
     const availablePartners = state.players.filter(p => {
-        if (p.id === myPlayerId) return false;
-        // Check if player is in any non-rejected pair
+        if (p.id === myPlayerId) return false; // STRICT SELF EXCLUSION
         const isBusy = state.pairs.some(pair => (pair.player1Id === p.id || pair.player2Id === p.id) && pair.status !== 'rejected');
         if (isBusy) return false;
-        
         return p.name.toLowerCase().includes(searchTerm.toLowerCase());
     });
 
-    // Smart Matching Effect
     useEffect(() => {
         if (modalTab === 'guest' && guestName.length > 2) {
             const matches = state.players.filter(p => p.name.toLowerCase().includes(guestName.toLowerCase()));
@@ -122,7 +166,7 @@ const PlayerTournaments: React.FC = () => {
 
     return (
         <div className="p-6 space-y-6 pb-24">
-            <h2 className="text-2xl font-black text-slate-900">Torneos Disponibles</h2>
+            <h2 className="text-2xl font-black text-slate-900">Mis Partidos</h2>
 
             {/* INBOX NOTIFICATION */}
             {isRegistered && isPending && !isInviter && (
@@ -143,60 +187,130 @@ const PlayerTournaments: React.FC = () => {
                 </div>
             )}
 
-            {/* REJECTED NOTIFICATIONS (If I was the sender and it got rejected) */}
-            {/* Note: In current logic, rejection deletes the pair, so the sender just sees they are not registered anymore. 
-                For a better UX, we would need a persistent notification system, but for MVP this is acceptable. */}
-
-            {hasTournament ? (
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden relative transform transition-all hover:scale-[1.02]">
-                    <div className={`absolute top-4 right-4 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${isRegistered ? (isPending ? 'bg-amber-100 text-amber-600 border-amber-200' : 'bg-blue-100 text-blue-600 border-blue-200') : isRegistrationOpen ? 'bg-emerald-100 text-emerald-600 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                        {isRegistered ? (isPending ? 'Pendiente' : 'Inscrito') : isRegistrationOpen ? 'Inscripción Abierta' : 'En Curso'}
+            {/* REGISTERED TOURNAMENT CARD (Now matching TournamentBrowser style) */}
+            {hasTournament && isRegistered ? (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden group">
+                    {/* Consistent Header */}
+                    <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                            <span className="text-lg">🎾</span>
+                            <span className="font-bold text-slate-700 text-sm">Mi Club de Padel</span>
+                        </div>
+                        <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${isPending ? 'bg-amber-100 text-amber-600 border-amber-200' : 'bg-emerald-100 text-emerald-600 border-emerald-200'}`}>
+                            {isPending ? 'Pendiente' : 'Confirmado'}
+                        </div>
                     </div>
 
-                    <div className="p-6">
-                        <div className="flex items-center gap-2 mb-3">
-                            <span style={{ backgroundColor: themeColor }} className="text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">MINI {formatLabel}</span>
-                            <span className="text-slate-400 text-xs font-bold flex items-center gap-1"><Clock size={12}/> Hoy</span>
+                    <div className="p-5">
+                        <div className="flex justify-between items-start mb-2">
+                            <h3 className="font-black text-slate-900 text-lg leading-tight w-3/4">{state.title || `Mini Torneo ${formatLabel}`}</h3>
+                             <div className="text-right">
+                                <div className="text-lg font-black text-slate-900">{richTournamentData.price || 15}€</div>
+                            </div>
                         </div>
-                        
-                        <h3 className="text-xl font-black text-slate-900 mb-4 leading-tight">Mini Torneo {formatLabel} Parejas</h3>
 
-                        {isRegistered ? (
-                             <div className={`p-4 rounded-xl border mb-6 flex items-center gap-3 ${isPending ? 'bg-amber-50 border-amber-100' : 'bg-blue-50 border-blue-100'}`}>
-                                 <div className={`bg-white p-2 rounded-full shadow-sm ${isPending ? 'text-amber-500' : 'text-blue-500'}`}>
-                                     {isPending ? <Clock size={20}/> : <CheckCircle size={20}/>}
-                                 </div>
-                                 <div className="flex-1">
-                                     <div className={`text-xs font-bold uppercase ${isPending ? 'text-amber-500' : 'text-blue-400'}`}>
-                                         {isPending ? (isInviter ? 'Esperando a...' : 'Te invita...') : 'Tu Compañero'}
-                                     </div>
-                                     <div className="text-base font-black text-slate-800">{partnerName}</div>
-                                 </div>
-                                 {isPending && isInviter && (
-                                     <button onClick={handleCancelInvite} className="p-2 text-slate-400 hover:text-red-500 bg-white rounded-lg border border-slate-100 shadow-sm"><Trash2 size={16}/></button>
-                                 )}
-                             </div>
-                        ) : (
-                            <div className="flex items-center gap-6 text-sm text-slate-600 mb-8">
-                                <div className="flex items-center gap-1.5"><Users size={18} className="text-slate-400"/><span className="font-bold text-slate-900">{state.pairs.filter(p=>!p.status||p.status==='confirmed').length}</span><span className="text-xs">confirmados</span></div>
-                                <div className="flex items-center gap-1.5"><Calendar size={18} className="text-slate-400"/><span className="text-xs font-bold">Club PadelPro</span></div>
+                        <div className="flex flex-wrap gap-2 mb-4">
+                            <span style={{ backgroundColor: themeColor }} className="text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">
+                                {formatLabel} PAREJAS
+                            </span>
+                            <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded border border-slate-200">
+                                {state.levelRange || 'Nivel Abierto'}
+                            </span>
+                        </div>
+
+                        <div className="flex items-center gap-4 text-xs font-bold text-slate-500 mb-6">
+                            <div className="flex items-center gap-1"><Calendar size={14} className="text-[#575AF9]"/> {formatDate()}</div>
+                            <div className="flex items-center gap-1"><Clock size={14}/> 10:00</div>
+                        </div>
+
+                        {/* PARTNER INFO BLOCK */}
+                        <div className={`p-4 rounded-xl border mb-6 flex items-center gap-3 ${isPending ? 'bg-amber-50 border-amber-100' : 'bg-slate-50 border-slate-100'}`}>
+                                <div className={`bg-white p-2 rounded-full shadow-sm ${isPending ? 'text-amber-500' : 'text-blue-500'}`}>
+                                    {isPending ? <Clock size={20}/> : <CheckCircle size={20}/>}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className={`text-xs font-bold uppercase ${isPending ? 'text-amber-500' : 'text-slate-400'}`}>
+                                        {isPending ? (isInviter ? 'Esperando a...' : 'Te invita...') : 'Tu Compañero'}
+                                    </div>
+                                    <div className="text-base font-black text-slate-800 truncate">{partnerName}</div>
+                                </div>
+                                
+                                <div className="flex items-center gap-1">
+                                    {/* EDIT BUTTON */}
+                                    {(isInviter || !isPending) && (
+                                        <button 
+                                        onClick={() => openRegisterModal(true)} 
+                                        className="p-2 text-blue-600 bg-white hover:bg-blue-50 rounded-lg border border-blue-100 shadow-sm transition-colors"
+                                        title="Cambiar Pareja"
+                                        >
+                                            <Edit2 size={16}/>
+                                        </button>
+                                    )}
+                                    
+                                    {isPending && isInviter && (
+                                        <button onClick={handleCancelInvite} className="p-2 text-slate-400 hover:text-red-500 bg-white rounded-lg border border-slate-100 shadow-sm"><Trash2 size={16}/></button>
+                                    )}
+                                </div>
+                        </div>
+
+                        {/* EXPANDABLE INFO (Prizes/Description) */}
+                        {isCardExpanded && (
+                            <div className="mb-6 animate-slide-up space-y-4">
+                                {richTournamentData.description && (
+                                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                                        <div className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center gap-1">
+                                            <FileText size={14}/> Detalles
+                                        </div>
+                                        <p className="text-sm text-slate-600 leading-relaxed">{richTournamentData.description}</p>
+                                    </div>
+                                )}
+                                
+                                {richTournamentData.prizes && richTournamentData.prizes.length > 0 && (
+                                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                                        <div className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center gap-1">
+                                            <Gift size={14}/> Premios
+                                        </div>
+                                        <ul className="space-y-1">
+                                            {richTournamentData.prizes.map((prize: string, idx: number) => (
+                                                <li key={idx} className="text-sm font-medium text-slate-700">
+                                                    {prize}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
                             </div>
                         )}
 
-                        {!isRegistered && (
+                        <div className="flex gap-2 items-center">
+                            {/* Expand Toggle */}
                             <button 
-                                onClick={() => setIsRegisterModalOpen(true)}
-                                disabled={!isRegistrationOpen}
-                                style={{ backgroundColor: isRegistrationOpen ? THEME.cta : '#e2e8f0', color: isRegistrationOpen ? 'white' : '#94a3b8' }}
-                                className="w-full py-4 rounded-xl font-bold shadow-md flex items-center justify-center gap-2 transition-all active:scale-95"
+                                onClick={() => setIsCardExpanded(!isCardExpanded)}
+                                className="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl font-bold flex items-center justify-center gap-1 transition-colors"
+                                title="Ver Info"
                             >
-                                {isRegistrationOpen ? <>Inscribirse <ArrowRight size={20}/></> : <>Ver Resultados</>}
+                                {isCardExpanded ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
                             </button>
-                        )}
+
+                            {/* Main Action */}
+                            {state.status === 'active' ? (
+                                <button className="flex-1 py-3 bg-rose-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg animate-pulse">
+                                    Ir al Directo <ArrowRight size={20}/>
+                                </button>
+                            ) : (
+                                <div className="flex-1 py-3 bg-slate-100 text-slate-400 rounded-xl font-bold flex items-center justify-center gap-2 text-xs">
+                                    El torneo comenzará pronto
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             ) : (
-                <div className="text-center py-16 bg-slate-50 rounded-3xl border border-dashed border-slate-200"><Calendar size={64} className="mx-auto text-slate-200 mb-6"/><h3 className="text-lg font-bold text-slate-700 mb-1">No hay torneos activos</h3></div>
+                <div className="text-center py-16 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                    <Calendar size={64} className="mx-auto text-slate-200 mb-6"/>
+                    <h3 className="text-lg font-bold text-slate-700 mb-2">No estás inscrito</h3>
+                    <button onClick={() => navigate('/p/explore')} className="text-[#575AF9] font-bold text-sm">Explorar Torneos</button>
+                </div>
             )}
 
             {/* PARTNER SELECTION MODAL */}
@@ -204,7 +318,10 @@ const PlayerTournaments: React.FC = () => {
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center sm:p-4">
                      <div className="bg-white w-full h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl sm:max-w-md shadow-2xl animate-slide-up flex flex-col">
                         <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 shrink-0">
-                             <h3 className="text-lg font-bold text-slate-900">Inscripción</h3>
+                             <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                {isEditingMode ? <RefreshCw className="text-blue-500"/> : <UserPlus className="text-blue-500"/>}
+                                {isEditingMode ? 'Cambiar Pareja' : 'Inscripción'}
+                             </h3>
                              <button onClick={() => setIsRegisterModalOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"><X size={20}/></button>
                         </div>
                         
@@ -242,13 +359,25 @@ const PlayerTournaments: React.FC = () => {
                             {modalTab === 'guest' && (
                                 <div className="space-y-4 animate-fade-in">
                                     <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 text-xs text-amber-800 mb-4">
-                                        Usar para amigos fuera del club. La inscripción se confirmará inmediatamente.
+                                        Usar para amigos que no tienen la app.
                                     </div>
+                                    
                                     <div>
                                         <label className="text-xs font-bold text-slate-500 uppercase mb-1">Nombre Invitado</label>
                                         <input value={guestName} onChange={e => setGuestName(e.target.value)} placeholder="Ej. Primo de Juan" className="w-full p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-blue-500"/>
                                     </div>
                                     
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-500 uppercase mb-1 flex items-center gap-1"><Phone size={12}/> Teléfono</label>
+                                            <input value={guestPhone} onChange={e => setGuestPhone(e.target.value)} placeholder="Opcional" className="w-full pl-9 p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-blue-500 text-sm"/>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-500 uppercase mb-1 flex items-center gap-1"><AtSign size={12}/> Email</label>
+                                            <input value={guestEmail} onChange={e => setGuestEmail(e.target.value)} placeholder="Opcional" className="w-full pl-9 p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-blue-500 text-sm"/>
+                                        </div>
+                                    </div>
+
                                     {/* SMART MATCH WARNING */}
                                     {smartMatchWarning.length > 0 && (
                                         <div className="bg-white border-2 border-orange-100 p-3 rounded-xl shadow-sm">
@@ -264,18 +393,18 @@ const PlayerTournaments: React.FC = () => {
                                         </div>
                                     )}
 
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase mb-1">Nivel Aproximado (1-10)</label>
-                                        <div className="flex items-center gap-4">
-                                            <input type="range" min="1" max="10" step="0.5" value={guestLevel} onChange={e => setGuestLevel(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
-                                            <span className="font-bold text-xl text-blue-600">{guestLevel}</span>
-                                        </div>
-                                    </div>
+                                    {/* CATEGORY SELECTOR REPLACING SLIDER */}
                                     <div>
                                         <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Categoría Base</label>
                                         <div className="flex flex-wrap gap-2">
                                             {TOURNAMENT_CATEGORIES.map(cat => (
-                                                <button key={cat} onClick={() => setGuestCategory(cat)} className={`px-2 py-1 rounded text-xs font-bold border transition-colors ${guestCategory === cat ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-slate-500 border-slate-300'}`}>{cat}</button>
+                                                <button 
+                                                    key={cat} 
+                                                    onClick={() => toggleGuestCategory(cat)} 
+                                                    className={`px-3 py-2 rounded-lg text-xs font-bold border transition-colors ${guestCategories.includes(cat) ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-slate-500 border-slate-300'}`}
+                                                >
+                                                    {cat}
+                                                </button>
                                             ))}
                                         </div>
                                     </div>
@@ -291,7 +420,7 @@ const PlayerTournaments: React.FC = () => {
                                     style={{ backgroundColor: selectedPartnerId ? THEME.cta : '#e2e8f0' }}
                                     className="w-full py-4 rounded-xl font-bold text-white shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
                                 >
-                                    <Mail size={20}/> Enviar Invitación
+                                    <Mail size={20}/> {isEditingMode ? 'Enviar Nueva Invitación' : 'Enviar Invitación'}
                                 </button>
                              ) : (
                                 <button 
@@ -300,7 +429,7 @@ const PlayerTournaments: React.FC = () => {
                                     style={{ backgroundColor: guestName ? THEME.cta : '#e2e8f0' }}
                                     className="w-full py-4 rounded-xl font-bold text-white shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
                                 >
-                                    <Check size={20}/> Confirmar Invitado
+                                    <Check size={20}/> {isEditingMode ? 'Cambiar a Invitado' : 'Confirmar Invitado'}
                                 </button>
                              )}
                         </div>

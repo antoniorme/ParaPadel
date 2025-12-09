@@ -1,4 +1,5 @@
 
+
 export interface Player {
   id: string; // UUID
   user_id?: string; // ID del Club (Admin)
@@ -75,14 +76,23 @@ export interface TournamentState {
   matches: Match[]; 
   groups: Group[]; 
   courts: { id: number; ballsGiven: boolean }[];
-  startDate?: string;
   loading: boolean; 
+  
+  // METADATA FOR PUBLIC LISTING
+  title?: string;
+  description?: string;
+  price?: number;
+  levelRange?: string; // e.g. "Nivel 4.0 - 5.0"
+  prizes?: string[];
+  includedItems?: string[]; // e.g. ["Agua", "Bolas", "Fruta"]
+  startDate?: string;
 }
 
 export interface ClubData {
     name: string;
     courtCount: number;
     address?: string;
+    mapsUrl?: string; // NEW: Google Maps Link
     phone?: string;
     logoUrl?: string;
 }
@@ -97,6 +107,26 @@ export interface PastTournament {
     data?: TournamentState; 
 }
 
+// NEW: For the Public Browser
+export interface PublicTournament {
+    id: string;
+    clubId: string;
+    clubName: string;
+    clubLogo?: string; // Emoji or URL
+    address?: string; // NEW
+    mapsUrl?: string; // NEW
+    name: string;
+    description?: string; // NEW
+    date: string; // ISO
+    format: TournamentFormat;
+    status: 'open' | 'full' | 'active';
+    spotsTaken: number;
+    spotsTotal: number;
+    level: string; // e.g. "Nivel Medio-Alto"
+    price: number;
+    prizes?: string[]; // NEW: List of prizes
+}
+
 export type TournamentAction =
   | { type: 'SET_STATE'; payload: Partial<TournamentState> }
   | { type: 'SET_LOADING'; payload: boolean }
@@ -105,4 +135,5 @@ export type TournamentAction =
   | { type: 'TOGGLE_WATER'; payload: string }
   | { type: 'TOGGLE_PAID'; payload: string }
   | { type: 'LOAD_DEMO_DATA'; }
-  | { type: 'SET_FORMAT'; payload: TournamentFormat };
+  | { type: 'SET_FORMAT'; payload: TournamentFormat }
+  | { type: 'UPDATE_SETTINGS'; payload: Partial<TournamentState> };

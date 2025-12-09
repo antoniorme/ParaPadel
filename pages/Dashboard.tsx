@@ -1,9 +1,10 @@
 
+
 import React, { useState } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
 import { useHistory } from '../store/HistoryContext';
-import { Users, PlayCircle, CheckCircle, Clock, Archive, Play, Trophy, Smartphone, Link, Copy, Check } from 'lucide-react';
+import { Users, PlayCircle, CheckCircle, Clock, Archive, Play, Trophy, Smartphone, Link, Copy, Check, Plus, Settings, Edit } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 
@@ -86,15 +87,21 @@ const Dashboard: React.FC = () => {
       return r;
   };
 
+  const isSetupMode = state.status === 'setup';
+  const isActiveMode = state.status === 'active';
+  const isFinishedMode = state.status === 'finished';
+
   return (
     <div className="space-y-6 pb-10">
       {/* Header with Format Badge */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-slate-900">Panel de Control</h2>
         <div className="flex items-center gap-2">
-            <span className="text-[10px] font-black px-3 py-1 bg-slate-800 text-white rounded-lg tracking-wider border border-slate-800 shadow-sm">
-                MINI {formatLabel.toUpperCase()}
-            </span>
+            {!isFinishedMode && (
+                <span className="text-[10px] font-black px-3 py-1 bg-slate-800 text-white rounded-lg tracking-wider border border-slate-800 shadow-sm">
+                    {state.title || 'MINI TORNEO'}
+                </span>
+            )}
         </div>
       </div>
 
@@ -117,9 +124,9 @@ const Dashboard: React.FC = () => {
         />
         <StatCard 
           title="Estado" 
-          value={state.status === 'active' ? 'EN JUEGO' : state.status === 'setup' ? 'REGISTRO' : 'FIN'} 
+          value={isActiveMode ? 'EN JUEGO' : isSetupMode ? 'INSCRIPCIÓN' : 'SIN TORNEO'} 
           icon={ActivityIcon(state.status)} 
-          color={state.status === 'active' ? "text-rose-400" : state.status === 'finished' ? "text-purple-400" : "text-orange-400"} 
+          color={isActiveMode ? "text-rose-400" : isFinishedMode ? "text-slate-400" : "text-orange-400"} 
           onClick={() => navigate('/active')}
         />
         <StatCard 
@@ -136,57 +143,82 @@ const Dashboard: React.FC = () => {
         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-6">Acciones Principales</h3>
         
         <div className="grid grid-cols-1 gap-4">
-          {/* Context-Aware Primary Button */}
-          {state.status === 'setup' && (
+          {/* 1. NO TOURNAMENT -> CREATE */}
+          {isFinishedMode && (
              <button 
-             onClick={() => navigate('/active')}
+             onClick={() => navigate('/setup')}
              style={{ backgroundColor: THEME.cta }}
-             className="w-full py-4 text-white rounded-xl font-bold transition-all shadow-md text-lg flex items-center justify-center gap-3 active:scale-[0.98] hover:opacity-90"
+             className="w-full py-6 text-white rounded-xl font-bold transition-all shadow-md text-lg flex items-center justify-center gap-3 active:scale-[0.98] hover:opacity-90 animate-fade-in"
            >
-             <div className="bg-white/20 p-1.5 rounded-full"><Play size={20} fill="currentColor"/></div>
-             CONFIGURAR Y EMPEZAR
+             <div className="bg-white/20 p-2 rounded-full"><Plus size={24} strokeWidth={3}/></div>
+             CREAR NUEVO TORNEO
            </button>
           )}
 
-           {state.status === 'active' && (
+          {/* 2. SETUP MODE -> MANAGE INSCRIPTIONS or GO LIVE */}
+          {isSetupMode && (
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
+                  <button 
+                    onClick={() => navigate('/registration')}
+                    className="w-full py-4 bg-white border-2 border-indigo-100 hover:border-indigo-500 text-indigo-700 rounded-xl font-bold transition-all flex flex-col items-center justify-center gap-2 group"
+                  >
+                    <div className="bg-indigo-50 p-2 rounded-full text-indigo-500 group-hover:bg-indigo-500 group-hover:text-white transition-colors"><Users size={24}/></div>
+                    Gestionar Inscripciones
+                  </button>
+                  <button 
+                    onClick={() => navigate('/active')}
+                    className="w-full py-4 bg-emerald-500 text-white rounded-xl font-bold transition-all shadow-md hover:bg-emerald-600 flex flex-col items-center justify-center gap-2"
+                  >
+                     <div className="bg-white/20 p-2 rounded-full"><Play size={24} fill="currentColor"/></div>
+                     Ir a Brackets / Directo
+                  </button>
+             </div>
+          )}
+
+           {/* 3. ACTIVE MODE -> GO LIVE */}
+           {isActiveMode && (
              <button 
              onClick={() => navigate('/active')}
-             className="w-full py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold transition-all animate-pulse shadow-md shadow-rose-200 text-lg flex items-center justify-center gap-3 active:scale-[0.98]"
+             className="w-full py-6 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold transition-all animate-pulse shadow-md shadow-rose-200 text-xl flex items-center justify-center gap-3 active:scale-[0.98]"
            >
-             <div className="bg-white/20 p-1.5 rounded-full"><PlayCircle size={20}/></div>
+             <div className="bg-white/20 p-2 rounded-full"><PlayCircle size={28}/></div>
              IR AL TORNEO EN VIVO
            </button>
           )}
 
           {/* Secondary Actions */}
-          <div className="grid grid-cols-2 gap-4">
-               <button 
-                onClick={() => navigate('/registration')}
-                className="w-full py-4 bg-white border-2 border-slate-100 hover:border-blue-200 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-xl font-bold transition-all text-sm flex flex-col items-center justify-center gap-2"
-              >
-                <Users size={24} className="opacity-50"/>
-                Inscripciones
-              </button>
+          {!isFinishedMode && (
+              <div className="grid grid-cols-2 gap-4 mt-2">
+                   <button 
+                    onClick={() => navigate('/setup')}
+                    className="w-full py-4 bg-white border-2 border-slate-100 hover:border-blue-200 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-xl font-bold transition-all text-sm flex flex-col items-center justify-center gap-2"
+                  >
+                    <Edit size={24} className="opacity-50"/>
+                    Editar Info
+                  </button>
+                  <button 
+                    onClick={() => navigate('/checkin')}
+                    className="w-full py-4 bg-white border-2 border-slate-100 hover:border-emerald-200 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-xl font-bold transition-all text-sm flex flex-col items-center justify-center gap-2"
+                  >
+                    <Clock size={24} className="opacity-50"/>
+                    Control y Pagos
+                  </button>
+              </div>
+          )}
+
+          {/* Copy Link Button - Always useful if active */}
+          {!isFinishedMode && (
               <button 
-                onClick={() => navigate('/checkin')}
-                className="w-full py-4 bg-white border-2 border-slate-100 hover:border-emerald-200 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-xl font-bold transition-all text-sm flex flex-col items-center justify-center gap-2"
+                onClick={handleCopyLink}
+                className="w-full py-3 bg-indigo-50 border border-indigo-100 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2"
               >
-                <Clock size={24} className="opacity-50"/>
-                Control y Pagos
+                {linkCopied ? <Check size={18} /> : <Link size={18} />}
+                {linkCopied ? '¡Enlace Copiado!' : 'Copiar Enlace de Inscripción Pública'}
               </button>
-          </div>
+          )}
 
-          {/* Copy Link Button */}
-          <button 
-            onClick={handleCopyLink}
-            className="w-full py-3 bg-indigo-50 border border-indigo-100 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2"
-          >
-            {linkCopied ? <Check size={18} /> : <Link size={18} />}
-            {linkCopied ? '¡Enlace Copiado!' : 'Copiar Enlace de Inscripción'}
-          </button>
-
-          {/* Archive Action (Only when finished) */}
-          {state.status === 'finished' && (
+          {/* Archive Action (Only when finished but state not reset) */}
+          {state.status === 'finished' && state.id && (
                 <div className="mt-4 pt-4 border-t border-slate-100">
                     <button 
                     onClick={() => openModal('archive')}

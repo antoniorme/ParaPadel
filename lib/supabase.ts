@@ -1,40 +1,21 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Helper function to safely retrieve environment variables across different environments
-const getEnv = (key: string, fallbackKey: string = '') => {
-  // Try import.meta.env (Vite)
-  try {
+// Intentamos obtener las variables de forma segura sin funciones auxiliares complejas
+let supabaseUrl = 'https://placeholder.supabase.co';
+let supabaseKey = 'placeholder';
+
+try {
+  // @ts-ignore
+  if (typeof import.meta !== 'undefined' && import.meta && import.meta.env) {
     // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env) {
-       // @ts-ignore
-       const val = import.meta.env[key];
-       if (typeof val === 'string') return val;
-    }
-  } catch (e) {}
-
-  // Try process.env (Node/CRA)
-  try {
-    if (typeof process !== 'undefined' && process.env) {
-      if (process.env[key]) return process.env[key];
-      if (fallbackKey && process.env[fallbackKey]) return process.env[fallbackKey];
-    }
-  } catch (e) {}
-
-  return '';
-};
-
-const supabaseUrl = getEnv('VITE_SUPABASE_URL', 'REACT_APP_SUPABASE_URL');
-const supabaseKey = getEnv('VITE_SUPABASE_ANON_KEY', 'REACT_APP_SUPABASE_ANON_KEY');
-
-if (!supabaseUrl || !supabaseKey) {
-  console.warn('Supabase URL or Key is missing. Authentication will fail.');
+    if (import.meta.env.VITE_SUPABASE_URL) supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    // @ts-ignore
+    if (import.meta.env.VITE_SUPABASE_ANON_KEY) supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  }
+} catch (e) {
+  console.warn("No se pudieron leer las variables de entorno de Vite.");
 }
 
-// Initialize client with fallback values to prevent immediate crash if config is missing
-// We use a placeholder URL to ensure the supabase client is always instantiated,
-// preventing "cannot read property of undefined" errors when importing 'supabase' elsewhere.
-export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co', 
-  supabaseKey || 'placeholder'
-);
+// Inicialización segura del cliente
+export const supabase = createClient(supabaseUrl, supabaseKey);

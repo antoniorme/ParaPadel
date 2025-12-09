@@ -1,10 +1,11 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { THEME, getFormatColor } from '../utils/theme';
 import { useTimer } from '../store/TimerContext';
 import { TournamentFormat, Player, Pair, GenerationMethod } from '../types';
-import { ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock, Shuffle, Coffee, CheckCircle, XCircle, Trophy, Medal, Settings, RotateCcw, Check, ArrowRight, Archive } from 'lucide-react';
+import { ChevronRight, Edit2, Info, User, Play, AlertTriangle, X, TrendingUp, ListOrdered, Clock, Shuffle, Coffee, CheckCircle, XCircle, Trophy, Medal, Settings, RotateCcw, Check, ArrowRight, Archive, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface WizardProps {
@@ -72,7 +73,6 @@ const ManualGroupingWizard: React.FC<WizardProps> = ({ pairs, players, onComplet
     );
 };
 
-// Interface for Post-Match Info
 interface NextMatchInfo {
     pairA: { name: string; status: 'win' | 'loss'; nextText: string; highlight: boolean };
     pairB: { name: string; status: 'win' | 'loss'; nextText: string; highlight: boolean };
@@ -87,22 +87,21 @@ const ActiveTournament: React.FC = () => {
   const [scoreA, setScoreA] = useState('');
   const [scoreB, setScoreB] = useState('');
   
-  // New State for Post Match Info
   const [nextMatchInfo, setNextMatchInfo] = useState<NextMatchInfo | null>(null);
-  
   const [selectedPairId, setSelectedPairId] = useState<string | null>(null);
   const [showRoundConfirm, setShowRoundConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
+  // SETUP STATE
   const [generationMethod, setGenerationMethod] = useState<GenerationMethod>('elo-balanced');
   const [selectedFormat, setSelectedFormat] = useState<TournamentFormat>('16_mini');
   const [showManualWizard, setShowManualWizard] = useState(false);
+
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
 
   useEffect(() => { if(state.format) setSelectedFormat(state.format); }, [state.format]);
 
-  // Dynamic Theme Color for Header
   const themeColor = getFormatColor(state.format);
 
   const handleFormatChange = (fmt: TournamentFormat) => {
@@ -128,11 +127,8 @@ const ActiveTournament: React.FC = () => {
   const allMatchesFinished = activePlayableMatches.length > 0 && activePlayableMatches.length === finishedPlayableMatches;
   const isTournamentFinished = state.status === 'finished' || state.currentRound > 8;
 
-  // Determine if this is the last round for the current format to show "Finish Tournament"
   let maxRound = 6;
   if (state.format === '16_mini') {
-      // 16_mini max round is 8 (Cons Final) unless Simultaneous (High Court Count) where logic might vary, 
-      // but usually 8. If simultaneous logic ends earlier (R7), we adapt.
       const isSimultaneous = state.courts.length >= 8;
       maxRound = isSimultaneous ? 7 : 8;
   }
@@ -176,24 +172,17 @@ const ActiveTournament: React.FC = () => {
       try { await startTournamentDB('manual', orderedPairs); resetTimer(); startTimer(); } catch (e: any) { setErrorMessage(e.message || "Error al iniciar el torneo manual."); }
   };
 
-  // --- LOGIC TO PREDICT OR FIND NEXT DESTINATION ---
   const getNextStepText = (pairId: string, isWinner: boolean, phase: string, courtId: number, bracket: string) => {
-      // 1. Check if next actual match exists (Group Phase)
       const nextMatch = state.matches.find(m => (m.pairAId === pairId || m.pairBId === pairId) && m.round > state.currentRound);
       if (nextMatch) {
           if (nextMatch.courtId > 0) return `A Pista ${nextMatch.courtId}`;
           return `Espera turno`;
       }
-
-      // 2. If no match exists (End of groups or Playoffs prediction)
       if (phase === 'group') {
-           // If it's the last round of groups
            const maxGroupRound = state.format === '16_mini' ? 4 : 3;
            if (state.currentRound >= maxGroupRound) return "Esperando Fase Final";
            return "Descanso / Espera";
       }
-
-      // 3. Playoff Prediction
       if (phase === 'qf') {
           if (!isWinner) return "Eliminado";
           if (bracket === 'main') {
@@ -205,18 +194,15 @@ const ActiveTournament: React.FC = () => {
                return "A Semis Cons.";
           }
       }
-
       if (phase === 'sf') {
            if (!isWinner) return "Eliminado";
            if (bracket === 'main') return "¡A LA FINAL! (Pista 1)";
            if (bracket === 'consolation') return "¡A FINAL CONS.! (Pista 2)";
       }
-
       if (phase === 'final') {
           if (isWinner) return "¡CAMPEONES!";
           return "Subcampeones";
       }
-
       return "Finalizado";
   };
 
@@ -258,7 +244,6 @@ const ActiveTournament: React.FC = () => {
 
   const handleCloseInfoModal = () => {
       setNextMatchInfo(null);
-      // AUTO-ADVANCE
       const nextMatch = sortedMatchesPriority.find(m => !m.isFinished && m.courtId > 0);
       if (nextMatch) {
           handleOpenScore(nextMatch.id, nextMatch.scoreA, nextMatch.scoreB);
@@ -307,16 +292,58 @@ const ActiveTournament: React.FC = () => {
 
   if (state.status === 'setup') {
       let limit = 16; if (selectedFormat === '10_mini') limit = 10; if (selectedFormat === '12_mini') limit = 12; if (selectedFormat === '8_mini') limit = 8;
-      const totalPairs = state.pairs.length; const canStart = totalPairs >= limit; const reservesCount = Math.max(0, totalPairs - limit);
+      const totalPairs = state.pairs.length; const canStart = totalPairs >= limit; 
+
       return (
           <div className="flex flex-col h-full space-y-6 pb-20">
-              <div>
-                  <h2 className="text-2xl font-bold text-slate-900">Configuración de Torneo</h2>
+              <div className="flex justify-between items-center">
+                  <h2 className="text-2xl font-bold text-slate-900">Configuración Técnica</h2>
+                  <div className={`px-4 py-2 rounded-xl text-xs font-bold uppercase border ${canStart ? 'bg-emerald-100 text-emerald-600 border-emerald-200' : 'bg-orange-100 text-orange-600 border-orange-200'}`}>
+                      {totalPairs}/{limit} Parejas
+                  </div>
               </div>
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between"><div><h3 className="text-sm font-bold text-slate-400 uppercase">Parejas Inscritas</h3><p className="text-xs text-slate-400">Titulares: {limit} {reservesCount > 0 && `(+${reservesCount} Reservas)`}</p></div><div className={`text-4xl font-black ${canStart ? 'text-emerald-500' : 'text-orange-500'}`}>{totalPairs}<span className="text-xl text-slate-300">/{limit}</span></div></div>
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm"><h3 className="text-sm font-bold text-slate-400 uppercase mb-4">Tipo de Mini</h3><div className="grid grid-cols-4 gap-2"><button onClick={() => handleFormatChange('16_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '16_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>16</button><button onClick={() => handleFormatChange('12_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '12_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>12</button><button onClick={() => handleFormatChange('10_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '10_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>10</button><button onClick={() => handleFormatChange('8_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all ${selectedFormat === '8_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>8</button></div></div>
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm"><h3 className="text-sm font-bold text-slate-400 uppercase mb-4">Generación de Grupos</h3><div className="grid grid-cols-2 gap-3"><button onClick={() => setGenerationMethod('arrival')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'arrival' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}><Clock size={18}/> <span className="text-xs font-bold uppercase">Llegada</span></button><button onClick={() => setGenerationMethod('manual')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'manual' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}><ListOrdered size={18}/> <span className="text-xs font-bold uppercase">Manual</span></button><button onClick={() => setGenerationMethod('elo-balanced')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'elo-balanced' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}><TrendingUp size={18}/> <span className="text-xs font-bold uppercase">Nivel</span></button><button onClick={() => setGenerationMethod('elo-mixed')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'elo-mixed' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}><Shuffle size={18}/> <span className="text-xs font-bold uppercase">Mix</span></button></div></div>
-              <button onClick={handleStart} disabled={!canStart} style={{ backgroundColor: canStart ? THEME.cta : '#e2e8f0' }} className={`w-full py-5 rounded-2xl font-bold text-lg shadow-xl flex items-center justify-center gap-2 transition-all ${canStart ? 'text-white active:scale-95 hover:shadow-2xl hover:opacity-90' : 'text-slate-400 cursor-not-allowed'}`}><Play size={24} fill="currentColor" /> EMPEZAR TORNEO</button>
+
+              {/* Tournament Info Summary */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-start gap-4">
+                  <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-100">
+                      <Trophy size={24} className="text-[#575AF9]"/>
+                  </div>
+                  <div>
+                      <h3 className="font-black text-slate-800">{state.title || 'Mini Torneo'}</h3>
+                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                          <span className="flex items-center gap-1"><Calendar size={12}/> {state.startDate ? new Date(state.startDate).toLocaleDateString() : 'Hoy'}</span>
+                          <span>|</span>
+                          <span>{state.levelRange || 'Nivel Abierto'}</span>
+                      </div>
+                  </div>
+              </div>
+
+              {/* TECHNICAL CONFIG */}
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+                  <div className="flex items-center gap-2 mb-2 text-slate-400 font-bold text-xs uppercase tracking-wider">
+                      <Settings size={16}/> Configuración de Brackets
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-600 uppercase mb-2">Formato (Parejas)</h3>
+                    <div className="grid grid-cols-4 gap-2">
+                        <button onClick={() => handleFormatChange('16_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all text-sm ${selectedFormat === '16_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>16</button>
+                        <button onClick={() => handleFormatChange('12_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all text-sm ${selectedFormat === '12_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>12</button>
+                        <button onClick={() => handleFormatChange('10_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all text-sm ${selectedFormat === '10_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>10</button>
+                        <button onClick={() => handleFormatChange('8_mini')} className={`py-3 rounded-xl font-bold border-2 transition-all text-sm ${selectedFormat === '8_mini' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}>8</button>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-600 uppercase mb-2">Orden de Grupos</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                        <button onClick={() => setGenerationMethod('arrival')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'arrival' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}><Clock size={18}/> <span className="text-xs font-bold uppercase">Llegada</span></button>
+                        <button onClick={() => setGenerationMethod('manual')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'manual' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}><ListOrdered size={18}/> <span className="text-xs font-bold uppercase">Manual</span></button>
+                        <button onClick={() => setGenerationMethod('elo-balanced')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'elo-balanced' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}><TrendingUp size={18}/> <span className="text-xs font-bold uppercase">Nivel</span></button>
+                        <button onClick={() => setGenerationMethod('elo-mixed')} className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${generationMethod === 'elo-mixed' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}><Shuffle size={18}/> <span className="text-xs font-bold uppercase">Mix</span></button>
+                    </div>
+                  </div>
+              </div>
+              
+              <button onClick={handleStart} disabled={!canStart} style={{ backgroundColor: canStart ? THEME.cta : '#e2e8f0' }} className={`w-full py-5 rounded-2xl font-bold text-lg shadow-xl flex items-center justify-center gap-2 transition-all ${canStart ? 'text-white active:scale-95 hover:shadow-2xl hover:opacity-90' : 'text-slate-400 cursor-not-allowed'}`}><Play size={24} fill="currentColor" /> GENERAR CUADROS Y EMPEZAR</button>
                {errorMessage && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center"><div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600"><AlertTriangle size={32} /></div><h3 className="text-xl font-black text-slate-900 mb-2">Error</h3><p className="text-slate-500 mb-6 text-sm break-words">{errorMessage}</p><button onClick={() => setErrorMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Entendido</button></div></div>)}
               {showManualWizard && (<ManualGroupingWizard pairs={state.pairs.filter(p => !p.isReserve).slice(0, limit)} players={state.players} onCancel={() => setShowManualWizard(false)} onComplete={handleManualWizardComplete} formatName={formatPlayerName} limit={limit} />)}
           </div>
@@ -404,7 +431,6 @@ const ActiveTournament: React.FC = () => {
             sortedMatchesPriority.map(match => {
                 const isWaiting = match.courtId === 0; const isPlayable = playableMatchIds.has(match.id); const isTechnicalRest = !isPlayable && !isWaiting;
                 
-                // Determine Card Styling
                 const cardClasses = isWaiting 
                     ? 'bg-slate-50 border-slate-300' 
                     : isTechnicalRest 
@@ -413,14 +439,12 @@ const ActiveTournament: React.FC = () => {
                             ? 'bg-white border-emerald-200'
                             : 'bg-white border-slate-200 shadow-sm';
                 
-                // Determine Header Styling
                 const headerBg = isWaiting ? 'bg-slate-200' : isTechnicalRest ? 'bg-slate-200' : 'bg-white';
 
                 return (
                 <div key={match.id} className={`relative rounded-2xl border overflow-hidden ${cardClasses}`}>
                     <div className={`${headerBg} px-5 py-4 flex justify-between items-center border-b ${isWaiting ? 'border-slate-300' : 'border-slate-100'}`}>
                         
-                        {/* Status / Court Badge */}
                         <div className="flex items-center gap-3">
                              {isWaiting ? (
                                  <span className="flex items-center gap-2 text-slate-500 font-bold text-xs uppercase">
@@ -431,7 +455,6 @@ const ActiveTournament: React.FC = () => {
                                      <Coffee size={16}/> DESCANSO (Pista {match.courtId})
                                  </span>
                              ) : (
-                                 // THEMED ACTIVE COURT BADGE
                                  <span 
                                     className="px-3 py-1 rounded-lg text-xs font-black tracking-wider uppercase border"
                                     style={{ 
@@ -444,7 +467,6 @@ const ActiveTournament: React.FC = () => {
                                  </span>
                              )}
                              
-                             {/* Phase Indicators */}
                              {getPhaseLabel(match) && <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">{getPhaseLabel(match)}</span>}
                              {match.bracket === 'consolation' && <span className="text-blue-500 text-[10px] font-bold uppercase tracking-wider">Cons.</span>}
                         </div>
@@ -502,11 +524,9 @@ const ActiveTournament: React.FC = () => {
         </div>
       )}
       
-      {/* SCORE INPUT MODAL */}
       {selectedMatchId && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in">
               <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in">
-                  {/* Modal Header Reordered: Court -> Round */}
                   <div className="text-center mb-6">
                       <h3 className="text-3xl font-black text-slate-900 mb-1">
                           PISTA {state.matches.find(m => m.id === selectedMatchId)?.courtId}
@@ -517,7 +537,6 @@ const ActiveTournament: React.FC = () => {
                   </div>
                   
                   <div className="flex items-center justify-between gap-4 mb-8">
-                      {/* Player A Input */}
                       <div className="flex-1 w-1/2">
                           <div className="bg-slate-50 rounded-2xl border-2 border-slate-200 p-2 mb-2">
                               <input 
@@ -528,7 +547,6 @@ const ActiveTournament: React.FC = () => {
                                 autoFocus
                               />
                           </div>
-                          {/* Player Name with truncation logic */}
                           <p className="text-xs font-bold text-center text-slate-500 px-1 mt-2 h-8 flex items-center justify-center leading-tight line-clamp-2 overflow-hidden">
                               {state.matches.find(m => m.id === selectedMatchId) ? getPairName(state.matches.find(m => m.id === selectedMatchId)!.pairAId) : 'P1'}
                           </p>
@@ -536,7 +554,6 @@ const ActiveTournament: React.FC = () => {
                       
                       <span className="text-2xl font-black text-slate-300 pb-8">-</span>
                       
-                      {/* Player B Input */}
                       <div className="flex-1 w-1/2">
                           <div className="bg-slate-50 rounded-2xl border-2 border-slate-200 p-2 mb-2">
                               <input 
@@ -546,7 +563,6 @@ const ActiveTournament: React.FC = () => {
                                 className="w-full bg-transparent text-center text-5xl font-black text-slate-900 outline-none p-2"
                               />
                           </div>
-                          {/* Player Name with truncation logic */}
                           <p className="text-xs font-bold text-center text-slate-500 px-1 mt-2 h-8 flex items-center justify-center leading-tight line-clamp-2 overflow-hidden">
                               {state.matches.find(m => m.id === selectedMatchId) ? getPairName(state.matches.find(m => m.id === selectedMatchId)!.pairBId) : 'P2'}
                           </p>
@@ -561,7 +577,6 @@ const ActiveTournament: React.FC = () => {
           </div>
       )}
       
-      {/* POST-MATCH INFO MODAL */}
       {nextMatchInfo && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
               <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
@@ -571,7 +586,6 @@ const ActiveTournament: React.FC = () => {
                   <h3 className="text-xl font-black text-slate-900 mb-4">Información Post-Partido</h3>
                   
                   <div className="space-y-3 mb-6 text-left">
-                      {/* Pair A Info */}
                       <div className={`p-3 rounded-xl border ${nextMatchInfo.pairA.highlight ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-200'}`}>
                           <div className="flex justify-between items-center mb-1">
                               <p className="text-xs font-bold text-slate-400 uppercase">Pareja 1</p>
@@ -583,7 +597,6 @@ const ActiveTournament: React.FC = () => {
                           </div>
                       </div>
 
-                      {/* Pair B Info */}
                       <div className={`p-3 rounded-xl border ${nextMatchInfo.pairB.highlight ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-200'}`}>
                           <div className="flex justify-between items-center mb-1">
                               <p className="text-xs font-bold text-slate-400 uppercase">Pareja 2</p>

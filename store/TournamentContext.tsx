@@ -1,4 +1,5 @@
 
+
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { TournamentState, TournamentAction, Player, Pair, Match, Group, TournamentFormat, GenerationMethod } from '../types';
 import { supabase } from '../lib/supabase';
@@ -11,7 +12,9 @@ const STORAGE_KEY = 'padelpro_local_db_v3';
 export const TOURNAMENT_CATEGORIES = ['Iniciación', '5ª CAT', '4ª CAT', '3ª CAT', '2ª CAT', '1ª CAT'];
 
 const initialState: TournamentState = {
-  status: 'setup', currentRound: 0, format: '16_mini', players: [], pairs: [], matches: [], groups: [], courts: [], loading: true
+  status: 'finished', // Default to finished so Dashboard shows "Create New"
+  currentRound: 0, format: '16_mini', players: [], pairs: [], matches: [], groups: [], courts: [], loading: true,
+  title: 'Mini Torneo', price: 15, prizes: [], includedItems: ['Bolas Nuevas', 'Agua'], levelRange: 'Abierto'
 };
 
 interface TournamentContextType {
@@ -30,6 +33,8 @@ interface TournamentContextType {
     substitutePairDB: (activePairId: string, reservePairId: string) => Promise<void>;
     finishTournamentDB: () => Promise<void>;
     respondToInviteDB: (pairId: string, action: 'accept' | 'reject') => Promise<void>;
+    updateTournamentSettings: (settings: Partial<TournamentState>) => Promise<void>;
+    createNewTournament: (metadata: Partial<TournamentState>) => Promise<void>;
 }
 
 const TournamentContext = createContext<TournamentContextType>({
@@ -38,15 +43,17 @@ const TournamentContext = createContext<TournamentContextType>({
     createPairInDB: async () => {}, updatePairDB: async () => {}, assignPartnerDB: async () => {}, startTournamentDB: async () => {}, updateScoreDB: async () => {}, nextRoundDB: async () => {},
     deletePairDB: async () => {}, archiveAndResetDB: async () => {}, resetToSetupDB: async () => {}, regenerateMatchesDB: async () => "", hardResetDB: async () => {},
     formatPlayerName: () => '', setTournamentFormat: async () => {}, getPairElo: () => 1200, substitutePairDB: async () => {},
-    finishTournamentDB: async () => {}, respondToInviteDB: async () => {}
+    finishTournamentDB: async () => {}, respondToInviteDB: async () => {}, updateTournamentSettings: async () => {},
+    createNewTournament: async () => {}
 });
 
 const reducer = (state: TournamentState, action: TournamentAction): TournamentState => {
     switch (action.type) {
         case 'SET_STATE': return { ...state, ...action.payload };
         case 'SET_FORMAT': return { ...state, format: action.payload };
+        case 'UPDATE_SETTINGS': return { ...state, ...action.payload };
         case 'SET_LOADING': return { ...state, loading: action.payload };
-        case 'RESET_LOCAL': return initialState;
+        case 'RESET_LOCAL': return { ...initialState, players: state.players }; // Keep players
         case 'TOGGLE_BALLS': return { ...state, courts: state.courts.map(c => c.id === action.payload ? { ...c, ballsGiven: !c.ballsGiven } : c) };
         case 'TOGGLE_WATER': return { ...state, pairs: state.pairs.map(p => p.id === action.payload ? { ...p, waterReceived: !p.waterReceived } : p) };
         case 'TOGGLE_PAID': return { ...state, pairs: state.pairs.map(p => { if (p.player1Id === action.payload) return { ...p, paidP1: !p.paidP1 }; if (p.player2Id === action.payload) return { ...p, paidP2: !p.paidP2 }; return p; }) };
@@ -69,23 +76,14 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }, []);
 
     const loadData = useCallback(async () => {
-        // Allow loading without user if in public mode (we might need some strategy here, but for now we assume admin view or public view)
-        // Actually, public view only needs to create data, not load full tournament state usually.
-        // But for "JoinTournament" checking existing players, we might need public read access or use RPC.
-        // For simplicity, we rely on RLS policies or local state for now.
-        
-        if (!user && !isOfflineMode) {
-             // If public and not logged in, we might still want to load players list for the search autocomplete if RLS allows
-             // But usually active tournament data is for admin.
-             return;
-        }
+        if (!user && !isOfflineMode) return;
 
         const courts = Array.from({ length: clubData.courtCount }, (_, i) => ({ id: i + 1, ballsGiven: false }));
 
         if (isOfflineMode) {
             const localData = localStorage.getItem(STORAGE_KEY);
             if (localData) { dispatch({ type: 'SET_STATE', payload: { ...JSON.parse(localData), courts: courts } }); } 
-            else { dispatch({ type: 'SET_STATE', payload: { players: [], pairs: [], status: 'setup', courts: courts } }); }
+            else { dispatch({ type: 'SET_STATE', payload: { players: [], pairs: [], status: 'finished', courts: courts } }); }
             dispatch({ type: 'SET_LOADING', payload: false });
             return;
         }
@@ -96,7 +94,8 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             const activeTournament = tournaments?.[0];
 
             if (!activeTournament) {
-                dispatch({ type: 'SET_STATE', payload: { id: undefined, status: 'setup', players: players || [], pairs: [], matches: [], groups: [], courts } });
+                // If no active tournament, we are in 'finished' state waiting for a new one
+                dispatch({ type: 'SET_STATE', payload: { id: undefined, status: 'finished', players: players || [], pairs: [], matches: [], groups: [], courts } });
             } else {
                 const { data: pairs } = await supabase.from('tournament_pairs').select('*').eq('tournament_id', activeTournament.id).order('created_at', { ascending: true });
                 const { data: matches } = await supabase.from('matches').select('*').eq('tournament_id', activeTournament.id);
@@ -131,7 +130,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                      groups = Logic.reconstructGroupsFromMatches(mappedPairs, mappedMatches, players || [], format);
                 } else {
                     const isSetup = activeTournament.status === 'setup';
-                    // Only generate potential groups from COMPLETE pairs
                     if (!isSetup) groups = Logic.generateGroupsHelper(mappedPairs, players || [], 'elo-balanced', format); 
                 }
 
@@ -139,21 +137,23 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                      const activeIds = new Set(groups.flatMap(g => g.pairIds));
                      mappedPairs = mappedPairs.map(p => ({ ...p, isReserve: !activeIds.has(p.id) }));
                 } else {
-                     // Filter only COMPLETE and CONFIRMED pairs for "titulares"
                      const completeConfirmed = mappedPairs.filter(p => p.player2Id && p.status === 'confirmed');
-                     // Incomplete or pending are reserves/waiting
                      const others = mappedPairs.filter(p => !p.player2Id || p.status !== 'confirmed');
-                     
-                     // Mark first N complete pairs as active, others as reserve
                      const completeConfirmedWithReserves = completeConfirmed.map((p, idx) => ({ ...p, isReserve: idx >= limit }));
-                     
-                     // Start with actives, then reserves, then others (solos/pending)
                      mappedPairs = [...completeConfirmedWithReserves, ...others.map(p => ({...p, isReserve: true}))];
                 }
 
                 dispatch({ type: 'SET_STATE', payload: {
                     id: activeTournament.id, status: activeTournament.status as any, currentRound: activeTournament.current_round || 0,
-                    players: players || [], pairs: mappedPairs, matches: mappedMatches, groups: groups, format, courts
+                    players: players || [], pairs: mappedPairs, matches: mappedMatches, groups: groups, format, courts,
+                    // Load Metadata (In real implementation, these would come from DB columns in 'tournaments')
+                    title: activeTournament.title || 'Mini Torneo',
+                    price: activeTournament.price || 15,
+                    prizes: activeTournament.prizes || [],
+                    description: activeTournament.description || '',
+                    startDate: activeTournament.date,
+                    levelRange: activeTournament.level_range || 'Abierto',
+                    includedItems: activeTournament.included_items || []
                 }});
             }
         } catch (e) { console.warn("Supabase load error:", e); } finally { dispatch({ type: 'SET_LOADING', payload: false }); }
@@ -171,7 +171,13 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
     }, [loadData, isOfflineMode, user]);
 
-    const saveLocal = (newState: TournamentState) => { if (isOfflineMode) localStorage.setItem(STORAGE_KEY, JSON.stringify(newState)); };
+    const saveLocal = (newState: TournamentState) => { 
+        if (isOfflineMode) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
+            // CRITICAL: Notify HistoryContext that local DB changed
+            window.dispatchEvent(new Event('local-db-update'));
+        } 
+    };
 
     const setTournamentFormat = async (format: TournamentFormat) => {
         dispatch({ type: 'SET_FORMAT', payload: format });
@@ -181,16 +187,73 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         if (isOfflineMode) { const newState = { ...state, format }; saveLocal(newState); }
     };
 
+    const updateTournamentSettings = async (settings: Partial<TournamentState>) => {
+        dispatch({ type: 'UPDATE_SETTINGS', payload: settings });
+        if (isOfflineMode) {
+            const newState = { ...state, ...settings };
+            saveLocal(newState);
+            return;
+        }
+        if (state.id) {
+            // Map state fields to DB columns
+             await supabase.from('tournaments').update({ 
+                 title: settings.title, 
+                 price: settings.price, 
+                 prizes: settings.prizes,
+                 description: settings.description,
+                 level_range: settings.levelRange,
+                 included_items: settings.includedItems
+            }).eq('id', state.id);
+        }
+    };
+
+    const createNewTournament = async (metadata: Partial<TournamentState>) => {
+        const defaults: TournamentState = {
+            status: 'setup', currentRound: 0, format: '16_mini', players: state.players, pairs: [], matches: [], groups: [], courts: state.courts, loading: false,
+            title: metadata.title || 'Nuevo Torneo',
+            price: metadata.price || 15,
+            prizes: metadata.prizes || [],
+            description: metadata.description || '',
+            levelRange: metadata.levelRange || 'Abierto',
+            includedItems: metadata.includedItems || [],
+            startDate: metadata.startDate || new Date().toISOString()
+        };
+
+        if (isOfflineMode) {
+            const newState = { ...defaults, id: `local-t-${Date.now()}` };
+            dispatch({ type: 'SET_STATE', payload: newState });
+            saveLocal(newState);
+            return;
+        }
+
+        if (user) {
+            const { data, error } = await supabase.from('tournaments').insert([{ 
+                user_id: user.id, 
+                status: 'setup', 
+                format: '16_mini',
+                title: metadata.title,
+                price: metadata.price,
+                prizes: metadata.prizes,
+                description: metadata.description,
+                level_range: metadata.levelRange,
+                included_items: metadata.includedItems,
+                date: metadata.startDate
+            }]).select().single();
+            
+            if (error) throw error;
+            await loadData(); // Reload to pull the new tournament
+        }
+    };
+
     // DB ACTIONS
     const addPlayerToDB = async (p: Partial<Player>, ownerId?: string) => {
-        // Allows public registration to specify the club owner ID
         const targetUserId = ownerId || user?.id;
         
         if (isOfflineMode) { const newPlayer = { ...p, id: `local-${Date.now()}`, created_at: new Date().toISOString() } as Player; const newState = { ...state, players: [...state.players, newPlayer] }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return newPlayer.id; }
         
         const { data, error } = await supabase.from('players').insert([{ ...p, user_id: targetUserId }]).select().single();
         if (error) { alert(error.message); return null; } 
-        if(user) await loadData(); // Only reload if admin logged in
+        if(user) await loadData(); 
         return data.id;
     };
 
@@ -208,55 +271,38 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const createPairInDB = async (p1: string, p2: string | null, status: 'confirmed' | 'pending' = 'confirmed') => {
         if (isOfflineMode) { 
             const newPair: Pair = { id: `pair-${Date.now()}`, player1Id: p1, player2Id: p2, name: 'Pareja', waterReceived: false, paidP1: false, paidP2: false, stats: {played:0, won:0, gameDiff:0}, isReserve: false, status }; 
-            // Only count complete confirmed pairs for reserve logic
             let limit = 16; if(state.format === '10_mini') limit = 10; if(state.format === '12_mini') limit = 12; if(state.format === '8_mini') limit = 8; 
             newPair.isReserve = p2 !== null && state.pairs.filter(p=>p.status==='confirmed' && p.player2Id).length >= limit; 
             const newState = { ...state, pairs: [...state.pairs, newPair] }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return; 
         }
         
-        // Find setup tournament or create one
         let tournamentId = state.id; 
         if (!tournamentId) { 
-            // Note: This might fail in public mode if no setup tournament exists. 
-            // Public reg usually assumes a tournament is in setup.
-            // Admin must create tournament first or we fetch the latest setup tournament for the owner.
+            // Fallback: If no tournament exists, create one in setup mode (should be handled by createNewTournament)
             if(user) {
                 const { data: t } = await supabase.from('tournaments').insert([{ user_id: user.id, status: 'setup', format: state.format }]).select().single(); 
                 tournamentId = t.id;
             } else {
-                // In public mode, we rely on the Join page to pass the tournament ID or find it via context loaded by ownerId
-                // For now, fail safe if no ID
-                console.error("No active tournament found for public registration");
                 return;
             }
         }
-        
         await supabase.from('tournament_pairs').insert([{ tournament_id: tournamentId, player1_id: p1, player2_id: p2, status }]); 
         if(user) await loadData();
     };
     
-    // Assign a partner to a solo pair (or merge two solo pairs)
     const assignPartnerDB = async (pairId: string, partnerId: string, mergeWithPairId?: string) => {
         if (isOfflineMode) {
-            // Update pairId with player2 = partnerId
-            // If mergeWithPairId exists, delete that pair
             let newPairs = state.pairs.map(p => p.id === pairId ? { ...p, player2Id: partnerId } : p);
             if (mergeWithPairId) newPairs = newPairs.filter(p => p.id !== mergeWithPairId);
-            
             const newState = { ...state, pairs: newPairs };
             dispatch({ type: 'SET_STATE', payload: newState });
             saveLocal(newState);
             return;
         }
-
-        // 1. Update the target pair
         await supabase.from('tournament_pairs').update({ player2_id: partnerId }).eq('id', pairId);
-        
-        // 2. If merging, delete the other pair
         if (mergeWithPairId) {
             await supabase.from('tournament_pairs').delete().eq('id', mergeWithPairId);
         }
-        
         await loadData();
     };
 
@@ -304,7 +350,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         if(state.format === '12_mini') limit = 12;
         if(state.format === '8_mini') limit = 8;
         
-        // Filter: Confirmed AND Complete (No solos)
         const allPairs = state.pairs.filter(p => p.status === 'confirmed' && p.player2Id !== null); 
         if (allPairs.length < limit) throw new Error(`Se necesitan al menos ${limit} parejas confirmadas y completas.`);
 
@@ -359,7 +404,10 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const archiveAndResetDB = async () => {
         const { wMain, wCons } = Logic.calculateChampions(state, (id, p, pair) => { const pp = pair.find(x => x.id === id); if(!pp) return 'Desc.'; const p1 = p.find(x => x.id === pp.player1Id); const p2 = pp.player2Id ? p.find(x => x.id === pp.player2Id) : null; return `${formatPlayerName(p1)} & ${formatPlayerName(p2)}`; });
         if (!isOfflineMode) await supabase.from('tournaments').update({ status: 'finished', winner_main: wMain, winner_consolation: wCons }).eq('id', state.id);
-        dispatch({ type: 'RESET_LOCAL' }); await loadData();
+        // Force reload from empty
+        const newState = { ...initialState, players: state.players };
+        dispatch({ type: 'SET_STATE', payload: newState }); 
+        saveLocal(newState);
     };
 
     const resetToSetupDB = async () => {
@@ -378,7 +426,8 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             state, dispatch, loadData,
             addPlayerToDB, updatePlayerInDB, deletePlayerDB, createPairInDB, updatePairDB, startTournamentDB,
             updateScoreDB, nextRoundDB, deletePairDB, archiveAndResetDB, resetToSetupDB, regenerateMatchesDB, hardResetDB,
-            formatPlayerName, setTournamentFormat, getPairElo: Logic.getPairElo, substitutePairDB, finishTournamentDB, respondToInviteDB, assignPartnerDB
+            formatPlayerName, setTournamentFormat, getPairElo: Logic.getPairElo, substitutePairDB, finishTournamentDB, respondToInviteDB, assignPartnerDB,
+            updateTournamentSettings, createNewTournament
         }}>
             {children}
         </TournamentContext.Provider>

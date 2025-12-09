@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Trophy, User } from 'lucide-react';
+import { Home, Trophy, User, Compass, Dribbble } from 'lucide-react';
 import { THEME } from '../utils/theme';
 
 export const PlayerLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -8,7 +9,8 @@ export const PlayerLayout: React.FC<{ children: React.ReactNode }> = ({ children
 
   const navItems = [
     { path: '/p/dashboard', label: 'Inicio', icon: Home },
-    { path: '/p/tournaments', label: 'Mis Torneos', icon: Trophy },
+    { path: '/p/explore', label: 'Explorar', icon: Compass },
+    { path: '/p/tournaments', label: 'Mis Partidos', icon: Dribbble },
     { path: '/p/profile', label: 'Perfil', icon: User },
   ];
 

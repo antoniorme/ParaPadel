@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { TournamentProvider } from './store/TournamentContext';
@@ -22,26 +23,32 @@ import ClubProfile from './pages/ClubProfile';
 import Help from './pages/Help';
 import PlayerProfile from './pages/PlayerProfile';
 import Onboarding from './pages/Onboarding'; 
+import JoinTournament from './pages/public/JoinTournament';
+import TournamentSetup from './pages/TournamentSetup';
 
 // Player Pages
 import PlayerDashboard from './pages/player/PlayerDashboard';
 import PlayerTournaments from './pages/player/PlayerTournaments';
-
-// Public Pages
-import JoinTournament from './pages/public/JoinTournament';
+import TournamentBrowser from './pages/player/TournamentBrowser';
 
 // Protected Route Wrapper
-const ProtectedRoute = ({ children }: React.PropsWithChildren) => {
-  const { user, loading } = useAuth();
+const ProtectedRoute = ({ children, requireAdmin = false }: { children?: React.ReactNode, requireAdmin?: boolean }) => {
+  const { user, loading, role } = useAuth();
   const { clubData } = useHistory();
   const location = useLocation();
 
-  if (loading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Cargando...</div>;
+  if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400 font-bold">Cargando...</div>;
   
   if (!user) return <Navigate to="/" replace />;
   
-  // Force Onboarding if default name matches
-  if (clubData.name === 'Mi Club de Padel' && location.pathname !== '/onboarding') {
+  // PROTECCIÓN DE ROL:
+  // Si requiere admin pero el usuario es 'player', lo mandamos a su dashboard.
+  if (requireAdmin && role !== 'admin') {
+      return <Navigate to="/p/dashboard" replace />;
+  }
+
+  // Force Onboarding for Admins if generic name (only for admin routes)
+  if (requireAdmin && clubData.name === 'Mi Club de Padel' && location.pathname !== '/onboarding') {
       return <Navigate to="/onboarding" replace />;
   }
 
@@ -49,52 +56,64 @@ const ProtectedRoute = ({ children }: React.PropsWithChildren) => {
 };
 
 const AppRoutes = () => {
-  const { user } = useAuth();
+  const { user, role, loading } = useAuth();
+
+  if (loading) return null; // Wait for auth check
+
+  const getHomeRoute = () => {
+      if (!user) return <Landing />;
+      // Redirección inteligente basada en rol
+      if (role === 'admin') return <Navigate to="/dashboard" replace />;
+      return <Navigate to="/p/dashboard" replace />;
+  };
 
   return (
     <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
-        <Route path="/auth" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage />} />
+        {/* Entry Point */}
+        <Route path="/" element={getHomeRoute()} />
+        
+        {/* Auth */}
+        <Route path="/auth" element={user ? getHomeRoute() : <AuthPage />} />
         
         {/* Public Registration Wizard (No Auth Required) */}
         <Route path="/join/:clubId" element={<JoinTournament />} />
 
-        {/* Fullscreen Onboarding (No Layout) */}
-        <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+        {/* Fullscreen Onboarding (Admin Only) */}
+        <Route path="/onboarding" element={<ProtectedRoute requireAdmin><Onboarding /></ProtectedRoute>} />
 
-        {/* PLAYER APP ROUTES (New Branch) */}
-        {/* For Phase 1, these are accessible to see the UI. Later we will add specific Player Auth protection */}
+        {/* PLAYER APP ROUTES (Accessible to Players and Admins who want to preview) */}
         <Route path="/p/*" element={
-            <PlayerLayout>
-                <Routes>
-                    <Route index element={<Navigate to="dashboard" replace />} />
-                    <Route path="dashboard" element={<PlayerDashboard />} />
-                    <Route path="tournaments" element={<PlayerTournaments />} />
-                    {/* Placeholder routes for nav */}
-                    <Route path="profile" element={<div className="p-6 text-center text-slate-400">Próximamente: Perfil</div>} />
-                    <Route path="*" element={<Navigate to="dashboard" replace />} />
-                </Routes>
-            </PlayerLayout>
+            <ProtectedRoute>
+                <PlayerLayout>
+                    <Routes>
+                        <Route index element={<Navigate to="dashboard" replace />} />
+                        <Route path="dashboard" element={<PlayerDashboard />} />
+                        <Route path="explore" element={<TournamentBrowser />} />
+                        <Route path="tournaments" element={<PlayerTournaments />} />
+                        <Route path="profile" element={<div className="p-6 text-center text-slate-400">Próximamente: Perfil</div>} />
+                        <Route path="*" element={<Navigate to="dashboard" replace />} />
+                    </Routes>
+                </PlayerLayout>
+            </ProtectedRoute>
         } />
 
-        {/* Protected App Routes (With Admin Layout) */}
+        {/* ADMIN ROUTES (Strictly Admin Only) */}
         <Route path="/*" element={
             <Layout>
                 <Routes>
-                    <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                    <Route path="/registration" element={<ProtectedRoute><Registration /></ProtectedRoute>} />
-                    <Route path="/checkin" element={<ProtectedRoute><CheckIn /></ProtectedRoute>} />
-                    <Route path="/active" element={<ProtectedRoute><ActiveTournament /></ProtectedRoute>} />
-                    <Route path="/results" element={<ProtectedRoute><Results /></ProtectedRoute>} />
+                    <Route path="/dashboard" element={<ProtectedRoute requireAdmin><Dashboard /></ProtectedRoute>} />
+                    <Route path="/setup" element={<ProtectedRoute requireAdmin><TournamentSetup /></ProtectedRoute>} />
+                    <Route path="/registration" element={<ProtectedRoute requireAdmin><Registration /></ProtectedRoute>} />
+                    <Route path="/checkin" element={<ProtectedRoute requireAdmin><CheckIn /></ProtectedRoute>} />
+                    <Route path="/active" element={<ProtectedRoute requireAdmin><ActiveTournament /></ProtectedRoute>} />
+                    <Route path="/results" element={<ProtectedRoute requireAdmin><Results /></ProtectedRoute>} />
                     
-                    <Route path="/players" element={<ProtectedRoute><PlayerManager /></ProtectedRoute>} />
-                    <Route path="/players/:playerId" element={<ProtectedRoute><PlayerProfile /></ProtectedRoute>} />
-                    <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
-                    <Route path="/club" element={<ProtectedRoute><ClubProfile /></ProtectedRoute>} />
-                    <Route path="/help" element={<ProtectedRoute><Help /></ProtectedRoute>} />
+                    <Route path="/players" element={<ProtectedRoute requireAdmin><PlayerManager /></ProtectedRoute>} />
+                    <Route path="/players/:playerId" element={<ProtectedRoute requireAdmin><PlayerProfile /></ProtectedRoute>} />
+                    <Route path="/history" element={<ProtectedRoute requireAdmin><History /></ProtectedRoute>} />
+                    <Route path="/club" element={<ProtectedRoute requireAdmin><ClubProfile /></ProtectedRoute>} />
+                    <Route path="/help" element={<ProtectedRoute requireAdmin><Help /></ProtectedRoute>} />
 
-                    {/* Catch all redirect to dashboard */}
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
             </Layout>

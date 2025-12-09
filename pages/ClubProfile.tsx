@@ -1,8 +1,9 @@
 
+
 import React, { useState } from 'react';
 import { useHistory } from '../store/HistoryContext';
 import { THEME } from '../utils/theme';
-import { Save, Building, Image as ImageIcon, Upload } from 'lucide-react';
+import { Save, Building, Image as ImageIcon, Upload, MapPin } from 'lucide-react';
 
 const ClubProfile: React.FC = () => {
   const { clubData, updateClubData } = useHistory();
@@ -93,6 +94,17 @@ const ClubProfile: React.FC = () => {
                     className="w-full bg-white border border-slate-300 rounded-xl p-4 mt-2 outline-none focus:border-[#575AF9]" 
                   />
               </div>
+
+              <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1"><MapPin size={12}/> Link Google Maps</label>
+                  <input 
+                    value={form.mapsUrl || ''} 
+                    onChange={e => setForm({...form, mapsUrl: e.target.value})}
+                    className="w-full bg-white border border-slate-300 rounded-xl p-4 mt-2 outline-none focus:border-[#575AF9] text-sm text-blue-600" 
+                    placeholder="https://maps.google.com/..."
+                  />
+              </div>
+
               <div>
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Teléfono</label>
                   <input 
