@@ -240,10 +240,11 @@ const Results: React.FC = () => {
 
       {tab === 'bracket' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* MAIN BRACKET */}
+              {/* MAIN BRACKET - INVERTED ORDER (FINAL -> SF -> QF) */}
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                   <h3 className="text-emerald-600 font-bold mb-4 text-center flex items-center justify-center gap-2"><Trophy size={18}/> Cuadro Principal</h3>
-                  <div className="space-y-6 relative">
+                  <div className="space-y-6 relative flex flex-col-reverse">
+                      
                       {/* QF */}
                       <div>
                           <p className="text-xs text-slate-400 font-bold mb-2">CUARTOS DE FINAL</p>
@@ -255,7 +256,7 @@ const Results: React.FC = () => {
                       
                       {/* SF */}
                       {state.currentRound >= roundSF && (
-                          <div className="animate-fade-in">
+                          <div className="animate-fade-in mb-4">
                               <p className="text-xs text-slate-400 font-bold mb-2">SEMIFINALES</p>
                               <BracketMatch title="SF1" {...sf1} />
                               <BracketMatch title="SF2" {...sf2} />
@@ -264,7 +265,7 @@ const Results: React.FC = () => {
 
                       {/* FINAL */}
                       {state.currentRound >= roundFinal && (
-                          <div className="animate-fade-in">
+                          <div className="animate-fade-in mb-4">
                               <p className="text-xs text-emerald-600 font-bold mb-2 flex items-center gap-1"><Trophy size={12}/> GRAN FINAL</p>
                               <div className="border-2 border-emerald-100 rounded-lg shadow-sm">
                                   <BracketMatch title="FINAL" {...finalMain} />
@@ -274,10 +275,10 @@ const Results: React.FC = () => {
                   </div>
               </div>
 
-              {/* CONSOLATION BRACKET */}
+              {/* CONSOLATION BRACKET - INVERTED ORDER */}
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                   <h3 className="text-blue-500 font-bold mb-4 text-center flex items-center justify-center gap-2"><Grid size={18}/> Consolación</h3>
-                  <div className="space-y-6 relative">
+                  <div className="space-y-6 relative flex flex-col-reverse">
                       
                       {isMini10 ? (
                           /* --- MINI 10 CONSOLATION (Direct Final) --- */
@@ -298,7 +299,7 @@ const Results: React.FC = () => {
                                 </div>
                             )}
                             {state.currentRound >= 5 && (
-                                <div className="animate-fade-in">
+                                <div className="animate-fade-in mb-4">
                                     <p className="text-xs text-blue-600 font-bold mb-2 flex items-center gap-1"><Trophy size={12}/> FINAL CONSOLACIÓN</p>
                                     <div className="border-2 border-blue-100 rounded-lg shadow-sm">
                                         <BracketMatch title="FINAL CONS." {...finalCons} />
@@ -317,7 +318,7 @@ const Results: React.FC = () => {
                                 </div>
                              )}
                              {state.currentRound >= 6 && (
-                                <div className="animate-fade-in">
+                                <div className="animate-fade-in mb-4">
                                     <p className="text-xs text-blue-600 font-bold mb-2 flex items-center gap-1"><Trophy size={12}/> FINAL CONSOLACIÓN</p>
                                     <div className="border-2 border-blue-100 rounded-lg shadow-sm">
                                         <BracketMatch title="FINAL CONS." {...finalCons} />
@@ -339,7 +340,7 @@ const Results: React.FC = () => {
 
                             {/* SF */}
                             {state.currentRound >= 7 && (
-                                <div className="animate-fade-in">
+                                <div className="animate-fade-in mb-4">
                                     <p className="text-xs text-slate-400 font-bold mb-2">SEMIFINALES</p>
                                     <BracketMatch title="SF C1" {...sfC1} />
                                     <BracketMatch title="SF C2" {...sfC2} />
@@ -348,7 +349,7 @@ const Results: React.FC = () => {
 
                              {/* FINAL */}
                              {state.currentRound >= 8 && (
-                                <div className="animate-fade-in">
+                                <div className="animate-fade-in mb-4">
                                     <p className="text-xs text-blue-600 font-bold mb-2 flex items-center gap-1"><Trophy size={12}/> FINAL CONSOLACIÓN</p>
                                     <div className="border-2 border-blue-100 rounded-lg shadow-sm">
                                         <BracketMatch title="FINAL CONS." {...finalCons} />

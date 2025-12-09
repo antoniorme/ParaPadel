@@ -1,5 +1,4 @@
 
-
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { ClubData, PastTournament, TournamentState, PublicTournament } from '../types';
 import { supabase } from '../lib/supabase';
@@ -8,6 +7,8 @@ import { useAuth } from './AuthContext';
 const CLUB_KEY = 'padelpro_club_v1';
 const FAVORITES_KEY = 'padelpro_favorites_v1';
 const LOCAL_STORAGE_KEY = 'padelpro_local_db_v3';
+// NEW: Key to retrieve completed tournaments in offline/local mode
+const LOCAL_HISTORY_KEY = 'padelpro_local_history';
 
 interface HistoryContextType {
     clubData: ClubData;
@@ -65,6 +66,95 @@ export const HistoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [globalTournaments, setGlobalTournaments] = useState<PublicTournament[]>(MOCK_GLOBAL_TOURNAMENTS);
     const { user, isOfflineMode } = useAuth();
 
+    // LISTEN FOR LOCAL DB UPDATES TO RELOAD HISTORY
+    useEffect(() => {
+        const handleLocalUpdate = () => {
+            if (isOfflineMode) loadHistory();
+        };
+        window.addEventListener('local-db-update', handleLocalUpdate);
+        return () => window.removeEventListener('local-db-update', handleLocalUpdate);
+    }, [isOfflineMode]);
+
+    const loadHistory = async () => {
+        // OFFLINE MODE
+        if (isOfflineMode) {
+            const rawHistory = localStorage.getItem(LOCAL_HISTORY_KEY);
+            if (rawHistory) {
+                const parsed: any[] = JSON.parse(rawHistory);
+                const mappedHistory: PastTournament[] = parsed.map(t => ({
+                    id: t.id,
+                    date: t.archivedAt || t.startDate || new Date().toISOString(),
+                    winnerMain: t.winnerMain || 'Desconocido',
+                    winnerConsolation: t.winnerConsolation || 'Desconocido',
+                    playerCount: (t.pairs || []).length * 2,
+                    format: t.format,
+                    data: t // The full state object
+                }));
+                setPastTournaments(mappedHistory);
+            } else {
+                setPastTournaments([]);
+            }
+            return;
+        }
+
+        // ONLINE MODE
+        if (user) {
+            // 1. Fetch finished tournaments
+            const { data: tournaments } = await supabase
+                .from('tournaments')
+                .select('*')
+                .eq('user_id', user.id)
+                .eq('status', 'finished')
+                .order('created_at', { ascending: false });
+            
+            if (tournaments && tournaments.length > 0) {
+                const tIds = tournaments.map(t => t.id);
+
+                // 2. Fetch Deep Data (Pairs & Matches) for Stats
+                const { data: allPairs } = await supabase.from('tournament_pairs').select('*').in('tournament_id', tIds);
+                const { data: allMatches } = await supabase.from('matches').select('*').in('tournament_id', tIds);
+                const { data: allPlayers } = await supabase.from('players').select('*').eq('user_id', user.id);
+
+                const history: PastTournament[] = tournaments.map(t => {
+                    const tPairs = allPairs?.filter(p => p.tournament_id === t.id) || [];
+                    const tMatches = allMatches?.filter(m => m.tournament_id === t.id) || [];
+                    
+                    const historicalState: TournamentState = {
+                        id: t.id,
+                        status: 'finished',
+                        currentRound: t.current_round,
+                        format: t.format || '16_mini',
+                        players: allPlayers || [],
+                        pairs: tPairs.map(p => ({
+                            id: p.id, tournament_id: p.tournament_id, player1Id: p.player1_id, player2Id: p.player2_id,
+                            name: p.name, waterReceived: p.water_received, paidP1: p.paid_p1, paidP2: p.paid_p2,
+                            stats: {played:0, won:0, gameDiff:0}, isReserve: false
+                        })),
+                        matches: tMatches.map(m => ({
+                            id: m.id, round: m.round, 
+                            phase: m.phase || (m.round <= 4 ? 'group' : 'playoff'), 
+                            bracket: m.bracket as any,
+                            courtId: m.court_id, pairAId: m.pair_a_id, pairBId: m.pair_b_id,
+                            scoreA: m.score_a, scoreB: m.score_b, isFinished: m.is_finished
+                        })),
+                        groups: [], courts: [], loading: false
+                    };
+
+                    return {
+                        id: t.id,
+                        date: t.created_at,
+                        winnerMain: t.winner_main || 'No registrado',
+                        winnerConsolation: t.winner_consolation || 'No registrado',
+                        playerCount: tPairs.length * 2,
+                        format: t.format || '16_mini',
+                        data: historicalState
+                    };
+                });
+                setPastTournaments(history);
+            }
+        }
+    };
+
     useEffect(() => {
         const savedClub = localStorage.getItem(CLUB_KEY);
         if (savedClub) try { setClubData(JSON.parse(savedClub)); } catch (e) {}
@@ -72,65 +162,8 @@ export const HistoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const savedFavs = localStorage.getItem(FAVORITES_KEY);
         if (savedFavs) try { setFavoriteClubIds(JSON.parse(savedFavs)); } catch (e) {}
 
-        const loadHistory = async () => {
-            if (user) {
-                // 1. Fetch finished tournaments
-                const { data: tournaments } = await supabase
-                    .from('tournaments')
-                    .select('*')
-                    .eq('user_id', user.id)
-                    .eq('status', 'finished')
-                    .order('created_at', { ascending: false });
-                
-                if (tournaments && tournaments.length > 0) {
-                    const tIds = tournaments.map(t => t.id);
-
-                    // 2. Fetch Deep Data (Pairs & Matches) for Stats
-                    const { data: allPairs } = await supabase.from('tournament_pairs').select('*').in('tournament_id', tIds);
-                    const { data: allMatches } = await supabase.from('matches').select('*').in('tournament_id', tIds);
-                    const { data: allPlayers } = await supabase.from('players').select('*').eq('user_id', user.id);
-
-                    const history: PastTournament[] = tournaments.map(t => {
-                        const tPairs = allPairs?.filter(p => p.tournament_id === t.id) || [];
-                        const tMatches = allMatches?.filter(m => m.tournament_id === t.id) || [];
-                        
-                        const historicalState: TournamentState = {
-                            id: t.id,
-                            status: 'finished',
-                            currentRound: t.current_round,
-                            format: t.format || '16_mini',
-                            players: allPlayers || [],
-                            pairs: tPairs.map(p => ({
-                                id: p.id, tournament_id: p.tournament_id, player1Id: p.player1_id, player2Id: p.player2_id,
-                                name: p.name, waterReceived: p.water_received, paidP1: p.paid_p1, paidP2: p.paid_p2,
-                                stats: {played:0, won:0, gameDiff:0}, isReserve: false
-                            })),
-                            matches: tMatches.map(m => ({
-                                id: m.id, round: m.round, 
-                                phase: m.phase || (m.round <= 4 ? 'group' : 'playoff'), 
-                                bracket: m.bracket as any,
-                                courtId: m.court_id, pairAId: m.pair_a_id, pairBId: m.pair_b_id,
-                                scoreA: m.score_a, scoreB: m.score_b, isFinished: m.is_finished
-                            })),
-                            groups: [], courts: [], loading: false
-                        };
-
-                        return {
-                            id: t.id,
-                            date: t.created_at,
-                            winnerMain: t.winner_main || 'No registrado',
-                            winnerConsolation: t.winner_consolation || 'No registrado',
-                            playerCount: tPairs.length * 2,
-                            format: t.format || '16_mini',
-                            data: historicalState
-                        };
-                    });
-                    setPastTournaments(history);
-                }
-            }
-        };
         loadHistory();
-    }, [user]);
+    }, [user, isOfflineMode]);
 
     const fetchGlobalTournaments = useCallback(async () => {
         let activeTournaments: any[] = [];

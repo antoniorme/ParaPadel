@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { THEME, getFormatColor } from '../utils/theme';
@@ -172,12 +171,21 @@ const ActiveTournament: React.FC = () => {
       try { await startTournamentDB('manual', orderedPairs); resetTimer(); startTimer(); } catch (e: any) { setErrorMessage(e.message || "Error al iniciar el torneo manual."); }
   };
 
+  // UPDATED LOGIC: Prioritize Next Match over Phase Label
   const getNextStepText = (pairId: string, isWinner: boolean, phase: string, courtId: number, bracket: string) => {
+      // 1. Look ahead for ANY scheduled match in a future round
       const nextMatch = state.matches.find(m => (m.pairAId === pairId || m.pairBId === pairId) && m.round > state.currentRound);
+      
       if (nextMatch) {
-          if (nextMatch.courtId > 0) return `A Pista ${nextMatch.courtId}`;
-          return `Espera turno`;
+          const opponentId = nextMatch.pairAId === pairId ? nextMatch.pairBId : nextMatch.pairAId;
+          const opponentName = getPairName(opponentId);
+          const shortOpName = opponentName !== 'Unknown' ? opponentName.split('&')[0].trim() : '...';
+
+          if (nextMatch.courtId > 0) return `A Pista ${nextMatch.courtId} (vs ${shortOpName})`;
+          return `Espera turno (vs ${shortOpName})`;
       }
+
+      // 2. Fallbacks based on Phase
       if (phase === 'group') {
            const maxGroupRound = state.format === '16_mini' ? 4 : 3;
            if (state.currentRound >= maxGroupRound) return "Esperando Fase Final";
@@ -190,7 +198,6 @@ const ActiveTournament: React.FC = () => {
               return "A Semis (Pista 2)";
           }
           if (bracket === 'consolation') {
-               if (courtId === 1 || courtId === 2 || courtId === 5 || courtId === 3) return "A Semis Cons. (Pista 2/3)";
                return "A Semis Cons.";
           }
       }
@@ -408,8 +415,8 @@ const ActiveTournament: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-32">
-      {/* Floating Sticky Header (Boxed) */}
-      <div className="sticky top-24 z-30">
+      {/* Floating Sticky Header (Boxed & Better Spaced) */}
+      <div className="sticky top-20 z-30 pt-4 -mx-1 px-1">
         <div style={{ backgroundColor: themeColor }} className="rounded-2xl shadow-lg p-4 flex items-center justify-between text-white transition-colors duration-300">
             <div className="flex items-center gap-2">
                 <h2 className="text-xl font-black tracking-tight">Ronda {state.currentRound}</h2>

@@ -1,5 +1,4 @@
 
-
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { TournamentState, TournamentAction, Player, Pair, Match, Group, TournamentFormat, GenerationMethod } from '../types';
 import { supabase } from '../lib/supabase';
@@ -8,7 +7,10 @@ import { useHistory } from './HistoryContext';
 import * as Logic from '../utils/TournamentLogic';
 import { THEME } from '../utils/theme'; 
 
-const STORAGE_KEY = 'padelpro_local_db_v3'; 
+const STORAGE_KEY = 'padelpro_local_db_v3';
+// NEW: Key to store completed tournaments in local mode to avoid overwriting them
+const LOCAL_HISTORY_KEY = 'padelpro_local_history'; 
+
 export const TOURNAMENT_CATEGORIES = ['Iniciación', '5ª CAT', '4ª CAT', '3ª CAT', '2ª CAT', '1ª CAT'];
 
 const initialState: TournamentState = {
@@ -403,7 +405,26 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     const archiveAndResetDB = async () => {
         const { wMain, wCons } = Logic.calculateChampions(state, (id, p, pair) => { const pp = pair.find(x => x.id === id); if(!pp) return 'Desc.'; const p1 = p.find(x => x.id === pp.player1Id); const p2 = pp.player2Id ? p.find(x => x.id === pp.player2Id) : null; return `${formatPlayerName(p1)} & ${formatPlayerName(p2)}`; });
-        if (!isOfflineMode) await supabase.from('tournaments').update({ status: 'finished', winner_main: wMain, winner_consolation: wCons }).eq('id', state.id);
+        
+        if (!isOfflineMode) {
+            await supabase.from('tournaments').update({ status: 'finished', winner_main: wMain, winner_consolation: wCons }).eq('id', state.id);
+        } else {
+            // OFFLINE: Save current tournament to history array before wiping
+            const currentHistory = localStorage.getItem(LOCAL_HISTORY_KEY) ? JSON.parse(localStorage.getItem(LOCAL_HISTORY_KEY)!) : [];
+            const archivedTournament = {
+                ...state,
+                id: state.id || `archived-${Date.now()}`,
+                status: 'finished',
+                winnerMain: wMain,
+                winnerConsolation: wCons,
+                archivedAt: new Date().toISOString()
+            };
+            currentHistory.unshift(archivedTournament);
+            localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(currentHistory));
+            // Trigger update so HistoryContext notices
+            window.dispatchEvent(new Event('local-db-update'));
+        }
+
         // Force reload from empty
         const newState = { ...initialState, players: state.players };
         dispatch({ type: 'SET_STATE', payload: newState }); 
