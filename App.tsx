@@ -1,5 +1,4 @@
 
-
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { TournamentProvider } from './store/TournamentContext';
@@ -25,6 +24,7 @@ import PlayerProfile from './pages/PlayerProfile';
 import Onboarding from './pages/Onboarding'; 
 import JoinTournament from './pages/public/JoinTournament';
 import TournamentSetup from './pages/TournamentSetup';
+import SuperAdmin from './pages/SuperAdmin'; // NEW
 
 // Player Pages
 import PlayerDashboard from './pages/player/PlayerDashboard';
@@ -32,7 +32,7 @@ import PlayerTournaments from './pages/player/PlayerTournaments';
 import TournamentBrowser from './pages/player/TournamentBrowser';
 
 // Protected Route Wrapper
-const ProtectedRoute = ({ children, requireAdmin = false }: { children?: React.ReactNode, requireAdmin?: boolean }) => {
+const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = false }: { children?: React.ReactNode, requireAdmin?: boolean, requireSuperAdmin?: boolean }) => {
   const { user, loading, role } = useAuth();
   const { clubData } = useHistory();
   const location = useLocation();
@@ -41,14 +41,19 @@ const ProtectedRoute = ({ children, requireAdmin = false }: { children?: React.R
   
   if (!user) return <Navigate to="/" replace />;
   
-  // PROTECCIÓN DE ROL:
-  // Si requiere admin pero el usuario es 'player', lo mandamos a su dashboard.
-  if (requireAdmin && role !== 'admin') {
+  // SUPER ADMIN PROTECTION
+  if (requireSuperAdmin && role !== 'superadmin') {
+      return <Navigate to="/dashboard" replace />;
+  }
+
+  // ADMIN PROTECTION (Clubs)
+  // Super Admins can access Admin routes
+  if (requireAdmin && role !== 'admin' && role !== 'superadmin') {
       return <Navigate to="/p/dashboard" replace />;
   }
 
   // Force Onboarding for Admins if generic name (only for admin routes)
-  if (requireAdmin && clubData.name === 'Mi Club de Padel' && location.pathname !== '/onboarding') {
+  if (requireAdmin && clubData.name === 'Mi Club de Padel' && location.pathname !== '/onboarding' && role !== 'superadmin') {
       return <Navigate to="/onboarding" replace />;
   }
 
@@ -62,7 +67,7 @@ const AppRoutes = () => {
 
   const getHomeRoute = () => {
       if (!user) return <Landing />;
-      // Redirección inteligente basada en rol
+      if (role === 'superadmin') return <Navigate to="/superadmin" replace />;
       if (role === 'admin') return <Navigate to="/dashboard" replace />;
       return <Navigate to="/p/dashboard" replace />;
   };
@@ -81,7 +86,7 @@ const AppRoutes = () => {
         {/* Fullscreen Onboarding (Admin Only) */}
         <Route path="/onboarding" element={<ProtectedRoute requireAdmin><Onboarding /></ProtectedRoute>} />
 
-        {/* PLAYER APP ROUTES (Accessible to Players and Admins who want to preview) */}
+        {/* PLAYER APP ROUTES (Accessible to Players, Admins and SuperAdmins) */}
         <Route path="/p/*" element={
             <ProtectedRoute>
                 <PlayerLayout>
@@ -97,7 +102,16 @@ const AppRoutes = () => {
             </ProtectedRoute>
         } />
 
-        {/* ADMIN ROUTES (Strictly Admin Only) */}
+        {/* SUPER ADMIN ROUTES */}
+        <Route path="/superadmin" element={
+            <Layout>
+                <ProtectedRoute requireSuperAdmin>
+                    <SuperAdmin />
+                </ProtectedRoute>
+            </Layout>
+        } />
+
+        {/* ADMIN ROUTES (Club) */}
         <Route path="/*" element={
             <Layout>
                 <Routes>

@@ -1,18 +1,18 @@
+
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Trophy, Users, ClipboardList, Activity, List, Menu, LogOut, UserCog, History, Settings, HelpCircle, X, Clock, Play, Square } from 'lucide-react';
+import { Trophy, Users, ClipboardList, Activity, List, Menu, LogOut, UserCog, History, Settings, HelpCircle, X, Clock, Play, Square, Shield } from 'lucide-react';
 import { useAuth } from '../store/AuthContext';
 import { useHistory } from '../store/HistoryContext';
-import { useTimer } from '../store/TimerContext'; // New Import
+import { useTimer } from '../store/TimerContext'; 
 import { useTournament } from '../store/TournamentContext';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
+  const { user, signOut, role } = useAuth();
   const { clubData } = useHistory();
-  const { state } = useTournament(); // To check if tournament is active
-  const { timeLeft, isActive, startTimer, pauseTimer, resetTimer } = useTimer(); // Timer logic
+  const { state } = useTournament(); 
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -31,17 +31,16 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       { path: '/help', label: 'Ayuda / FAQ', icon: HelpCircle },
   ];
 
+  // Add SuperAdmin Item if applicable
+  if (role === 'superadmin') {
+      menuItems.unshift({ path: '/superadmin', label: 'Super Admin', icon: Shield });
+  }
+
   const isPublicPage = location.pathname === '/' || location.pathname === '/auth';
 
   const handleLogout = async () => {
     await signOut();
     navigate('/');
-  };
-
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
   if (isPublicPage) {
@@ -88,7 +87,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                             key={item.path} 
                             to={item.path} 
                             onClick={() => setIsMenuOpen(false)}
-                            className="flex items-center gap-3 p-3 rounded-xl text-slate-700 hover:bg-[#EEFF00]/20 hover:text-[#2B2DBF] font-medium transition-colors"
+                            className={`flex items-center gap-3 p-3 rounded-xl font-medium transition-colors ${item.path === '/superadmin' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'text-slate-700 hover:bg-[#EEFF00]/20 hover:text-[#2B2DBF]'}`}
                           >
                               <item.icon size={20} />
                               {item.label}

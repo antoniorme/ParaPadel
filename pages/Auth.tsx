@@ -19,7 +19,6 @@ const AuthPage: React.FC = () => {
   const [showDevTools, setShowDevTools] = useState(false);
 
   useEffect(() => {
-      // Mostrar herramientas de desarrollo si estamos offline o si Supabase está en modo placeholder
       const isPlaceholder = (supabase as any).supabaseUrl === 'https://placeholder.supabase.co';
       if (isOfflineMode || isPlaceholder) {
           setShowDevTools(true);
@@ -37,7 +36,6 @@ const AuthPage: React.FC = () => {
     setLoading(true);
     setError(null);
 
-    // Si estamos en modo placeholder, avisar al usuario
     if ((supabase as any).supabaseUrl === 'https://placeholder.supabase.co') {
         setError("Base de datos no conectada. Usa los botones de 'Modo Desarrollador' abajo para probar la app.");
         setLoading(false);
@@ -57,7 +55,7 @@ const AuthPage: React.FC = () => {
 
       if (result.data.user) {
           const role = await checkUserRole(result.data.user.id, result.data.user.email);
-          if (role === 'admin') {
+          if (role === 'admin' || role === 'superadmin') {
               navigate('/dashboard');
           } else {
               navigate('/p/dashboard');
@@ -74,10 +72,10 @@ const AuthPage: React.FC = () => {
     }
   };
 
-  const handleBypass = (role: 'admin' | 'player') => {
+  const handleBypass = (role: 'admin' | 'player' | 'superadmin') => {
       loginWithDevBypass(role);
-      if (role === 'admin') navigate('/dashboard');
-      else navigate('/p/dashboard');
+      if (role === 'player') navigate('/p/dashboard');
+      else navigate('/dashboard');
   };
 
   return (
@@ -143,7 +141,7 @@ const AuthPage: React.FC = () => {
                 <div className="flex items-center justify-center gap-2 text-slate-400 text-xs font-bold uppercase mb-4">
                     <Code2 size={16}/> Modo Desarrollador (Simulación)
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3 mb-3">
                     <button 
                         onClick={() => handleBypass('admin')}
                         className="py-3 bg-slate-800 text-white rounded-xl font-bold text-xs hover:bg-slate-900 transition-colors shadow-lg active:scale-95"
@@ -157,9 +155,12 @@ const AuthPage: React.FC = () => {
                         Entrar como JUGADOR
                     </button>
                 </div>
-                <p className="text-center text-[10px] text-slate-400 mt-4">
-                    Usa estos botones si no tienes conectada una base de datos real.
-                </p>
+                <button 
+                    onClick={() => handleBypass('superadmin')}
+                    className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold text-xs hover:bg-indigo-700 transition-colors shadow-lg active:scale-95"
+                >
+                    Entrar como SUPER ADMIN
+                </button>
             </div>
         )}
       </div>
