@@ -4,7 +4,7 @@ import { useTournament } from '../store/TournamentContext';
 import { THEME, getFormatColor } from '../utils/theme';
 import { useHistory } from '../store/HistoryContext';
 import { useTimer } from '../store/TimerContext';
-import { Users, PlayCircle, CheckCircle, Clock, Play, Trophy, Smartphone, Link, Check, Settings, Edit, Shuffle, ListOrdered, TrendingUp, X, Check as CheckIcon, AlertTriangle, Lock, ArrowLeft, Calendar, LayoutGrid } from 'lucide-react';
+import { Users, PlayCircle, CheckCircle, Clock, Play, Trophy, Smartphone, Link, Check, Settings, Edit, Shuffle, ListOrdered, TrendingUp, X, Check as CheckIcon, AlertTriangle, Lock, ArrowLeft, Calendar, LayoutGrid, Hourglass } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { TournamentFormat, GenerationMethod, Pair, Player } from '../types';
@@ -155,10 +155,10 @@ const Dashboard: React.FC = () => {
 
   // --- RENDER HELPERS ---
 
-  const StatCard = ({ title, value, subValue, icon: Icon, color, onClick, active }: any) => (
+  const StatCard = ({ title, value, subValue, icon: Icon, color, onClick, active, fullWidth = false }: any) => (
     <div 
       onClick={onClick}
-      className={`p-4 rounded-2xl border transition-all shadow-sm flex flex-col justify-between h-24 relative overflow-hidden ${active ? 'bg-white border-slate-200 hover:border-blue-300 cursor-pointer' : 'bg-slate-50 border-slate-100 text-slate-400'}`}
+      className={`p-4 rounded-2xl border transition-all shadow-sm flex flex-col justify-between h-24 relative overflow-hidden ${fullWidth ? 'col-span-2' : ''} ${active ? 'bg-white border-slate-200 hover:border-blue-300 cursor-pointer' : 'bg-slate-50 border-slate-100 text-slate-400'}`}
     >
       <div className="flex justify-between items-start z-10">
           <div>
@@ -207,8 +207,8 @@ const Dashboard: React.FC = () => {
           </div>
       </div>
 
-      {/* 2. KEY METRICS GRID */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* 2. KEY METRICS GRID (2 Columns for Mobile) */}
+      <div className="grid grid-cols-2 gap-3">
           <StatCard 
             title="Parejas" 
             value={`${totalConfirmed}/${currentLimit}`} 
@@ -221,7 +221,7 @@ const Dashboard: React.FC = () => {
           
           <StatCard 
             title="Estado" 
-            value={isActiveMode ? 'ACTIVO' : 'SETUP'} 
+            value={isActiveMode ? 'EN JUEGO' : 'CONFIGURACIÓN'} 
             icon={isSetupMode ? Settings : PlayCircle} 
             color={isActiveMode ? "text-rose-400" : "text-amber-400"} 
             active={true}
@@ -229,21 +229,23 @@ const Dashboard: React.FC = () => {
 
           {isActiveMode ? (
               <StatCard 
-                title="Ronda" 
-                value={state.currentRound} 
+                title="Ronda Actual" 
+                value={`Ronda ${state.currentRound}`} 
                 icon={Clock} 
                 color="text-emerald-400" 
                 active={true}
+                fullWidth={true}
                 onClick={() => navigate('/active')}
               />
           ) : (
               <StatCard 
-                title="Formato" 
-                value={currentLimit} 
-                subValue="Parejas"
+                title="Formato Seleccionado" 
+                value={`Mini ${currentLimit} Parejas`} 
+                subValue="Sistema de Grupos"
                 icon={LayoutGrid} 
-                color="text-slate-400" 
-                active={false}
+                color="text-indigo-400" 
+                active={true}
+                fullWidth={true}
               />
           )}
       </div>
@@ -383,6 +385,13 @@ const Dashboard: React.FC = () => {
                           <div>
                               <div className="font-bold text-slate-900">Mix (Cremallera)</div>
                               <div className="text-xs text-slate-500">Reparte el nivel en todos los grupos.</div>
+                          </div>
+                      </button>
+                      <button onClick={() => setGenerationMethod('arrival')} className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all ${generationMethod === 'arrival' ? 'border-[#575AF9] bg-indigo-50' : 'border-slate-100'}`}>
+                          <Hourglass size={24} className="text-[#575AF9]"/>
+                          <div>
+                              <div className="font-bold text-slate-900">Orden de Llegada</div>
+                              <div className="text-xs text-slate-500">Estricto orden de inscripción.</div>
                           </div>
                       </button>
                       <button onClick={() => setGenerationMethod('manual')} className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all ${generationMethod === 'manual' ? 'border-[#575AF9] bg-indigo-50' : 'border-slate-100'}`}>

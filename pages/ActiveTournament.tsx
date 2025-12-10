@@ -295,9 +295,9 @@ const ActiveTournament: React.FC = () => {
   // 3. ACTIVE MATCHES STATE
   return (
     <div className="space-y-6 pb-32">
-      {/* Floating Sticky Header (Boxed & Better Spaced) */}
-      <div className="sticky top-20 z-30 pt-4 -mx-1 px-1">
-        <div style={{ backgroundColor: themeColor }} className="rounded-2xl shadow-lg p-4 flex items-center justify-between text-white transition-colors duration-300">
+      
+      {/* ROUND HEADER - Removed Sticky/Overlap Hacks */}
+      <div style={{ backgroundColor: themeColor }} className="rounded-2xl shadow-lg p-4 flex items-center justify-between text-white transition-colors duration-300">
             <div className="flex items-center gap-2">
                 <h2 className="text-xl font-black tracking-tight">Ronda {state.currentRound}</h2>
                 <span className="px-3 py-1 bg-white/20 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm border border-white/10">
@@ -311,7 +311,6 @@ const ActiveTournament: React.FC = () => {
             >
                 <RotateCcw size={20}/>
             </button>
-        </div>
       </div>
       
       <div className="space-y-4">
