@@ -3,17 +3,18 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTournament } from '../../store/TournamentContext';
 import { useHistory } from '../../store/HistoryContext';
+import { useNotifications } from '../../store/NotificationContext'; // IMPORT
 import { THEME } from '../../utils/theme';
-import { Activity, TrendingUp, Award, Calendar, ChevronRight, LogOut, UserCircle } from 'lucide-react';
+import { Activity, TrendingUp, Award, Calendar, ChevronRight, LogOut, UserCircle, Bell } from 'lucide-react';
 import { calculateDisplayRanking } from '../../utils/Elo';
 
 const PlayerDashboard: React.FC = () => {
     const navigate = useNavigate();
     const { state, formatPlayerName } = useTournament();
     const { pastTournaments } = useHistory();
+    const { unreadCount } = useNotifications(); // USE NOTIFICATIONS
 
     // --- IDENTITY SIMULATOR ---
-    // In a real app, this comes from AuthContext. Here we simulate it.
     const [myPlayerId, setMyPlayerId] = useState<string>(() => {
         return localStorage.getItem('padel_sim_player_id') || '';
     });
@@ -32,7 +33,6 @@ const PlayerDashboard: React.FC = () => {
         
         const result = { matches: 0, wins: 0, winRate: 0 };
         
-        // Helper to process a tournament's data
         const processData = (tData: any) => {
             const myPairs = tData.pairs.filter((p: any) => p.player1Id === myPlayerId || p.player2Id === myPlayerId);
             myPairs.forEach((pair: any) => {
@@ -46,9 +46,7 @@ const PlayerDashboard: React.FC = () => {
             });
         };
 
-        // 1. Process History
         pastTournaments.forEach(pt => { if (pt.data) processData(pt.data); });
-        // 2. Process Active Tournament
         if (state.status !== 'setup') processData(state);
 
         result.winRate = result.matches > 0 ? Math.round((result.wins / result.matches) * 100) : 0;
@@ -56,7 +54,6 @@ const PlayerDashboard: React.FC = () => {
 
     }, [currentPlayer, pastTournaments, state]);
 
-    // Handle Logout / Exit
     const handleExit = () => {
         navigate('/dashboard');
     };
@@ -87,7 +84,8 @@ const PlayerDashboard: React.FC = () => {
 
     return (
         <div className="p-6 space-y-8 relative pb-24">
-            {/* Identity Switcher (Dev Tool) */}
+            
+            {/* Identity Switcher */}
             <div className="bg-slate-100 p-2 rounded-lg flex items-center justify-between text-xs mb-2">
                 <span className="font-bold text-slate-500 uppercase px-2">Viendo como:</span>
                 <select 
@@ -118,6 +116,25 @@ const PlayerDashboard: React.FC = () => {
                 </div>
             </div>
 
+            {/* NOTIFICATION BANNER (If Unread) */}
+            {unreadCount > 0 && (
+                <div 
+                    onClick={() => navigate('/notifications')}
+                    className="bg-white border-l-4 border-rose-500 rounded-xl p-4 shadow-sm flex items-center justify-between animate-fade-in cursor-pointer"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="bg-rose-100 p-2 rounded-full text-rose-600">
+                            <Bell size={20} />
+                        </div>
+                        <div>
+                            <div className="font-bold text-slate-800 text-sm">Tienes novedades</div>
+                            <div className="text-xs text-slate-500">{unreadCount} notificaciones sin leer</div>
+                        </div>
+                    </div>
+                    <ChevronRight size={20} className="text-slate-300"/>
+                </div>
+            )}
+
             {/* ELO Card */}
             <div className="relative overflow-hidden rounded-3xl p-6 text-white shadow-xl bg-gradient-to-br from-[#2B2DBF] to-[#575AF9]">
                 <div className="absolute top-0 right-0 p-6 opacity-20">
@@ -136,7 +153,6 @@ const PlayerDashboard: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Mini Stats Row */}
                 <div className="relative z-10 mt-8 grid grid-cols-2 gap-4 pt-6 border-t border-white/10">
                     <div>
                         <div className="text-2xl font-black">{stats?.winRate}%</div>
@@ -171,7 +187,7 @@ const PlayerDashboard: React.FC = () => {
                 </button>
             </div>
 
-            {/* Recent Activity Placeholder */}
+            {/* Recent Activity */}
             <div>
                 <h3 className="text-lg font-bold text-slate-900 mb-4">Última Actividad</h3>
                 {stats && stats.matches > 0 ? (

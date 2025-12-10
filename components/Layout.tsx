@@ -1,11 +1,11 @@
 
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Trophy, Users, ClipboardList, Activity, List, Menu, LogOut, UserCog, History, Settings, HelpCircle, X, Clock, Play, Square, Shield } from 'lucide-react';
+import { Trophy, Users, ClipboardList, Activity, List, Menu, LogOut, UserCog, History, Settings, HelpCircle, X, Bell, Shield } from 'lucide-react';
 import { useAuth } from '../store/AuthContext';
 import { useHistory } from '../store/HistoryContext';
-import { useTimer } from '../store/TimerContext'; 
 import { useTournament } from '../store/TournamentContext';
+import { useNotifications } from '../store/NotificationContext';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
@@ -13,6 +13,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const { user, signOut, role } = useAuth();
   const { clubData } = useHistory();
   const { state } = useTournament(); 
+  const { unreadCount } = useNotifications();
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -31,7 +32,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       { path: '/help', label: 'Ayuda / FAQ', icon: HelpCircle },
   ];
 
-  // Add SuperAdmin Item if applicable
   if (role === 'superadmin') {
       menuItems.unshift({ path: '/superadmin', label: 'Super Admin', icon: Shield });
   }
@@ -65,9 +65,23 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                     {clubData.name || 'Minis de Padel'}
                 </h1>
             </div>
-            <button onClick={() => setIsMenuOpen(true)} className="text-slate-700 hover:text-[#575AF9] p-2 rounded-full hover:bg-slate-100 transition-colors">
-              <Menu size={28} />
-            </button>
+            
+            <div className="flex items-center gap-2">
+                <button 
+                    onClick={() => navigate('/notifications')} 
+                    className="relative p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-full transition-colors"
+                >
+                    <Bell size={24} />
+                    {unreadCount > 0 && (
+                        <span className="absolute top-1 right-1 w-4 h-4 bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full border-2 border-white">
+                            {unreadCount}
+                        </span>
+                    )}
+                </button>
+                <button onClick={() => setIsMenuOpen(true)} className="text-slate-700 hover:text-[#575AF9] p-2 rounded-full hover:bg-slate-100 transition-colors">
+                  <Menu size={28} />
+                </button>
+            </div>
           </header>
       </div>
 

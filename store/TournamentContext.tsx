@@ -4,11 +4,11 @@ import { TournamentState, TournamentAction, Player, Pair, Match, Group, Tourname
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useHistory } from './HistoryContext'; 
+import { useNotifications } from './NotificationContext'; // IMPORT NOTIFICATIONS
 import * as Logic from '../utils/TournamentLogic';
 import { THEME } from '../utils/theme'; 
 
 const STORAGE_KEY = 'padelpro_local_db_v3';
-// NEW: Key to store completed tournaments in local mode to avoid overwriting them
 const LOCAL_HISTORY_KEY = 'padelpro_local_history'; 
 
 export const TOURNAMENT_CATEGORIES = ['Iniciación', '5ª CAT', '4ª CAT', '3ª CAT', '2ª CAT', '1ª CAT'];
@@ -61,7 +61,6 @@ const reducer = (state: TournamentState, action: TournamentAction): TournamentSt
         case 'UPDATE_SETTINGS': return { ...state, ...action.payload };
         case 'SET_LOADING': return { ...state, loading: action.payload };
         case 'RESET_LOCAL': return { ...initialState, players: state.players }; // Keep players
-        // Optimized optimistic updates can remain here, but DB/Local sync is handled in async functions
         case 'TOGGLE_BALLS': return { ...state, courts: state.courts.map(c => c.id === action.payload ? { ...c, ballsGiven: !c.ballsGiven } : c) };
         case 'TOGGLE_WATER': return { ...state, pairs: state.pairs.map(p => p.id === action.payload ? { ...p, waterReceived: !p.waterReceived } : p) };
         case 'TOGGLE_PAID': return { ...state, pairs: state.pairs.map(p => { if (p.player1Id === action.payload) return { ...p, paidP1: !p.paidP1 }; if (p.player2Id === action.payload) return { ...p, paidP2: !p.paidP2 }; return p; }) };
@@ -74,6 +73,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const [state, dispatch] = useReducer(reducer, initialState);
     const { user, isOfflineMode } = useAuth();
     const { clubData } = useHistory(); 
+    const { addNotification } = useNotifications(); // USE NOTIFICATIONS
 
     const formatPlayerName = useCallback((p?: Player) => {
         if (!p) return 'Jugador';
@@ -92,7 +92,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             const localData = localStorage.getItem(STORAGE_KEY);
             if (localData) { 
                 const parsed = JSON.parse(localData);
-                // Merge courts state if available, else default
                 const savedCourts = parsed.courts || courts;
                 dispatch({ type: 'SET_STATE', payload: { ...parsed, courts: savedCourts } }); 
             } 
@@ -107,7 +106,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             const activeTournament = tournaments?.[0];
 
             if (!activeTournament) {
-                // If no active tournament, we are in 'finished' state waiting for a new one
                 dispatch({ type: 'SET_STATE', payload: { id: undefined, status: 'finished', players: players || [], pairs: [], matches: [], groups: [], courts } });
             } else {
                 const { data: pairs } = await supabase.from('tournament_pairs').select('*').eq('tournament_id', activeTournament.id).order('created_at', { ascending: true });
@@ -156,7 +154,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                      mappedPairs = [...completeConfirmedWithReserves, ...others.map(p => ({...p, isReserve: true}))];
                 }
 
-                // Check localStorage for ball status as it is ephemeral in online mode
                 const tempKey = `padelpro_courts_${activeTournament.id}`;
                 const savedCourts = localStorage.getItem(tempKey);
                 const finalCourts = savedCourts ? JSON.parse(savedCourts) : courts;
@@ -165,7 +162,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                     id: activeTournament.id, status: activeTournament.status as any, currentRound: activeTournament.current_round || 0,
                     players: players || [], pairs: mappedPairs, matches: mappedMatches, groups: groups, format, 
                     courts: finalCourts,
-                    // Load Metadata
                     title: activeTournament.title || 'Mini Torneo',
                     price: activeTournament.price || 15,
                     prizes: activeTournament.prizes || [],
@@ -200,7 +196,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     // --- NEW PERSISTENCE ACTIONS ---
 
     const togglePaymentDB = async (playerId: string, pairId: string, isP1: boolean) => {
-        // Optimistic Update
         dispatch({ type: 'TOGGLE_PAID', payload: playerId });
         
         const pair = state.pairs.find(p => p.id === pairId);
@@ -250,9 +245,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             dispatch({ type: 'SET_STATE', payload: newState });
             saveLocal(newState);
         } else {
-            // In online mode, we update the state AND save to localStorage as a fallback
-            // because we don't have a 'courts' table in the provided schema.
-            // This ensures persistence on refresh.
             dispatch({ type: 'SET_STATE', payload: { ...state, courts: updatedCourts } });
             
             if (state.id) {
@@ -356,7 +348,13 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             const newPair: Pair = { id: `pair-${Date.now()}`, player1Id: p1, player2Id: p2, name: 'Pareja', waterReceived: false, paidP1: false, paidP2: false, stats: {played:0, won:0, gameDiff:0}, isReserve: false, status }; 
             let limit = 16; if(state.format === '10_mini') limit = 10; if(state.format === '12_mini') limit = 12; if(state.format === '8_mini') limit = 8; 
             newPair.isReserve = p2 !== null && state.pairs.filter(p=>p.status==='confirmed' && p.player2Id).length >= limit; 
-            const newState = { ...state, pairs: [...state.pairs, newPair] }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return; 
+            const newState = { ...state, pairs: [...state.pairs, newPair] }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); 
+            // NOTIFY IF PENDING INVITE
+            if (p2 && status === 'pending') {
+                const inviter = state.players.find(p => p.id === p1)?.name || 'Un jugador';
+                addNotification(p2, 'invite', 'Invitación a Torneo', `${inviter} te ha invitado a formar pareja.`, '/p/tournaments');
+            }
+            return; 
         }
         
         let tournamentId = state.id; 
@@ -369,6 +367,13 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             }
         }
         await supabase.from('tournament_pairs').insert([{ tournament_id: tournamentId, player1_id: p1, player2_id: p2, status }]); 
+        
+        // NOTIFY
+        if (p2 && status === 'pending') {
+            const inviter = state.players.find(p => p.id === p1)?.name || 'Un jugador';
+            addNotification(p2, 'invite', 'Invitación a Torneo', `${inviter} te ha invitado a formar pareja.`, '/p/tournaments');
+        }
+
         if(user) await loadData();
     };
     
@@ -379,6 +384,8 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             const newState = { ...state, pairs: newPairs };
             dispatch({ type: 'SET_STATE', payload: newState });
             saveLocal(newState);
+            // NOTIFY
+            addNotification(partnerId, 'system', 'Pareja Asignada', 'Has sido emparejado en el torneo.', '/p/tournaments');
             return;
         }
         await supabase.from('tournament_pairs').update({ player2_id: partnerId }).eq('id', pairId);
@@ -391,8 +398,16 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const respondToInviteDB = async (pairId: string, action: 'accept' | 'reject') => {
         if (isOfflineMode) {
             let newPairs = [...state.pairs];
-            if (action === 'accept') { newPairs = newPairs.map(p => p.id === pairId ? { ...p, status: 'confirmed' } : p); } 
-            else { newPairs = newPairs.map(p => p.id === pairId ? { ...p, status: 'rejected' } : p); }
+            const pair = newPairs.find(p => p.id === pairId);
+            if (action === 'accept') { 
+                newPairs = newPairs.map(p => p.id === pairId ? { ...p, status: 'confirmed' } : p);
+                // NOTIFY INVITER
+                if (pair) addNotification(pair.player1Id, 'system', 'Invitación Aceptada', 'Tu compañero ha aceptado la invitación.', '/p/tournaments');
+            } 
+            else { 
+                newPairs = newPairs.map(p => p.id === pairId ? { ...p, status: 'rejected' } : p); 
+                if (pair) addNotification(pair.player1Id, 'system', 'Invitación Rechazada', 'Tu compañero ha rechazado la invitación.', '/p/tournaments');
+            }
             const newState = { ...state, pairs: newPairs }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return;
         }
         const newStatus = action === 'accept' ? 'confirmed' : 'rejected';
@@ -402,7 +417,47 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     const updatePairDB = async (pairId: string, p1: string, p2: string) => { if (isOfflineMode) { const newState = { ...state, pairs: state.pairs.map(p => p.id === pairId ? { ...p, player1Id: p1, player2Id: p2 } : p) }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return; } await supabase.from('tournament_pairs').update({ player1_id: p1, player2_id: p2 }).eq('id', pairId); await loadData(); };
     const deletePairDB = async (pairId: string) => { if (isOfflineMode) { const remaining = state.pairs.filter(p => p.id !== pairId); const newState = { ...state, pairs: remaining }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return; } await supabase.from('tournament_pairs').delete().eq('id', pairId); await loadData(); };
-    const updateScoreDB = async (matchId: string, sA: number, sB: number) => { if (isOfflineMode) { const newMatches = state.matches.map(m => m.id === matchId ? { ...m, scoreA: sA, scoreB: sB, isFinished: true } : m); const newPairs = Logic.recalculateStats(state.pairs, newMatches); const newState = { ...state, matches: newMatches, pairs: newPairs }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return; } await supabase.from('matches').update({ score_a: sA, score_b: sB, is_finished: true }).eq('id', matchId); await loadData(); };
+    
+    const updateScoreDB = async (matchId: string, sA: number, sB: number) => { 
+        const match = state.matches.find(m => m.id === matchId);
+        
+        if (isOfflineMode) { 
+            const newMatches = state.matches.map(m => m.id === matchId ? { ...m, scoreA: sA, scoreB: sB, isFinished: true } : m); 
+            const newPairs = Logic.recalculateStats(state.pairs, newMatches); 
+            const newState = { ...state, matches: newMatches, pairs: newPairs }; 
+            dispatch({ type: 'SET_STATE', payload: newState }); 
+            saveLocal(newState); 
+            
+            // NOTIFY PLAYERS OF RESULT
+            if (match) {
+                const title = "Partido Finalizado";
+                const msg = `Resultado: ${sA} - ${sB}. Revisa tu nuevo ELO.`;
+                [match.pairAId, match.pairBId].forEach(pairId => {
+                    const pair = state.pairs.find(p => p.id === pairId);
+                    if (pair) {
+                        addNotification(pair.player1Id, 'result', title, msg, '/p/profile');
+                        if (pair.player2Id) addNotification(pair.player2Id, 'result', title, msg, '/p/profile');
+                    }
+                });
+            }
+            return; 
+        } 
+        
+        await supabase.from('matches').update({ score_a: sA, score_b: sB, is_finished: true }).eq('id', matchId); 
+        // NOTIFY
+        if (match) {
+            const title = "Partido Finalizado";
+            const msg = `Resultado: ${sA} - ${sB}. Revisa tu nuevo ELO.`;
+            [match.pairAId, match.pairBId].forEach(pairId => {
+                const pair = state.pairs.find(p => p.id === pairId);
+                if (pair) {
+                    addNotification(pair.player1Id, 'result', title, msg, '/p/profile');
+                    if (pair.player2Id) addNotification(pair.player2Id, 'result', title, msg, '/p/profile');
+                }
+            });
+        }
+        await loadData(); 
+    };
 
     const substitutePairDB = async (activePairId: string, reservePairId: string) => {
         const activePair = state.pairs.find(p => p.id === activePairId);
@@ -451,7 +506,16 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
         if (isOfflineMode) {
             const newState: TournamentState = { ...state, status: 'active', currentRound: 1, groups, matches: matches as Match[], pairs: reindexedPairs };
-            dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return;
+            dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); 
+            // NOTIFY ALL PLAYERS
+            activeIds.forEach(pairId => {
+                const pair = state.pairs.find(p => p.id === pairId);
+                if (pair) {
+                    addNotification(pair.player1Id, 'match_start', 'Torneo Iniciado', 'El torneo ha comenzado. Revisa tu pista.', '/p/tournaments');
+                    if (pair.player2Id) addNotification(pair.player2Id, 'match_start', 'Torneo Iniciado', 'El torneo ha comenzado. Revisa tu pista.', '/p/tournaments');
+                }
+            });
+            return;
         }
         if (!state.id) throw new Error("ID de torneo perdido.");
         await supabase.from('matches').delete().eq('tournament_id', state.id);
@@ -460,6 +524,16 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         const matchesDB = matches.map(m => ({ tournament_id: state.id, round: m.round, phase: m.phase, bracket: m.bracket, court_id: m.courtId, pair_a_id: m.pairAId, pair_b_id: m.pairBId, score_a: m.scoreA, score_b: m.scoreB, is_finished: m.isFinished }));
         const { error } = await supabase.from('matches').insert(matchesDB);
         if (error) { if (error.message.includes('phase')) { const matchesNoPhase = matchesDB.map(({ phase, ...rest }) => rest); const { error: retryError } = await supabase.from('matches').insert(matchesNoPhase); if (retryError) throw retryError; } else { throw error; } }
+        
+        // NOTIFY
+        activeIds.forEach(pairId => {
+            const pair = state.pairs.find(p => p.id === pairId);
+            if (pair) {
+                addNotification(pair.player1Id, 'match_start', 'Torneo Iniciado', 'El torneo ha comenzado. Revisa tu pista.', '/p/tournaments');
+                if (pair.player2Id) addNotification(pair.player2Id, 'match_start', 'Torneo Iniciado', 'El torneo ha comenzado. Revisa tu pista.', '/p/tournaments');
+            }
+        });
+
         await loadData();
     };
 

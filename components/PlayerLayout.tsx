@@ -1,11 +1,14 @@
 
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Home, Trophy, User, Compass, Dribbble } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Home, Trophy, User, Compass, Dribbble, Bell } from 'lucide-react';
 import { THEME } from '../utils/theme';
+import { useNotifications } from '../store/NotificationContext';
 
 export const PlayerLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { unreadCount } = useNotifications();
 
   const navItems = [
     { path: '/p/dashboard', label: 'Inicio', icon: Home },
@@ -16,6 +19,25 @@ export const PlayerLayout: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
+      
+      {/* Player App Header (Dynamic based on route, simple back button logic could be added) */}
+      <div className="px-6 py-4 flex justify-between items-center bg-white sticky top-0 z-10 shadow-sm sm:hidden">
+          <div className="font-black text-xl italic tracking-tighter text-slate-900">
+              Padel<span style={{color: THEME.cta}}>Pro</span>
+          </div>
+          <button 
+            onClick={() => navigate('/notifications')} 
+            className="relative p-2 text-slate-500 hover:bg-slate-50 rounded-full transition-colors"
+          >
+              <Bell size={24} />
+              {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 w-4 h-4 bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full border-2 border-white">
+                      {unreadCount}
+                  </span>
+              )}
+          </button>
+      </div>
+
       {/* Main Content Area */}
       <main className="flex-1 pb-24 overflow-y-auto">
         <div className="max-w-md mx-auto min-h-screen bg-white shadow-xl sm:my-4 sm:rounded-3xl sm:overflow-hidden relative">

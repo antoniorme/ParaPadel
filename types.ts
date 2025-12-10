@@ -127,6 +127,28 @@ export interface PublicTournament {
     prizes?: string[]; // NEW: List of prizes
 }
 
+// --- NOTIFICATIONS ---
+export type NotificationType = 'invite' | 'match_start' | 'result' | 'system' | 'alert';
+
+export interface AppNotification {
+    id: string;
+    userId: string; // Recipient ID (Player ID or User ID)
+    type: NotificationType;
+    title: string;
+    message: string;
+    link?: string; // Internal route to navigate to
+    read: boolean;
+    createdAt: string;
+    meta?: any; // Extra data (e.g., matchId, tournamentId)
+}
+
+export interface NotificationSettings {
+    invites: boolean;
+    matchStart: boolean;
+    results: boolean;
+    system: boolean;
+}
+
 export type TournamentAction =
   | { type: 'SET_STATE'; payload: Partial<TournamentState> }
   | { type: 'SET_LOADING'; payload: boolean }

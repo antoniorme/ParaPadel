@@ -5,6 +5,7 @@ import { TournamentProvider } from './store/TournamentContext';
 import { AuthProvider, useAuth } from './store/AuthContext';
 import { HistoryProvider, useHistory } from './store/HistoryContext';
 import { TimerProvider } from './store/TimerContext';
+import { NotificationProvider } from './store/NotificationContext'; // NEW
 import { Layout } from './components/Layout';
 import { PlayerLayout } from './components/PlayerLayout';
 
@@ -20,17 +21,19 @@ import PlayerManager from './pages/PlayerManager';
 import History from './pages/History';
 import ClubProfile from './pages/ClubProfile';
 import Help from './pages/Help';
-import AdminPlayerProfile from './pages/PlayerProfile'; // Renamed to avoid conflict
+import AdminPlayerProfile from './pages/PlayerProfile'; 
 import Onboarding from './pages/Onboarding'; 
 import JoinTournament from './pages/public/JoinTournament';
 import TournamentSetup from './pages/TournamentSetup';
-import SuperAdmin from './pages/SuperAdmin'; // NEW
+import SuperAdmin from './pages/SuperAdmin'; 
+import Notifications from './pages/Notifications'; // NEW
+import NotificationSettings from './pages/NotificationSettings'; // NEW
 
 // Player Pages
 import PlayerDashboard from './pages/player/PlayerDashboard';
 import PlayerTournaments from './pages/player/PlayerTournaments';
 import TournamentBrowser from './pages/player/TournamentBrowser';
-import PlayerAppProfile from './pages/player/PlayerProfile'; // NEW
+import PlayerAppProfile from './pages/player/PlayerProfile';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = false }: { children?: React.ReactNode, requireAdmin?: boolean, requireSuperAdmin?: boolean }) => {
@@ -87,6 +90,10 @@ const AppRoutes = () => {
         {/* Fullscreen Onboarding (Admin Only) */}
         <Route path="/onboarding" element={<ProtectedRoute requireAdmin><Onboarding /></ProtectedRoute>} />
 
+        {/* SHARED ROUTES (Notifications) - Accessible by both layouts basically */}
+        <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+        <Route path="/notifications/settings" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
+
         {/* PLAYER APP ROUTES (Accessible to Players, Admins and SuperAdmins) */}
         <Route path="/p/*" element={
             <ProtectedRoute>
@@ -141,13 +148,15 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <HistoryProvider>
-        <TournamentProvider>
-            <TimerProvider>
-                <HashRouter>
-                <AppRoutes />
-                </HashRouter>
-            </TimerProvider>
-        </TournamentProvider>
+        <NotificationProvider>
+            <TournamentProvider>
+                <TimerProvider>
+                    <HashRouter>
+                    <AppRoutes />
+                    </HashRouter>
+                </TimerProvider>
+            </TournamentProvider>
+        </NotificationProvider>
       </HistoryProvider>
     </AuthProvider>
   );
