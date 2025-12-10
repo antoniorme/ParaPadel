@@ -1,15 +1,18 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTournament } from '../store/TournamentContext';
-import { THEME } from '../utils/theme';
+import { THEME, getFormatColor } from '../utils/theme';
 import { useHistory } from '../store/HistoryContext';
 import { useTimer } from '../store/TimerContext';
-import { Users, PlayCircle, CheckCircle, Clock, Archive, Play, Trophy, Smartphone, Link, Check, Plus, Settings, Edit, Shuffle, ListOrdered, TrendingUp, X, Check as CheckIcon, AlertTriangle } from 'lucide-react';
+import { Users, PlayCircle, CheckCircle, Clock, Play, Trophy, Smartphone, Link, Check, Settings, Edit, Shuffle, ListOrdered, TrendingUp, X, Check as CheckIcon, AlertTriangle, Lock, ArrowLeft, Calendar, LayoutGrid } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { TournamentFormat, GenerationMethod, Pair, Player } from '../types';
+import ClubDashboard from './ClubDashboard'; // Fallback view
 
-// MANUAL WIZARD COMPONENT (MOVED HERE)
+// --- COMPONENTS ---
+
+// 1. MANUAL WIZARD (Kept same logic, just minor style tweaks if needed)
 interface WizardProps {
     pairs: Pair[];
     players: Player[];
@@ -75,66 +78,52 @@ const ManualGroupingWizard: React.FC<WizardProps> = ({ pairs, players, onComplet
     );
 };
 
+// 2. MAIN DASHBOARD
 const Dashboard: React.FC = () => {
-  const { state, startTournamentDB, setTournamentFormat, formatPlayerName } = useTournament();
+  const { state, startTournamentDB, setTournamentFormat, formatPlayerName, closeTournament } = useTournament();
   const { archiveTournament } = useHistory();
   const { resetTimer, startTimer } = useTimer();
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // MODAL STATES
-  const [modalConfig, setModalConfig] = useState<{
-      type: 'archive' | null;
-      isOpen: boolean;
-  }>({ type: null, isOpen: false });
-
+  // LOCAL UI STATE
   const [showGenerationModal, setShowGenerationModal] = useState(false);
   const [generationMethod, setGenerationMethod] = useState<GenerationMethod>('elo-balanced');
-  const [selectedFormat, setSelectedFormat] = useState<TournamentFormat>('16_mini');
   const [showManualWizard, setShowManualWizard] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
   const [linkCopied, setLinkCopied] = useState(false);
 
-  // Calculate stats based on computed isReserve flag
-  const activePairsCount = state.pairs.filter(p => !p.isReserve && p.player2Id).length;
-  const reservePairsCount = state.pairs.filter(p => p.isReserve && p.player2Id).length;
-  
-  // Format Label (e.g., "12", "16")
-  const formatLabel = state.format ? state.format.replace('_mini', '') : '16';
-
-  const StatCard = ({ title, value, subValue, icon: Icon, color, onClick }: any) => (
-    <div 
-      onClick={onClick}
-      className="bg-white p-5 rounded-2xl border border-slate-200 cursor-pointer hover:border-blue-300 transition-all hover:shadow-md shadow-sm h-full flex flex-col justify-between group"
-    >
-      <div className="flex items-start justify-between mb-3">
-        <div className={`p-2.5 rounded-xl ${color.replace('text-', 'bg-').replace('400', '50')} ${color.replace('400', '600')}`}>
-          <Icon size={24} />
-        </div>
-        {subValue && (
-            <span className="text-[10px] font-black bg-slate-100 px-2 py-1 rounded-full text-slate-500 border border-slate-200 whitespace-nowrap">
-                {subValue}
-            </span>
-        )}
-      </div>
-      <div>
-          <div className="text-2xl font-black text-slate-800 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis">{value}</div>
-          <h3 className="text-slate-400 font-bold uppercase text-[10px] tracking-wider mt-1">{title}</h3>
-      </div>
-    </div>
-  );
-
-  const performAction = () => {
-      if (modalConfig.type === 'archive') {
-          archiveTournament(state);
-      }
-      setModalConfig({ type: null, isOpen: false });
-  };
-  
-  const openModal = (type: 'archive') => {
-      setModalConfig({ type, isOpen: true });
+  // ROUTING CHECK
+  if (!state.id || state.status === 'finished') {
+      return <ClubDashboard />;
   }
+
+  // --- CALCULATIONS ---
+  const isSetupMode = state.status === 'setup';
+  const isActiveMode = state.status === 'active';
+  
+  // Format Logic
+  const limitMap: Record<TournamentFormat, number> = { '16_mini': 16, '12_mini': 12, '10_mini': 10, '8_mini': 8 };
+  const currentLimit = limitMap[state.format] || 16;
+  
+  // Counts
+  const confirmedPairs = state.pairs.filter(p => !p.isReserve && p.player2Id && p.status === 'confirmed');
+  const totalConfirmed = confirmedPairs.length;
+  const reservePairsCount = state.pairs.filter(p => p.isReserve && p.player2Id).length;
+  const canStart = totalConfirmed >= currentLimit;
+  const missingPairs = Math.max(0, currentLimit - totalConfirmed);
+
+  // Format Date
+  const dateObj = new Date(state.startDate || Date.now());
+  const dateStr = dateObj.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'long' });
+  const timeStr = dateObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+  // --- HANDLERS ---
+
+  const handleBackToClub = () => {
+      closeTournament();
+      navigate('/dashboard');
+  };
 
   const handleCopyLink = () => {
       if (!user) return;
@@ -144,374 +133,297 @@ const Dashboard: React.FC = () => {
       setTimeout(() => setLinkCopied(false), 2000);
   };
 
-  const ActivityIcon = (status: string) => {
-    switch(status) {
-      case 'active': return PlayCircle;
-      case 'finished': return CheckCircle;
-      default: return Clock;
-    }
-  }
-
-  const getRoundLabel = (r: number) => {
-      if (r === 0) return '-';
-      if (r <= 4) return r;
-      if (r === 5) return 'QF';
-      if (r === 6) return 'SF';
-      if (r >= 7) return 'Final';
-      return r;
-  };
-
-  // GENERATION HANDLERS
-  const handleOpenGeneration = () => {
-      setSelectedFormat(state.format);
-      setShowGenerationModal(true);
-  }
-
-  const handleFormatChange = (fmt: TournamentFormat) => {
-      setSelectedFormat(fmt);
-      setTournamentFormat(fmt);
-  };
-
   const handleStartTournament = async () => {
-      if (generationMethod === 'manual') { 
-          setShowManualWizard(true); 
-          // Do not close generation modal yet, wizard overlays it
-          return; 
-      }
+      if (generationMethod === 'manual') { setShowManualWizard(true); return; }
       try { 
           await startTournamentDB(generationMethod); 
-          resetTimer(); 
-          startTimer();
+          resetTimer(); startTimer();
           setShowGenerationModal(false);
           navigate('/active');
-      } catch (e: any) { 
-          setErrorMessage(e.message || "Error desconocido al iniciar torneo."); 
-      }
+      } catch (e: any) { setErrorMessage(e.message || "Error al iniciar."); }
   };
 
   const handleManualWizardComplete = async (orderedPairs: Pair[]) => {
       setShowManualWizard(false);
       try { 
           await startTournamentDB('manual', orderedPairs); 
-          resetTimer(); 
-          startTimer();
+          resetTimer(); startTimer();
           setShowGenerationModal(false);
           navigate('/active');
-      } catch (e: any) { 
-          setErrorMessage(e.message || "Error al iniciar el torneo manual."); 
-      }
+      } catch (e: any) { setErrorMessage(e.message || "Error manual."); }
   };
 
-  const isSetupMode = state.status === 'setup';
-  const isActiveMode = state.status === 'active';
-  const isFinishedMode = state.status === 'finished';
+  // --- RENDER HELPERS ---
 
-  // Check start eligibility
-  let limit = 16; 
-  if (selectedFormat === '10_mini') limit = 10; 
-  if (selectedFormat === '12_mini') limit = 12; 
-  if (selectedFormat === '8_mini') limit = 8;
-  const totalPairs = state.pairs.filter(p => p.player2Id).length;
-  const canStart = totalPairs >= limit;
+  const StatCard = ({ title, value, subValue, icon: Icon, color, onClick, active }: any) => (
+    <div 
+      onClick={onClick}
+      className={`p-4 rounded-2xl border transition-all shadow-sm flex flex-col justify-between h-24 relative overflow-hidden ${active ? 'bg-white border-slate-200 hover:border-blue-300 cursor-pointer' : 'bg-slate-50 border-slate-100 text-slate-400'}`}
+    >
+      <div className="flex justify-between items-start z-10">
+          <div>
+              <h3 className="text-[10px] font-bold uppercase tracking-wider opacity-70">{title}</h3>
+              <div className={`text-2xl font-black tracking-tight mt-1 ${active ? 'text-slate-800' : 'text-slate-400'}`}>{value}</div>
+          </div>
+          <div className={`p-2 rounded-xl ${active ? color.replace('text-', 'bg-').replace('400', '50') + ' ' + color.replace('400', '600') : 'bg-slate-100 text-slate-300'}`}>
+            <Icon size={20} />
+          </div>
+      </div>
+      {subValue && active && (
+          <div className="text-[10px] font-bold text-slate-500 mt-auto z-10">{subValue}</div>
+      )}
+    </div>
+  );
 
   return (
-    <div className="space-y-6 pb-10">
-      {/* Header with Format Badge */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-slate-900">Panel de Control</h2>
-        <div className="flex items-center gap-2">
-            {!isFinishedMode && (
-                <span className="text-[10px] font-black px-3 py-1 bg-slate-800 text-white rounded-lg tracking-wider border border-slate-800 shadow-sm">
-                    {state.title || 'MINI TORNEO'}
-                </span>
-            )}
-        </div>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard 
-          title="Jugadores" 
-          value={state.players.length} 
-          icon={Users} 
-          color="text-blue-400" 
-          onClick={() => navigate('/players')} 
-        />
-        <StatCard 
-          title="Parejas" 
-          value={activePairsCount}
-          subValue={reservePairsCount > 0 ? `+${reservePairsCount} Res.` : null}
-          icon={Trophy} 
-          color={activePairsCount > 0 ? "text-emerald-400" : "text-slate-400"}
-          onClick={() => navigate('/registration')}
-        />
-        <StatCard 
-          title="Estado" 
-          value={isActiveMode ? 'EN JUEGO' : isSetupMode ? 'INSCRIPCIÓN' : 'SIN TORNEO'} 
-          icon={ActivityIcon(state.status)} 
-          color={isActiveMode ? "text-rose-400" : isFinishedMode ? "text-slate-400" : "text-orange-400"} 
-          onClick={() => navigate('/active')}
-        />
-        <StatCard 
-          title="Ronda Actual" 
-          value={getRoundLabel(state.currentRound)} 
-          icon={Clock} 
-          color="text-pink-400" 
-          onClick={() => navigate('/active')}
-        />
-      </div>
+    <div className="pb-10 space-y-6">
       
-      {/* Main Actions Area */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-6">Acciones Principales</h3>
-        
-        <div className="grid grid-cols-1 gap-4">
-          {/* 1. NO TOURNAMENT -> CREATE */}
-          {isFinishedMode && (
-             <button 
-             onClick={() => navigate('/setup')}
-             style={{ backgroundColor: THEME.cta }}
-             className="w-full py-6 text-white rounded-xl font-bold transition-all shadow-md text-lg flex items-center justify-center gap-3 active:scale-[0.98] hover:opacity-90 animate-fade-in"
-           >
-             <div className="bg-white/20 p-2 rounded-full"><Plus size={24} strokeWidth={3}/></div>
-             CREAR NUEVO TORNEO
-           </button>
-          )}
+      {/* 1. TOP NAVIGATION & HEADER */}
+      <div>
+          <button 
+            onClick={handleBackToClub}
+            className="flex items-center gap-2 text-slate-500 font-bold text-sm hover:text-slate-800 transition-colors mb-4 px-1"
+          >
+              <ArrowLeft size={18}/> Volver al Club
+          </button>
 
-          {/* 2. SETUP MODE -> GENERATE & START */}
-          {isSetupMode && (
-             <div className="animate-fade-in">
-                  <button 
-                    onClick={handleOpenGeneration}
-                    style={{ backgroundColor: THEME.cta }}
-                    className="w-full py-6 text-white rounded-xl font-bold transition-all shadow-md hover:opacity-90 flex flex-col items-center justify-center gap-2 mb-4"
-                  >
-                     <div className="bg-white/20 p-3 rounded-full"><Play size={32} fill="currentColor"/></div>
-                     <span className="text-lg">GENERAR CUADROS Y EMPEZAR</span>
-                  </button>
-                  
-                  <div className="grid grid-cols-1 gap-4">
-                      <button 
-                        onClick={() => navigate('/registration')}
-                        className="w-full py-4 bg-white border-2 border-indigo-100 hover:border-indigo-500 text-indigo-700 rounded-xl font-bold transition-all flex items-center justify-center gap-2 group"
-                      >
-                        <Users size={20}/> Gestionar Inscripciones
-                      </button>
-                  </div>
-             </div>
-          )}
-
-           {/* 3. ACTIVE MODE -> GO LIVE */}
-           {isActiveMode && (
-             <button 
-             onClick={() => navigate('/active')}
-             className="w-full py-6 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold transition-all animate-pulse shadow-md shadow-rose-200 text-xl flex items-center justify-center gap-3 active:scale-[0.98]"
-           >
-             <div className="bg-white/20 p-2 rounded-full"><PlayCircle size={28}/></div>
-             IR AL TORNEO EN VIVO
-           </button>
-          )}
-
-          {/* Secondary Actions */}
-          {!isFinishedMode && (
-              <div className="grid grid-cols-2 gap-4 mt-2">
-                   <button 
-                    onClick={() => navigate('/setup')}
-                    className="w-full py-4 bg-white border-2 border-slate-100 hover:border-blue-200 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-xl font-bold transition-all text-sm flex flex-col items-center justify-center gap-2"
-                  >
-                    <Edit size={24} className="opacity-50"/>
-                    Editar Info
-                  </button>
-                  <button 
-                    onClick={() => navigate('/checkin')}
-                    className="w-full py-4 bg-white border-2 border-slate-100 hover:border-emerald-200 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-xl font-bold transition-all text-sm flex flex-col items-center justify-center gap-2"
-                  >
-                    <Clock size={24} className="opacity-50"/>
-                    Control y Pagos
-                  </button>
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex justify-between items-center relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                  <Trophy size={120} />
               </div>
-          )}
-
-          {/* Copy Link Button - Always useful if active */}
-          {!isFinishedMode && (
-              <button 
-                onClick={handleCopyLink}
-                className="w-full py-3 bg-indigo-50 border border-indigo-100 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2"
-              >
-                {linkCopied ? <Check size={18} /> : <Link size={18} />}
-                {linkCopied ? '¡Enlace Copiado!' : 'Copiar Enlace de Inscripción Pública'}
-              </button>
-          )}
-
-          {/* Archive Action (Only when finished but state not reset) */}
-          {state.status === 'finished' && state.id && (
-                <div className="mt-4 pt-4 border-t border-slate-100">
-                    <button 
-                    onClick={() => openModal('archive')}
-                    className="w-full py-4 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold transition-all shadow-lg text-lg flex items-center justify-center gap-2 active:scale-[0.98]"
-                    >
-                        <Archive size={24} />
-                        ARCHIVAR Y CERRAR TORNEO
-                    </button>
-                    <p className="text-center text-xs text-slate-400 mt-2">Guardará resultados en historial y preparará un nuevo torneo.</p>
-                </div>
-           )}
-
-           {/* Preview Player App Button */}
-           <div className="mt-6 pt-6 border-t border-slate-100">
-               <button 
-                onClick={() => navigate('/p/dashboard')}
-                className="w-full py-3 bg-slate-50 text-slate-600 hover:bg-slate-100 rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2"
-              >
-                <Smartphone size={18} />
-                Vista Previa App Jugadores (Test)
-              </button>
-           </div>
-        </div>
+              
+              <div className="relative z-10">
+                  <div className="flex items-center gap-2 mb-1">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${isSetupMode ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
+                          {isSetupMode ? 'Configuración' : 'En Juego'}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1">
+                          <Calendar size={12}/> {dateStr}, {timeStr}
+                      </span>
+                  </div>
+                  <h1 className="text-2xl font-black text-slate-900 leading-tight">{state.title || 'Torneo Sin Título'}</h1>
+                  <p className="text-sm text-slate-500 font-medium mt-0.5">{state.levelRange || 'Nivel Abierto'}</p>
+              </div>
+          </div>
       </div>
 
-      {/* GLOBAL CONFIRMATION MODAL */}
-      {modalConfig.isOpen && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-2xl animate-scale-in text-center">
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 bg-blue-100 text-blue-600`}>
-                      <Archive size={32}/>
-                  </div>
-                  
-                  <h3 className="text-xl font-black text-slate-900 mb-2">
-                      ¿Archivar Torneo?
+      {/* 2. KEY METRICS GRID */}
+      <div className="grid grid-cols-3 gap-3">
+          <StatCard 
+            title="Parejas" 
+            value={`${totalConfirmed}/${currentLimit}`} 
+            subValue={reservePairsCount > 0 ? `+${reservePairsCount} Reservas` : null}
+            icon={Users} 
+            color="text-blue-400" 
+            active={true}
+            onClick={() => navigate('/registration')}
+          />
+          
+          <StatCard 
+            title="Estado" 
+            value={isActiveMode ? 'ACTIVO' : 'SETUP'} 
+            icon={isSetupMode ? Settings : PlayCircle} 
+            color={isActiveMode ? "text-rose-400" : "text-amber-400"} 
+            active={true}
+          />
+
+          {isActiveMode ? (
+              <StatCard 
+                title="Ronda" 
+                value={state.currentRound} 
+                icon={Clock} 
+                color="text-emerald-400" 
+                active={true}
+                onClick={() => navigate('/active')}
+              />
+          ) : (
+              <StatCard 
+                title="Formato" 
+                value={currentLimit} 
+                subValue="Parejas"
+                icon={LayoutGrid} 
+                color="text-slate-400" 
+                active={false}
+              />
+          )}
+      </div>
+
+      {/* 3. SETUP PHASE PANEL */}
+      {isSetupMode && (
+          <div className="animate-fade-in space-y-6">
+              
+              {/* Format Selector */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                      <Settings size={18} className="text-slate-400"/> Formato del Torneo
                   </h3>
                   
-                  <p className="text-slate-500 mb-8 leading-relaxed">
-                      El torneo se guardará en el historial y se preparará la app para uno nuevo.
-                  </p>
+                  <div className="grid grid-cols-4 gap-2 mb-6">
+                      {['16_mini', '12_mini', '10_mini', '8_mini'].map((fmt) => {
+                          const isSelected = state.format === fmt;
+                          const num = fmt.split('_')[0];
+                          return (
+                              <button 
+                                key={fmt}
+                                onClick={() => setTournamentFormat(fmt as TournamentFormat)}
+                                className={`py-3 rounded-xl border-2 flex flex-col items-center justify-center transition-all ${isSelected ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-400 hover:border-slate-300'}`}
+                              >
+                                  <span className="text-lg font-black">{num}</span>
+                                  <span className="text-[9px] font-bold uppercase">Parejas</span>
+                              </button>
+                          )
+                      })}
+                  </div>
 
+                  {/* Progress Bar */}
+                  <div className="mb-2 flex justify-between text-xs font-bold">
+                      <span className={missingPairs > 0 ? "text-amber-600" : "text-emerald-600"}>
+                          {missingPairs > 0 ? `Faltan ${missingPairs} parejas` : '¡Completo!'}
+                      </span>
+                      <span className="text-slate-400">{Math.round((totalConfirmed / currentLimit) * 100)}%</span>
+                  </div>
+                  <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden mb-6">
+                      <div 
+                        className={`h-full transition-all duration-500 rounded-full ${missingPairs > 0 ? 'bg-amber-400' : 'bg-emerald-500'}`} 
+                        style={{ width: `${Math.min((totalConfirmed / currentLimit) * 100, 100)}%` }}
+                      ></div>
+                  </div>
+
+                  {/* Action Buttons */}
                   <div className="grid grid-cols-1 gap-3">
                       <button 
-                        onClick={performAction}
-                        style={{ backgroundColor: THEME.cta }}
-                        className={`w-full py-4 rounded-xl font-bold text-white shadow-lg active:scale-95 transition-transform`}
+                        onClick={() => navigate('/registration')}
+                        className="w-full py-4 bg-white border-2 border-indigo-100 text-indigo-700 font-bold rounded-xl hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2"
                       >
-                          Confirmar Acción
+                          <Users size={20}/> Gestionar Inscripciones
                       </button>
                       <button 
-                        onClick={() => setModalConfig({ type: null, isOpen: false })}
-                        className="w-full py-4 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200"
+                        onClick={handleCopyLink}
+                        className="w-full py-3 bg-slate-50 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-100 transition-colors flex items-center justify-center gap-2 text-sm"
                       >
-                          Cancelar
+                          {linkCopied ? <Check size={16}/> : <Link size={16}/>}
+                          {linkCopied ? 'Copiado' : 'Copiar Link Público'}
                       </button>
                   </div>
               </div>
+
+              {/* Launch Button */}
+              <button 
+                onClick={() => setShowGenerationModal(true)}
+                disabled={!canStart}
+                style={{ backgroundColor: canStart ? THEME.cta : '#e2e8f0' }}
+                className={`w-full py-6 rounded-xl font-bold text-white text-lg shadow-lg flex items-center justify-center gap-3 transition-all ${canStart ? 'hover:opacity-90 active:scale-95' : 'cursor-not-allowed text-slate-400'}`}
+              >
+                  {canStart ? <Play size={24} fill="currentColor"/> : <Lock size={24}/>}
+                  GENERAR CUADROS Y EMPEZAR
+              </button>
           </div>
       )}
 
-      {/* GENERATION MODAL */}
-      {showGenerationModal && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center sm:p-4">
-              <div className="bg-white w-full h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl sm:max-w-lg shadow-2xl animate-slide-up flex flex-col relative">
-                  <button onClick={() => setShowGenerationModal(false)} className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"><X size={20}/></button>
-                  
-                  <div className="p-6 border-b border-slate-100">
-                      <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                          <Settings className="text-slate-400"/> Configuración Técnica
-                      </h2>
-                      <div className={`mt-2 px-3 py-1 inline-block rounded-lg text-xs font-bold uppercase border ${canStart ? 'bg-emerald-100 text-emerald-600 border-emerald-200' : 'bg-orange-100 text-orange-600 border-orange-200'}`}>
-                          {totalPairs}/{limit} Parejas Inscritas
-                      </div>
+      {/* 4. ACTIVE PHASE PANEL */}
+      {isActiveMode && (
+          <div className="animate-slide-up space-y-4">
+              <button 
+                onClick={() => navigate('/active')}
+                className="w-full py-8 bg-rose-600 text-white rounded-2xl font-black text-xl shadow-xl shadow-rose-200 flex flex-col items-center justify-center gap-2 animate-pulse hover:bg-rose-700 transition-colors"
+              >
+                  <div className="flex items-center gap-3">
+                      <PlayCircle size={32} fill="currentColor"/>
+                      IR AL DIRECTO
                   </div>
+                  <span className="text-xs font-bold bg-white/20 px-3 py-1 rounded-full text-white uppercase tracking-wider">
+                      Gestionar Partidos
+                  </span>
+              </button>
 
-                  <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-                      {/* Format Selection */}
-                      <div>
-                        <h3 className="text-xs font-bold text-slate-500 uppercase mb-2">Formato (Parejas)</h3>
-                        <div className="grid grid-cols-4 gap-2">
-                            {['16_mini', '12_mini', '10_mini', '8_mini'].map((fmt) => (
-                                <button 
-                                    key={fmt}
-                                    onClick={() => handleFormatChange(fmt as TournamentFormat)} 
-                                    className={`py-3 rounded-xl font-bold border-2 transition-all text-sm ${selectedFormat === fmt ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500 hover:border-slate-300'}`}
-                                >
-                                    {fmt.replace('_mini', '')}
-                                </button>
-                            ))}
-                        </div>
-                      </div>
-
-                      {/* Generation Method */}
-                      <div>
-                        <h3 className="text-xs font-bold text-slate-500 uppercase mb-2">Orden de Grupos</h3>
-                        <div className="grid grid-cols-1 gap-3">
-                            <button onClick={() => setGenerationMethod('arrival')} className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${generationMethod === 'arrival' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}>
-                                <Clock size={20}/> 
-                                <div>
-                                    <div className="font-bold text-sm uppercase">Ordenar por Llegada</div>
-                                    <div className="text-xs opacity-70 font-normal">Orden de inscripción</div>
-                                </div>
-                            </button>
-                            <button onClick={() => setGenerationMethod('elo-balanced')} className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${generationMethod === 'elo-balanced' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}>
-                                <TrendingUp size={20}/>
-                                <div>
-                                    <div className="font-bold text-sm uppercase">Ordenar por ELO</div>
-                                    <div className="text-xs opacity-70 font-normal">Equilibrado (Mejores al A)</div>
-                                </div>
-                            </button>
-                            <button onClick={() => setGenerationMethod('elo-mixed')} className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${generationMethod === 'elo-mixed' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}>
-                                <Shuffle size={20}/>
-                                <div>
-                                    <div className="font-bold text-sm uppercase">Ordenar Mezclados</div>
-                                    <div className="text-xs opacity-70 font-normal">Sistema Cremallera (Mix Nivel)</div>
-                                </div>
-                            </button>
-                            <button onClick={() => setGenerationMethod('manual')} className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${generationMethod === 'manual' ? 'border-[#575AF9] bg-indigo-50 text-[#575AF9]' : 'border-slate-100 text-slate-500'}`}>
-                                <ListOrdered size={20}/>
-                                <div>
-                                    <div className="font-bold text-sm uppercase">Ordenar Manualmente</div>
-                                    <div className="text-xs opacity-70 font-normal">Seleccionar uno a uno</div>
-                                </div>
-                            </button>
-                        </div>
-                      </div>
-                  </div>
-
-                  <div className="p-6 border-t border-slate-100">
-                      <button 
-                        onClick={handleStartTournament} 
-                        disabled={!canStart} 
-                        style={{ backgroundColor: canStart ? THEME.cta : '#e2e8f0' }} 
-                        className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all ${canStart ? 'text-white active:scale-95 hover:opacity-90' : 'text-slate-400 cursor-not-allowed'}`}
-                      >
-                          <Play size={24} fill="currentColor" /> EMPEZAR TORNEO
-                      </button>
-                  </div>
+              <div className="grid grid-cols-2 gap-4">
+                  <button 
+                    onClick={() => navigate('/checkin')}
+                    className="p-4 bg-white border border-slate-200 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-emerald-300 transition-all shadow-sm"
+                  >
+                      <Clock size={24} className="text-emerald-500"/>
+                      <span className="font-bold text-slate-700">Control Pistas</span>
+                  </button>
+                  <button 
+                    onClick={() => navigate('/results')}
+                    className="p-4 bg-white border border-slate-200 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-blue-300 transition-all shadow-sm"
+                  >
+                      <Trophy size={24} className="text-blue-500"/>
+                      <span className="font-bold text-slate-700">Resultados</span>
+                  </button>
               </div>
-          </div>
-      )}
-
-      {/* ERROR MODAL */}
-      {errorMessage && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
-                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600">
-                      <AlertTriangle size={32} />
-                  </div>
-                  <h3 className="text-xl font-black text-slate-900 mb-2">Error</h3>
-                  <p className="text-slate-500 mb-6 text-sm break-words">{errorMessage}</p>
-                  <button onClick={() => setErrorMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">
-                      Entendido
+              
+              <div className="pt-4 border-t border-slate-200 mt-4">
+                  <button onClick={() => navigate('/setup')} className="w-full py-3 text-slate-400 font-bold text-xs flex items-center justify-center gap-2 hover:text-slate-600 transition-colors">
+                      <Edit size={14}/> Editar Detalles del Torneo
                   </button>
               </div>
           </div>
       )}
 
-      {/* MANUAL WIZARD OVERLAY */}
+      {/* GENERATION MODAL (Hidden by default) */}
+      {showGenerationModal && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center sm:p-4">
+              <div className="bg-white w-full h-auto rounded-t-3xl sm:rounded-3xl p-6 max-w-lg shadow-2xl animate-slide-up">
+                  <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-xl font-bold text-slate-900">Tipo de Sorteo</h3>
+                      <button onClick={() => setShowGenerationModal(false)} className="p-2 bg-slate-100 rounded-full"><X size={20}/></button>
+                  </div>
+                  
+                  <div className="space-y-3 mb-6">
+                      <button onClick={() => setGenerationMethod('elo-balanced')} className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all ${generationMethod === 'elo-balanced' ? 'border-[#575AF9] bg-indigo-50' : 'border-slate-100'}`}>
+                          <TrendingUp size={24} className="text-[#575AF9]"/>
+                          <div>
+                              <div className="font-bold text-slate-900">Por Nivel (Equilibrado)</div>
+                              <div className="text-xs text-slate-500">Mejores al Grupo A, peores al D.</div>
+                          </div>
+                      </button>
+                      <button onClick={() => setGenerationMethod('elo-mixed')} className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all ${generationMethod === 'elo-mixed' ? 'border-[#575AF9] bg-indigo-50' : 'border-slate-100'}`}>
+                          <Shuffle size={24} className="text-[#575AF9]"/>
+                          <div>
+                              <div className="font-bold text-slate-900">Mix (Cremallera)</div>
+                              <div className="text-xs text-slate-500">Reparte el nivel en todos los grupos.</div>
+                          </div>
+                      </button>
+                      <button onClick={() => setGenerationMethod('manual')} className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all ${generationMethod === 'manual' ? 'border-[#575AF9] bg-indigo-50' : 'border-slate-100'}`}>
+                          <ListOrdered size={24} className="text-[#575AF9]"/>
+                          <div>
+                              <div className="font-bold text-slate-900">Manual</div>
+                              <div className="text-xs text-slate-500">Tú decides los grupos uno a uno.</div>
+                          </div>
+                      </button>
+                  </div>
+
+                  <button 
+                    onClick={handleStartTournament}
+                    style={{ backgroundColor: THEME.cta }} 
+                    className="w-full py-4 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 hover:opacity-90 active:scale-95"
+                  >
+                      <Play size={20} fill="currentColor"/> EMPEZAR YA
+                  </button>
+              </div>
+          </div>
+      )}
+
+      {/* ERROR & WIZARD MODALS */}
+      {errorMessage && (
+          <div className="fixed inset-0 bg-slate-900/60 z-[200] flex items-center justify-center p-4">
+              <div className="bg-white p-6 rounded-2xl shadow-xl max-w-sm text-center">
+                  <AlertTriangle size={32} className="mx-auto text-rose-500 mb-2"/>
+                  <p className="font-bold text-slate-800 mb-4">{errorMessage}</p>
+                  <button onClick={() => setErrorMessage(null)} className="w-full py-3 bg-slate-100 font-bold rounded-xl">Cerrar</button>
+              </div>
+          </div>
+      )}
+
       {showManualWizard && (
           <ManualGroupingWizard 
-            pairs={state.pairs.filter(p => !p.isReserve).slice(0, limit)} 
+            pairs={confirmedPairs.slice(0, currentLimit)} 
             players={state.players} 
             onCancel={() => setShowManualWizard(false)} 
             onComplete={handleManualWizardComplete} 
             formatName={formatPlayerName} 
-            limit={limit} 
+            limit={currentLimit} 
           />
       )}
 

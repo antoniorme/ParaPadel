@@ -1,5 +1,3 @@
-
-
 export interface Player {
   id: string; // UUID
   user_id?: string; // ID del Club (Admin)
@@ -66,6 +64,16 @@ export type TournamentFormat = '16_mini' | '10_mini' | '12_mini' | '8_mini';
 
 export type GenerationMethod = 'elo-balanced' | 'elo-mixed' | 'manual' | 'arrival';
 
+// NEW: Lightweight summary for the Club Dashboard list
+export interface TournamentSummary {
+    id: string;
+    title: string;
+    date: string;
+    status: 'setup' | 'active' | 'finished';
+    format: TournamentFormat;
+    playerCount: number; // or pairCount
+}
+
 export interface TournamentState {
   id?: string; 
   status: 'setup' | 'checkin' | 'active' | 'finished';
@@ -78,6 +86,9 @@ export interface TournamentState {
   courts: { id: number; ballsGiven: boolean }[];
   loading: boolean; 
   
+  // List of active tournaments for the dashboard
+  tournamentList: TournamentSummary[];
+
   // METADATA FOR PUBLIC LISTING
   title?: string;
   description?: string;
@@ -151,6 +162,7 @@ export interface NotificationSettings {
 
 export type TournamentAction =
   | { type: 'SET_STATE'; payload: Partial<TournamentState> }
+  | { type: 'SET_TOURNAMENT_LIST'; payload: TournamentSummary[] }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'RESET_LOCAL'; }
   | { type: 'TOGGLE_BALLS'; payload: number }

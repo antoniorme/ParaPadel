@@ -137,7 +137,8 @@ export const HistoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
                             courtId: m.court_id, pairAId: m.pair_a_id, pairBId: m.pair_b_id,
                             scoreA: m.score_a, scoreB: m.score_b, isFinished: m.is_finished
                         })),
-                        groups: [], courts: [], loading: false
+                        groups: [], courts: [], loading: false,
+                        tournamentList: []
                     };
 
                     return {

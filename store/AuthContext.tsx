@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
@@ -36,12 +35,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Función crítica: Determina si es Club (Admin), SuperAdmin o Jugador
   const checkUserRole = async (uid: string, userEmail?: string): Promise<UserRole> => {
-      // 0. SUPER ADMIN HARDCODED
-      if (userEmail === 'antoniorme@gmail.com') {
-          return 'superadmin';
+      // 1. SUPER ADMIN CHECK (DB + Fallback)
+      if (userEmail) {
+          // Hardcoded Fallback (Seguridad por si la tabla no existe aún)
+          if (userEmail === 'antoniorme@gmail.com') return 'superadmin';
+
+          try {
+              // Consultamos tabla whitelist de superadmins
+              const { data: saData } = await supabase
+                  .from('superadmins')
+                  .select('id')
+                  .eq('email', userEmail)
+                  .maybeSingle();
+              
+              if (saData) return 'superadmin';
+          } catch (e) {
+              console.warn('Error checking superadmin table, falling back to basic role check');
+          }
       }
 
-      // 1. MODO LOCAL / OFFLINE
+      // 2. MODO LOCAL / OFFLINE
       if (isOfflineMode) {
           if (userEmail?.includes('admin') || userEmail?.includes('club')) {
               return 'admin';
@@ -49,7 +62,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return 'player';
       }
 
-      // 2. MODO PRODUCCIÓN (Supabase)
+      // 3. MODO PRODUCCIÓN (Supabase - Club Check)
       try {
           // Consultamos si este usuario está en la tabla de clubs como dueño
           const { data, error } = await supabase
@@ -90,6 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initSession = async () => {
         let shouldUseOffline = false;
 
+        // @ts-ignore
         if ((supabase as any).supabaseUrl === 'https://placeholder.supabase.co') {
              shouldUseOffline = true;
         }
