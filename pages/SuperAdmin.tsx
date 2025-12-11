@@ -63,12 +63,11 @@ const SuperAdmin: React.FC = () => {
         setFoundUser(null);
 
         // Search in public.players table as a proxy for registered users
-        // NOTE: This assumes users create a player profile. 
-        // In a perfect world we would query auth.users via an Edge Function.
+        // NOTE: AuthPage now ensures all registered users have a players entry.
         const { data, error } = await supabase
             .from('players')
             .select('user_id, name, email')
-            .eq('email', searchEmail)
+            .ilike('email', searchEmail.trim()) // Case insensitive search
             .limit(1)
             .maybeSingle();
 
@@ -81,7 +80,7 @@ const SuperAdmin: React.FC = () => {
                 setFoundUser({ id: data.user_id!, name: data.name, email: data.email! });
             }
         } else {
-            setCreateError("Usuario no encontrado en la base de datos de jugadores. Pídeles que se registren en la App primero.");
+            setCreateError("Usuario no encontrado. Asegúrate de que se haya registrado e iniciado sesión en la App al menos una vez.");
         }
     };
 
