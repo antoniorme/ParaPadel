@@ -62,12 +62,18 @@ const PlayerManager: React.FC = () => {
       // Calcular ELO inicial basado en anclas
       const initialElo = calculateInitialElo(newPlayer.categories, newPlayer.manual_rating);
       
-      await addPlayerToDB({
+      const newId = await addPlayerToDB({
           ...newPlayer,
           global_rating: initialElo
       });
-      setIsCreating(false);
-      setNewPlayer({ name: '', nickname: '', categories: [], manual_rating: 5, email: '', phone: '' });
+
+      if (!newId) {
+          setAlertMessage({ type: 'error', message: "Error al crear el jugador. Inténtalo de nuevo." });
+      } else {
+          setIsCreating(false);
+          setNewPlayer({ name: '', nickname: '', categories: [], manual_rating: 5, email: '', phone: '' });
+          setAlertMessage({ type: 'success', message: "Jugador creado correctamente." });
+      }
   };
   
   const toggleEditCategory = (cat: string) => {

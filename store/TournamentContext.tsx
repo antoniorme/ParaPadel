@@ -396,7 +396,11 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         const targetUserId = ownerId || user?.id;
         if (isOfflineMode) { const newPlayer = { ...p, id: `local-${Date.now()}`, created_at: new Date().toISOString() } as Player; const newState = { ...state, players: [...state.players, newPlayer] }; dispatch({ type: 'SET_STATE', payload: newState }); saveLocal(newState); return newPlayer.id; }
         const { data, error } = await supabase.from('players').insert([{ ...p, user_id: targetUserId }]).select().single();
-        if (error) { alert(error.message); return null; } 
+        if (error) { 
+            console.error("Error creating player:", error); 
+            // Removed alert here, component handles null return
+            return null; 
+        } 
         // Update local players list
         const newPlayers = [...state.players, data];
         dispatch({ type: 'SET_STATE', payload: { players: newPlayers } });

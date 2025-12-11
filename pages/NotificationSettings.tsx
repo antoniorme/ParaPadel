@@ -29,55 +29,57 @@ const NotificationSettings: React.FC = () => {
 
     return (
         <div className="bg-slate-50 min-h-screen pb-20">
-            <div className="bg-white p-6 pb-4 border-b border-slate-200 sticky top-0 z-10 shadow-sm">
-                <div className="flex items-center gap-4">
-                    <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-slate-500 rounded-full hover:bg-slate-100">
-                        <ArrowLeft size={24}/>
-                    </button>
-                    <h2 className="text-xl font-bold text-slate-900">Configuración Avisos</h2>
-                </div>
-            </div>
-
-            <div className="p-6 space-y-6">
-                <div>
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 pl-2">Tipos de Notificación</h3>
-                    <div className="space-y-3">
-                        <Toggle 
-                            label="Invitaciones" 
-                            desc="Cuando alguien quiere jugar contigo"
-                            icon={Mail}
-                            checked={settings.invites} 
-                            onChange={(v: boolean) => updateSettings({ invites: v })} 
-                        />
-                        <Toggle 
-                            label="Inicio de Partido" 
-                            desc="Cuando se asigna pista y rivales"
-                            icon={Activity}
-                            checked={settings.matchStart} 
-                            onChange={(v: boolean) => updateSettings({ matchStart: v })} 
-                        />
-                        <Toggle 
-                            label="Resultados y ELO" 
-                            desc="Confirmación de marcador y ranking"
-                            icon={Trophy}
-                            checked={settings.results} 
-                            onChange={(v: boolean) => updateSettings({ results: v })} 
-                        />
-                        <Toggle 
-                            label="Sistema" 
-                            desc="Avisos importantes de la app"
-                            icon={Info}
-                            checked={settings.system} 
-                            onChange={(v: boolean) => updateSettings({ system: v })} 
-                        />
+            <div className="max-w-3xl mx-auto">
+                <div className="bg-white p-6 pb-4 border-b border-slate-200 sticky top-0 z-10 shadow-sm">
+                    <div className="flex items-center gap-4">
+                        <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-slate-500 rounded-full hover:bg-slate-100">
+                            <ArrowLeft size={24}/>
+                        </button>
+                        <h2 className="text-xl font-bold text-slate-900">Configuración Avisos</h2>
                     </div>
                 </div>
 
-                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex gap-3 text-sm text-blue-800">
-                    <Bell size={20} className="shrink-0 mt-0.5"/>
-                    <p>
-                        Estas preferencias solo afectan a las notificaciones dentro de la aplicación. Para emails o notificaciones push, consulta la configuración de tu dispositivo.
-                    </p>
+                <div className="p-6 space-y-6">
+                    <div>
+                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 pl-2">Tipos de Notificación</h3>
+                        <div className="space-y-3">
+                            <Toggle 
+                                label="Invitaciones" 
+                                desc="Cuando alguien quiere jugar contigo"
+                                icon={Mail}
+                                checked={settings.invites} 
+                                onChange={(v: boolean) => updateSettings({ invites: v })} 
+                            />
+                            <Toggle 
+                                label="Inicio de Partido" 
+                                desc="Cuando se asigna pista y rivales"
+                                icon={Activity}
+                                checked={settings.matchStart} 
+                                onChange={(v: boolean) => updateSettings({ matchStart: v })} 
+                            />
+                            <Toggle 
+                                label="Resultados y ELO" 
+                                desc="Confirmación de marcador y ranking"
+                                icon={Trophy}
+                                checked={settings.results} 
+                                onChange={(v: boolean) => updateSettings({ results: v })} 
+                            />
+                            <Toggle 
+                                label="Sistema" 
+                                desc="Avisos importantes de la app"
+                                icon={Info}
+                                checked={settings.system} 
+                                onChange={(v: boolean) => updateSettings({ system: v })} 
+                            />
+                        </div>
+                    </div>
+
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex gap-3 text-sm text-blue-800">
+                        <Bell size={20} className="shrink-0 mt-0.5"/>
+                        <p>
+                            Estas preferencias solo afectan a las notificaciones dentro de la aplicación. Para emails o notificaciones push, consulta la configuración de tu dispositivo.
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>
