@@ -63,10 +63,12 @@ const PlayerTournaments: React.FC = () => {
     const formatLabel = state.format ? state.format.replace('_mini', '') : '16';
 
     // Find rich data for the current tournament from globalTournaments
-    const richTournamentData = globalTournaments.find(t => t.id === state.id) || {
+    const foundTournament = globalTournaments.find(t => t.id === state.id);
+    const richTournamentData = foundTournament || {
         prizes: state.prizes,
         price: state.price,
-        description: state.description
+        description: state.description,
+        clubId: undefined
     };
 
     const formatDate = () => {
