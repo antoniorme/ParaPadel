@@ -4,7 +4,7 @@ import { useTournament } from '../store/TournamentContext';
 import { THEME, getFormatColor } from '../utils/theme';
 import { useHistory } from '../store/HistoryContext';
 import { useTimer } from '../store/TimerContext';
-import { Users, PlayCircle, CheckCircle, Clock, Play, Trophy, Smartphone, Link, Check, Settings, Edit, Shuffle, ListOrdered, TrendingUp, X, Check as CheckIcon, AlertTriangle, Lock, ArrowLeft, Calendar, LayoutGrid, Hourglass } from 'lucide-react';
+import { Users, PlayCircle, CheckCircle, Clock, Play, Trophy, Smartphone, Link, Check, Settings, Edit, Shuffle, ListOrdered, TrendingUp, X, Check as CheckIcon, AlertTriangle, Lock, ArrowLeft, Calendar, LayoutGrid, Hourglass, Gift, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { TournamentFormat, GenerationMethod, Pair, Player } from '../types';
@@ -12,7 +12,7 @@ import ClubDashboard from './ClubDashboard'; // Fallback view
 
 // --- COMPONENTS ---
 
-// 1. MANUAL WIZARD (Kept same logic, just minor style tweaks if needed)
+// 1. MANUAL WIZARD
 interface WizardProps {
     pairs: Pair[];
     players: Player[];
@@ -178,7 +178,7 @@ const Dashboard: React.FC = () => {
   return (
     <div className="pb-10 space-y-6">
       
-      {/* 1. TOP NAVIGATION & HEADER */}
+      {/* 1. TOP NAVIGATION & HEADER (Enhanced) */}
       <div>
           <button 
             onClick={handleBackToClub}
@@ -187,13 +187,13 @@ const Dashboard: React.FC = () => {
               <ArrowLeft size={18}/> Volver al Club
           </button>
 
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex justify-between items-center relative overflow-hidden">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
                   <Trophy size={120} />
               </div>
               
-              <div className="relative z-10">
-                  <div className="flex items-center gap-2 mb-1">
+              <div className="relative z-10 space-y-2">
+                  <div className="flex items-center gap-2">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${isSetupMode ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
                           {isSetupMode ? 'Configuración' : 'En Juego'}
                       </span>
@@ -201,13 +201,27 @@ const Dashboard: React.FC = () => {
                           <Calendar size={12}/> {dateStr}, {timeStr}
                       </span>
                   </div>
+                  
                   <h1 className="text-2xl font-black text-slate-900 leading-tight">{state.title || 'Torneo Sin Título'}</h1>
-                  <p className="text-sm text-slate-500 font-medium mt-0.5">{state.levelRange || 'Nivel Abierto'}</p>
+                  
+                  {/* Expanded Info: Prizes & Category */}
+                  <div className="flex flex-wrap gap-2 pt-1">
+                      {state.levelRange && (
+                          <div className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-md text-xs font-bold text-slate-600 border border-slate-200">
+                              <TrendingUp size={12}/> {state.levelRange}
+                          </div>
+                      )}
+                      {state.prizes && state.prizes.length > 0 && (
+                          <div className="flex items-center gap-1 bg-amber-50 px-2 py-1 rounded-md text-xs font-bold text-amber-700 border border-amber-100">
+                              <Gift size={12}/> {state.prizes[0]}{state.prizes.length > 1 ? ` +${state.prizes.length-1}` : ''}
+                          </div>
+                      )}
+                  </div>
               </div>
           </div>
       </div>
 
-      {/* 2. KEY METRICS GRID (2 Columns for Mobile) */}
+      {/* 2. KEY METRICS GRID (Simplified - Removed Status, kept Logic) */}
       <div className="grid grid-cols-2 gap-3">
           <StatCard 
             title="Parejas" 
@@ -219,14 +233,6 @@ const Dashboard: React.FC = () => {
             onClick={() => navigate('/registration')}
           />
           
-          <StatCard 
-            title="Estado" 
-            value={isActiveMode ? 'EN JUEGO' : 'CONFIGURACIÓN'} 
-            icon={isSetupMode ? Settings : PlayCircle} 
-            color={isActiveMode ? "text-rose-400" : "text-amber-400"} 
-            active={true}
-          />
-
           {isActiveMode ? (
               <StatCard 
                 title="Ronda Actual" 
@@ -234,7 +240,6 @@ const Dashboard: React.FC = () => {
                 icon={Clock} 
                 color="text-emerald-400" 
                 active={true}
-                fullWidth={true}
                 onClick={() => navigate('/active')}
               />
           ) : (
@@ -245,7 +250,6 @@ const Dashboard: React.FC = () => {
                 icon={LayoutGrid} 
                 color="text-indigo-400" 
                 active={true}
-                fullWidth={true}
               />
           )}
       </div>
@@ -327,7 +331,8 @@ const Dashboard: React.FC = () => {
           <div className="animate-slide-up space-y-4">
               <button 
                 onClick={() => navigate('/active')}
-                className="w-full py-8 bg-rose-600 text-white rounded-2xl font-black text-xl shadow-xl shadow-rose-200 flex flex-col items-center justify-center gap-2 animate-pulse hover:bg-rose-700 transition-colors"
+                style={{ backgroundColor: THEME.cta }}
+                className="w-full py-8 text-white rounded-2xl font-black text-xl shadow-xl shadow-indigo-200 flex flex-col items-center justify-center gap-2 hover:opacity-90 transition-colors"
               >
                   <div className="flex items-center gap-3">
                       <PlayCircle size={32} fill="currentColor"/>

@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { TournamentState, TournamentAction, Player, Pair, Match, Group, TournamentFormat, GenerationMethod, TournamentSummary } from '../types';
 import { supabase } from '../lib/supabase';
@@ -139,21 +140,26 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             .order('date', { ascending: true });
 
         if (tournaments) {
-            // We need pair counts for the summary. 
-            // Ideally we do a join or count query, but for now we fetch pairs for these IDs.
             const tIds = tournaments.map(t => t.id);
-            const { data: pairCounts } = await supabase.rpc('get_tournament_pair_counts', { tournament_ids: tIds }); 
-            // Fallback if RPC doesn't exist: fetch all pairs (careful with scale)
-            // For now, simpler approach: just list them, load count when selected or accept 0 in list for speed.
-            
-            const summaries: TournamentSummary[] = tournaments.map(t => ({
-                id: t.id,
-                title: t.title || 'Sin Título',
-                date: t.date,
-                status: t.status as any,
-                format: t.format,
-                playerCount: 0 // Placeholder until we load it
-            }));
+            // Fetch counts manually to avoid RPC dependency issues
+            const { data: allPairs } = await supabase
+                .from('tournament_pairs')
+                .select('tournament_id, status, player2_id')
+                .in('tournament_id', tIds);
+
+            const summaries: TournamentSummary[] = tournaments.map(t => {
+                const count = allPairs 
+                    ? allPairs.filter(p => p.tournament_id === t.id && p.status !== 'rejected').length 
+                    : 0;
+                return {
+                    id: t.id,
+                    title: t.title || 'Sin Título',
+                    date: t.date,
+                    status: t.status as any,
+                    format: t.format,
+                    playerCount: count
+                }
+            });
             
             dispatch({ type: 'SET_TOURNAMENT_LIST', payload: summaries });
         }
@@ -294,7 +300,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         } 
     };
 
-    // ... (Keep existing persistence functions: togglePaymentDB, etc.) ...
     const togglePaymentDB = async (playerId: string, pairId: string, isP1: boolean) => {
         dispatch({ type: 'TOGGLE_PAID', payload: playerId });
         const pair = state.pairs.find(p => p.id === pairId);
@@ -341,9 +346,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             }
         }
     };
-
-    // ... (Keep other existing actions: startTournamentDB, etc. logic remains the same) ...
-    // Just ensure they use state.id which is set by selectTournament
 
     const setTournamentFormat = async (format: TournamentFormat) => {
         dispatch({ type: 'SET_FORMAT', payload: format });
@@ -434,10 +436,6 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         if (p2 && status === 'pending') { const inviter = state.players.find(p => p.id === p1)?.name || 'Un jugador'; addNotification(p2, 'invite', 'Invitación a Torneo', `${inviter} te ha invitado a formar pareja.`, '/p/tournaments'); }
         await selectTournament(tournamentId); // Refresh pairs
     };
-    
-    // ... Copy remaining existing functions (assignPartnerDB, respondToInviteDB, updatePairDB, deletePairDB, substitutePairDB, etc.)
-    // Ensure they call selectTournament(state.id) instead of generic loadData() at the end to refresh specific data.
-    // For brevity in this XML block, assuming they are preserved but using state.id.
     
     const assignPartnerDB = async (pairId: string, partnerId: string, mergeWithPairId?: string) => {
         if (isOfflineMode) {
@@ -567,10 +565,25 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
 
     const archiveAndResetDB = async () => {
-        const { wMain, wCons } = Logic.calculateChampions(state, (id, p, pair) => { const pp = pair.find(x => x.id === id); if(!pp) return 'Desc.'; const p1 = p.find(x => x.id === pp.player1Id); const p2 = pp.player2Id ? p.find(x => x.id === pp.player2Id) : null; return `${formatPlayerName(p1)} & ${formatPlayerName(p2)}`; });
+        // Calculate champions using the current full state logic
+        const { wMain, wCons } = Logic.calculateChampions(state, (id, p, pair) => { 
+            const pp = pair.find(x => x.id === id); 
+            if(!pp) return 'Desconocido'; 
+            const p1 = p.find(x => x.id === pp.player1Id); 
+            const p2 = pp.player2Id ? p.find(x => x.id === pp.player2Id) : null; 
+            return `${formatPlayerName(p1)} & ${formatPlayerName(p2)}`; 
+        });
         
         if (!isOfflineMode) {
-            await supabase.from('tournaments').update({ status: 'finished', winner_main: wMain, winner_consolation: wCons }).eq('id', state.id);
+            // CRITICAL: Ensure we persist the winner names to the DB row
+            await supabase
+                .from('tournaments')
+                .update({ 
+                    status: 'finished', 
+                    winner_main: wMain, 
+                    winner_consolation: wCons 
+                })
+                .eq('id', state.id);
         } else {
             const currentHistory = localStorage.getItem(LOCAL_HISTORY_KEY) ? JSON.parse(localStorage.getItem(LOCAL_HISTORY_KEY)!) : [];
             const archivedTournament = { ...state, id: state.id || `archived-${Date.now()}`, status: 'finished', winnerMain: wMain, winnerConsolation: wCons, archivedAt: new Date().toISOString() };

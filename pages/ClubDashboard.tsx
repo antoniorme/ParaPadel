@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { THEME, getFormatColor } from '../utils/theme';
@@ -14,9 +15,7 @@ const ClubDashboard: React.FC = () => {
 
     const handleSelect = async (id: string) => {
         await selectTournament(id);
-        // After selection, the app state will have an ID, triggering Layout to show tournament nav
-        // We navigate to the "Inner Dashboard" (which we renamed conceptually to TournamentDashboard)
-        navigate('/active'); // Or /dashboard (tournament view)
+        navigate('/active');
     };
 
     const activeTournaments = state.tournamentList.filter(t => t.status !== 'finished');
@@ -56,32 +55,28 @@ const ClubDashboard: React.FC = () => {
                             <div 
                                 key={t.id} 
                                 onClick={() => handleSelect(t.id)}
-                                className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-all group"
+                                className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-all group relative"
                             >
                                 <div className="p-5">
-                                    <div className="flex justify-between items-start mb-3">
-                                        <div>
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="w-3/4">
                                             <div className="flex items-center gap-2 mb-1">
                                                 <span className={`w-2 h-2 rounded-full ${isSetup ? 'bg-slate-400' : 'bg-rose-500 animate-pulse'}`}></span>
                                                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                                                     {isSetup ? 'Inscripción' : 'En Juego'}
                                                 </span>
                                             </div>
-                                            <h3 className="font-black text-slate-900 text-lg leading-tight group-hover:text-[#575AF9] transition-colors">{t.title}</h3>
+                                            <h3 className="font-black text-slate-900 text-lg leading-tight group-hover:text-[#575AF9] transition-colors truncate">{t.title}</h3>
+                                            <div className="flex items-center gap-1 mt-1 text-slate-400 text-xs font-medium">
+                                                <Calendar size={12}/>
+                                                {new Date(t.date).toLocaleDateString('es-ES', {weekday: 'short', day: 'numeric', month: 'short'})}
+                                            </div>
                                         </div>
-                                        <div className="bg-slate-50 p-2 rounded-xl text-slate-400 group-hover:bg-indigo-50 group-hover:text-[#575AF9] transition-colors">
-                                            <ChevronRight size={20}/>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="flex items-center gap-4 text-xs font-medium text-slate-500">
-                                        <div className="flex items-center gap-1">
-                                            <Calendar size={14}/>
-                                            {new Date(t.date).toLocaleDateString('es-ES', {weekday: 'short', day: 'numeric', month: 'short'})}
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            <Users size={14}/>
-                                            {t.playerCount || 0} Parejas
+                                        
+                                        {/* PAIR COUNT - PROMINENT */}
+                                        <div className="flex flex-col items-center justify-center bg-slate-50 rounded-xl p-2 min-w-[60px] border border-slate-100">
+                                            <span className="text-2xl font-black text-slate-700 leading-none">{t.playerCount || 0}</span>
+                                            <span className="text-[9px] font-bold uppercase text-slate-400 mt-0.5">Parejas</span>
                                         </div>
                                     </div>
                                     
@@ -90,9 +85,13 @@ const ClubDashboard: React.FC = () => {
                                             {t.format.replace('_mini', '').toUpperCase()}
                                         </span>
                                         {isSetup ? (
-                                            <span className="text-xs font-bold text-slate-400 flex items-center gap-1"><Settings size={14}/> Gestionar</span>
+                                            <span className="text-xs font-bold text-slate-400 flex items-center gap-1 group-hover:text-[#575AF9] transition-colors">
+                                                <Settings size={14}/> Gestionar <ChevronRight size={14}/>
+                                            </span>
                                         ) : (
-                                            <span className="text-xs font-bold text-rose-500 flex items-center gap-1"><Play size={14}/> Directo</span>
+                                            <span className="text-xs font-bold text-rose-500 flex items-center gap-1 group-hover:underline">
+                                                <Play size={14}/> Directo <ChevronRight size={14}/>
+                                            </span>
                                         )}
                                     </div>
                                 </div>
