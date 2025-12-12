@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -8,16 +9,23 @@ import HCaptcha from '@hcaptcha/react-hcaptcha';
 type AuthView = 'login' | 'register' | 'recovery';
 
 // ------------------------------------------------------------------
-// CONFIGURACIÓN DE ENTORNO (ACCESO SEGURO)
+// CONFIGURACIÓN DE ENTORNO (ACCESO SEGURO + REEMPLAZO VITE)
 // ------------------------------------------------------------------
-// Usamos (import.meta.env || {}) para evitar errores de "Cannot read properties of undefined"
-// si el entorno no inyecta el objeto env correctamente.
+// Definimos las variables fuera con try-catch para asegurar que:
+// 1. Vite vea "import.meta.env.VITE_..." y lo reemplace en el Build.
+// 2. Si el objeto env no existe en runtime, no explote la app.
 
-// @ts-ignore
-const env = (import.meta.env || {}) as any;
+let HCAPTCHA_SITE_TOKEN = "";
+let IS_DEV_ENV = false;
 
-const HCAPTCHA_SITE_TOKEN = (env.VITE_HCAPTCHA_SITE_TOKEN as string) || "";
-const IS_DEV_ENV = env.DEV;
+try {
+    // @ts-ignore
+    HCAPTCHA_SITE_TOKEN = import.meta.env.VITE_HCAPTCHA_SITE_TOKEN as string;
+    // @ts-ignore
+    IS_DEV_ENV = import.meta.env.DEV;
+} catch (e) {
+    console.warn("Env access failed in Auth, defaulting to safe mode.");
+}
 
 // Detección de entorno local
 const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -222,9 +230,7 @@ const AuthPage: React.FC = () => {
       let output = "";
       try {
           output += `Host: ${window.location.hostname}\n`;
-          // @ts-ignore
-          const metaEnv = import.meta.env;
-          output += `Mode: ${metaEnv?.MODE || 'undefined'}\n`;
+          output += `IS_DEV_ENV: ${IS_DEV_ENV}\n`;
           output += `HCAPTCHA_SITE_TOKEN Detected: ${HCAPTCHA_SITE_TOKEN ? 'YES' : 'NO'}\n`;
           if (HCAPTCHA_SITE_TOKEN) output += `Token Value: ${HCAPTCHA_SITE_TOKEN.substring(0, 4)}... (Hidden)\n`;
       } catch (e) {
