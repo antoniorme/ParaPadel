@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
 import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, CheckCircle, ShieldAlert, Clock, Key, Send } from 'lucide-react';
-import ReCAPTCHA from "react-google-recaptcha";
+import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery';
 
@@ -23,10 +23,11 @@ const getEnv = (key: string, defaultValue: string): string => {
 };
 
 // ------------------------------------------------------------------
-// CONFIGURACIÓN GOOGLE RECAPTCHA
-// Usa la variable de entorno VITE_RECAPTCHA_SITE_KEY.
+// CONFIGURACIÓN HCAPTCHA
+// Clave de pruebas oficial de hCaptcha: 10000000-ffff-ffff-ffff-000000000001
+// Usa esta si no tienes una real configurada en .env para evitar errores en local.
 // ------------------------------------------------------------------
-const RECAPTCHA_SITE_KEY = getEnv('VITE_RECAPTCHA_SITE_KEY', ''); 
+const HCAPTCHA_SITE_KEY = getEnv('VITE_HCAPTCHA_SITE_KEY', '10000000-ffff-ffff-ffff-000000000001');
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
@@ -43,7 +44,7 @@ const AuthPage: React.FC = () => {
   
   // Captcha State
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const captchaRef = useRef<ReCAPTCHA>(null);
+  const captchaRef = useRef<HCaptcha>(null);
   
   // Verification Gate State
   const [isPendingVerification, setIsPendingVerification] = useState(false);
@@ -52,8 +53,8 @@ const AuthPage: React.FC = () => {
 
   useEffect(() => {
       const isPlaceholder = (supabase as any).supabaseUrl === 'https://placeholder.supabase.co';
-      // Si estamos offline o no tenemos clave de recaptcha, mostramos dev tools
-      if (isOfflineMode || isPlaceholder || !RECAPTCHA_SITE_KEY) {
+      // Si estamos offline o usando la base de datos de prueba
+      if (isOfflineMode || isPlaceholder) {
           setShowDevTools(true);
       }
   }, [isOfflineMode]);
@@ -64,13 +65,12 @@ const AuthPage: React.FC = () => {
     }
   }, [searchParams]);
 
-  // Handle View Changes -> Reset errors
   const switchView = (newView: AuthView) => {
       setView(newView);
       setError(null);
       setSuccessMsg(null);
       setCaptchaToken(null);
-      captchaRef.current?.reset();
+      captchaRef.current?.resetCaptcha();
   };
 
   const ensurePlayerRecord = async (userId: string, userEmail: string) => {
@@ -103,7 +103,8 @@ const AuthPage: React.FC = () => {
           return;
       }
       
-      if (!captchaToken && !showDevTools && RECAPTCHA_SITE_KEY) {
+      // Captcha Check
+      if (!captchaToken && !showDevTools) {
           setError("Por favor, completa la verificación de seguridad.");
           setLoading(false);
           return;
@@ -118,7 +119,7 @@ const AuthPage: React.FC = () => {
           setSuccessMsg("Si el email existe, recibirás un enlace para entrar.");
       } catch (err: any) {
           setError(err.message || "Error al solicitar recuperación.");
-          captchaRef.current?.reset();
+          captchaRef.current?.resetCaptcha();
           setCaptchaToken(null);
       } finally {
           setLoading(false);
@@ -139,7 +140,7 @@ const AuthPage: React.FC = () => {
     }
 
     // CAPTCHA CHECK
-    if (!captchaToken && !showDevTools && RECAPTCHA_SITE_KEY) {
+    if (!captchaToken && !showDevTools) {
         setError("Por favor, completa el captcha para continuar.");
         setLoading(false);
         return;
@@ -193,7 +194,7 @@ const AuthPage: React.FC = () => {
           }
       } else if (view === 'register' && result.data.user && !result.data.session) {
            setError("Revisa tu email para confirmar la cuenta.");
-           captchaRef.current?.reset(); 
+           captchaRef.current?.resetCaptcha(); 
            setCaptchaToken(null);
       }
 
@@ -205,7 +206,7 @@ const AuthPage: React.FC = () => {
       else if (message.includes('Captcha')) message = 'Error de Captcha. Inténtalo de nuevo.';
       
       setError(message);
-      captchaRef.current?.reset();
+      captchaRef.current?.resetCaptcha();
       setCaptchaToken(null);
     } finally {
       setLoading(false);
@@ -218,9 +219,9 @@ const AuthPage: React.FC = () => {
       else navigate('/dashboard');
   };
 
-  const onCaptchaChange = (token: string | null) => {
+  const onCaptchaVerify = (token: string) => {
       setCaptchaToken(token);
-      if (token) setError(null);
+      setError(null);
   };
 
   if (isPendingVerification) {
@@ -287,11 +288,11 @@ const AuthPage: React.FC = () => {
                         </div>
                         
                         {/* CAPTCHA FOR RECOVERY */}
-                        {!showDevTools && RECAPTCHA_SITE_KEY && (
+                        {!showDevTools && (
                             <div className="flex justify-center my-4">
-                                <ReCAPTCHA
-                                    sitekey={RECAPTCHA_SITE_KEY}
-                                    onChange={onCaptchaChange}
+                                <HCaptcha
+                                    sitekey={HCAPTCHA_SITE_KEY}
+                                    onVerify={onCaptchaVerify}
                                     ref={captchaRef}
                                 />
                             </div>
@@ -354,18 +355,14 @@ const AuthPage: React.FC = () => {
             />
           </div>
 
-          {/* CAPTCHA WIDGET */}
-          {!showDevTools && RECAPTCHA_SITE_KEY ? (
+          {/* CAPTCHA WIDGET (hCaptcha) */}
+          {!showDevTools && (
               <div className="flex justify-center my-2 transform scale-90 sm:scale-100 origin-center">
-                  <ReCAPTCHA
-                      sitekey={RECAPTCHA_SITE_KEY}
-                      onChange={onCaptchaChange}
+                  <HCaptcha
+                      sitekey={HCAPTCHA_SITE_KEY}
+                      onVerify={onCaptchaVerify}
                       ref={captchaRef}
                   />
-              </div>
-          ) : !showDevTools && (
-              <div className="text-xs text-center text-amber-500 bg-amber-50 p-2 rounded">
-                  Falta configurar VITE_RECAPTCHA_SITE_KEY
               </div>
           )}
 
