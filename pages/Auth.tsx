@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -9,23 +8,15 @@ import HCaptcha from '@hcaptcha/react-hcaptcha';
 type AuthView = 'login' | 'register' | 'recovery';
 
 // ------------------------------------------------------------------
-// CONFIGURACIÓN DE ENTORNO (ACCESO SEGURO + REEMPLAZO VITE)
+// CONFIGURACIÓN DE ENTORNO (ACCESO SEGURO)
 // ------------------------------------------------------------------
-// Definimos las variables fuera con try-catch para asegurar que:
-// 1. Vite vea "import.meta.env.VITE_..." y lo reemplace en el Build.
-// 2. Si el objeto env no existe en runtime, no explote la app.
+// Usamos short-circuit para leer las variables de forma segura.
+// Esto evita el crash si import.meta.env es undefined, pero permite el reemplazo de Vite.
 
-let HCAPTCHA_SITE_TOKEN = "";
-let IS_DEV_ENV = false;
-
-try {
-    // @ts-ignore
-    HCAPTCHA_SITE_TOKEN = import.meta.env.VITE_HCAPTCHA_SITE_TOKEN as string;
-    // @ts-ignore
-    IS_DEV_ENV = import.meta.env.DEV;
-} catch (e) {
-    console.warn("Env access failed in Auth, defaulting to safe mode.");
-}
+// @ts-ignore
+const HCAPTCHA_SITE_TOKEN = (import.meta.env && import.meta.env.VITE_HCAPTCHA_SITE_TOKEN) || "";
+// @ts-ignore
+const IS_DEV_ENV = (import.meta.env && import.meta.env.DEV) || false;
 
 // Detección de entorno local
 const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -232,7 +223,7 @@ const AuthPage: React.FC = () => {
           output += `Host: ${window.location.hostname}\n`;
           output += `IS_DEV_ENV: ${IS_DEV_ENV}\n`;
           output += `HCAPTCHA_SITE_TOKEN Detected: ${HCAPTCHA_SITE_TOKEN ? 'YES' : 'NO'}\n`;
-          if (HCAPTCHA_SITE_TOKEN) output += `Token Value: ${HCAPTCHA_SITE_TOKEN.substring(0, 4)}... (Hidden)\n`;
+          if (typeof HCAPTCHA_SITE_TOKEN === 'string' && HCAPTCHA_SITE_TOKEN) output += `Token Value: ${HCAPTCHA_SITE_TOKEN.substring(0, 4)}... (Hidden)\n`;
       } catch (e) {
           output += "Error getting diagnostics.";
       }
@@ -386,7 +377,7 @@ const AuthPage: React.FC = () => {
                       <ShieldCheck size={16}/> Modo Local: Captcha Omitido
                   </div>
               ) : (
-                  // PROD MISSING TOKEN - WARNING ONLY (Permissive mode until config fixed)
+                  // PROD MISSING TOKEN - WARNING ONLY
                   <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl flex items-start gap-3 text-amber-800 mb-2">
                       <AlertTriangle size={20} className="shrink-0 mt-0.5" />
                       <div className="text-xs">
