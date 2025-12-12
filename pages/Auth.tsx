@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Clock, Key, Send, ShieldAlert, ShieldCheck, Terminal, AlertTriangle } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Key, Send, ShieldAlert, ShieldCheck, Terminal, AlertTriangle } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery';
@@ -11,11 +11,9 @@ type AuthView = 'login' | 'register' | 'recovery';
 // ------------------------------------------------------------------
 // CONFIGURACIÓN DE ENTORNO (BLINDADA)
 // ------------------------------------------------------------------
-// Inicializamos variables con valores por defecto seguros
 let HCAPTCHA_SITE_TOKEN = "";
 let IS_DEV_ENV = false;
 
-// Bloque Try-Catch para evitar que la app explote si import.meta no existe o falla
 try {
     // @ts-ignore
     if (import.meta && import.meta.env) {
@@ -34,13 +32,12 @@ try {
     console.warn("Entorno seguro: No se pudieron leer variables de entorno (usando defaults).", e);
 }
 
-// Detección de host local como fallback
 const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const IS_LOCAL = isLocalHost || IS_DEV_ENV;
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
-  const { checkUserRole, loginWithDevBypass, isOfflineMode, signOut } = useAuth();
+  const { loginWithDevBypass, isOfflineMode } = useAuth();
   const [searchParams] = useSearchParams();
   
   const [view, setView] = useState<AuthView>('login');
@@ -51,15 +48,12 @@ const AuthPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   
-  // Captcha State
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
   
-  const [isPendingVerification, setIsPendingVerification] = useState(false);
   const [showDevTools, setShowDevTools] = useState(false);
   const [showDiagnose, setShowDiagnose] = useState(false);
 
-  // DEBUGGING INICIAL
   useEffect(() => {
       // @ts-ignore
       const isPlaceholder = (supabase as any).supabaseUrl === 'https://placeholder.supabase.co';
@@ -105,7 +99,6 @@ const AuthPage: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // En producción, exigimos captcha para evitar spam
       if (!IS_LOCAL && (!HCAPTCHA_SITE_TOKEN || !captchaToken)) {
           setError("Por seguridad, debes completar el captcha.");
           setLoading(false);
@@ -132,10 +125,8 @@ const AuthPage: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setIsPendingVerification(false);
 
     // 1. CHECK CRÍTICO DE CONFIGURACIÓN
-    // Si estamos en producción y no hay KEY configurada, avisamos.
     if (!IS_LOCAL && !HCAPTCHA_SITE_TOKEN) {
         setError("ERROR CONFIG: Falta VITE_HCAPTCHA_SITE_TOKEN. Contacta al admin.");
         setLoading(false);
@@ -143,7 +134,6 @@ const AuthPage: React.FC = () => {
     }
 
     // 2. CHECK DE RESOLUCIÓN DE CAPTCHA
-    // Si hay key configurada (o estamos en prod), el usuario TIENE que resolverlo.
     if (HCAPTCHA_SITE_TOKEN && !captchaToken && !IS_LOCAL) {
         setError("Por favor, completa el Captcha para continuar.");
         setLoading(false);
@@ -152,8 +142,6 @@ const AuthPage: React.FC = () => {
 
     try {
       let result;
-      
-      // Siempre mandamos el objeto options si tenemos token
       const authOptions = captchaToken ? { options: { captchaToken } } : undefined;
 
       console.log("🔐 AUTH:", { view, email, token: !!captchaToken });
@@ -175,31 +163,8 @@ const AuthPage: React.FC = () => {
       if (result.error) throw result.error;
 
       if (result.data.user && result.data.session) {
-          const userId = result.data.user.id;
-          const userEmail = result.data.user.email!;
-
-          await ensurePlayerRecord(userId, userEmail);
-
-          const isMe = userEmail === 'antoniorme@gmail.com'; 
-          
-          const { data: club } = await supabase
-              .from('clubs')
-              .select('id')
-              .eq('owner_id', userId)
-              .eq('is_active', true) 
-              .maybeSingle();
-
-          const isClub = !!club;
-          const role = await checkUserRole(userId, userEmail);
-          const isSuperAdmin = role === 'superadmin';
-
-          if (isMe || isClub || isSuperAdmin) {
-              if (isSuperAdmin) navigate('/dashboard'); 
-              else if (isClub) navigate('/dashboard');
-              else navigate('/p/dashboard');
-          } else {
-              setIsPendingVerification(true);
-          }
+          await ensurePlayerRecord(result.data.user.id, result.data.user.email!);
+          // Navigation is handled by App.tsx observing AuthContext state
       } else if (view === 'register' && result.data.user && !result.data.session) {
            setSuccessMsg("¡Cuenta creada! Revisa tu email para confirmarla.");
            if(captchaRef.current) captchaRef.current.resetCaptcha(); 
@@ -247,28 +212,6 @@ const AuthPage: React.FC = () => {
       return output;
   };
 
-  if (isPendingVerification) {
-      return (
-        <div className="min-h-screen bg-slate-50 flex flex-col p-6 items-center justify-center text-center">
-            <div className="bg-white p-8 rounded-3xl shadow-xl max-w-sm w-full border border-slate-200 animate-scale-in">
-                <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-600">
-                    <Clock size={40} />
-                </div>
-                <h1 className="text-2xl font-black text-slate-900 mb-4">Verificación Pendiente</h1>
-                <p className="text-slate-500 mb-8 leading-relaxed">
-                    Tu usuario ha sido registrado correctamente, pero necesita ser validado por la administración antes de acceder.
-                </p>
-                <button 
-                    onClick={() => { signOut(); setIsPendingVerification(false); switchView('login'); }}
-                    className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors"
-                >
-                    Volver al Inicio
-                </button>
-            </div>
-        </div>
-      );
-  }
-
   // --- RECOVERY VIEW ---
   if (view === 'recovery') {
       return (
@@ -310,7 +253,6 @@ const AuthPage: React.FC = () => {
                             />
                         </div>
                         
-                        {/* CAPTCHA ALWAYS VISIBLE IN PROD */}
                         {(!IS_LOCAL || HCAPTCHA_SITE_TOKEN) && (
                             <div className="flex justify-center my-4 min-h-[78px]">
                                 {HCAPTCHA_SITE_TOKEN ? (

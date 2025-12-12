@@ -28,6 +28,7 @@ import TournamentSetup from './pages/TournamentSetup';
 import SuperAdmin from './pages/SuperAdmin'; 
 import Notifications from './pages/Notifications'; // NEW
 import NotificationSettings from './pages/NotificationSettings'; // NEW
+import PendingVerification from './pages/PendingVerification'; // NEW
 
 // Player Pages
 import PlayerDashboard from './pages/player/PlayerDashboard';
@@ -45,6 +46,11 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
   
   if (!user) return <Navigate to="/" replace />;
   
+  // Pending Check (If role is pending and not on pending page)
+  if (role === 'pending' && location.pathname !== '/pending') {
+      return <Navigate to="/pending" replace />;
+  }
+
   // SUPER ADMIN PROTECTION
   if (requireSuperAdmin && role !== 'superadmin') {
       return <Navigate to="/dashboard" replace />;
@@ -73,6 +79,7 @@ const AppRoutes = () => {
       if (!user) return <Landing />;
       if (role === 'superadmin') return <Navigate to="/superadmin" replace />;
       if (role === 'admin') return <Navigate to="/dashboard" replace />;
+      if (role === 'pending') return <Navigate to="/pending" replace />;
       return <Navigate to="/p/dashboard" replace />;
   };
 
@@ -83,6 +90,13 @@ const AppRoutes = () => {
         
         {/* Auth */}
         <Route path="/auth" element={user ? getHomeRoute() : <AuthPage />} />
+        
+        {/* Pending Verification */}
+        <Route path="/pending" element={
+            <ProtectedRoute>
+                <PendingVerification />
+            </ProtectedRoute>
+        } />
         
         {/* Public Registration Wizard (No Auth Required) */}
         <Route path="/join/:clubId" element={<JoinTournament />} />

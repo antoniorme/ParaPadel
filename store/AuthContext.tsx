@@ -3,7 +3,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
-type UserRole = 'admin' | 'player' | 'superadmin' | null;
+type UserRole = 'admin' | 'player' | 'superadmin' | 'pending' | null;
 
 interface AuthContextType {
   session: Session | null;
@@ -23,7 +23,7 @@ const AuthContext = createContext<AuthContextType>({
   role: null,
   signOut: async () => {},
   isOfflineMode: false,
-  checkUserRole: async () => 'player',
+  checkUserRole: async () => 'pending',
   loginWithDevBypass: () => {},
 });
 
@@ -34,7 +34,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
 
-  // Función crítica: Determina si es Club (Admin), SuperAdmin o Jugador
+  // Función crítica: Determina si es Club (Admin), SuperAdmin o Jugador (Pending por defecto)
   const checkUserRole = async (uid: string, userEmail?: string): Promise<UserRole> => {
       // 1. SUPER ADMIN CHECK (DB + Fallback)
       if (userEmail) {
@@ -60,6 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (userEmail?.includes('admin') || userEmail?.includes('club')) {
               return 'admin';
           }
+          // En modo local simulamos que "player" es un jugador activo, no pendiente
           return 'player';
       }
 
@@ -73,11 +74,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               .maybeSingle();
           
           if (error) {
-              return 'player'; 
+              return 'pending'; 
           }
-          return data ? 'admin' : 'player';
+          return data ? 'admin' : 'pending';
       } catch (e) {
-          return 'player';
+          return 'pending';
       }
   };
 
