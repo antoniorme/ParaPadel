@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -10,8 +11,7 @@ type AuthView = 'login' | 'register' | 'recovery';
 // ------------------------------------------------------------------
 // CONFIGURACIÓN DE ENTORNO (ACCESO SEGURO)
 // ------------------------------------------------------------------
-// Usamos short-circuit para leer las variables de forma segura.
-// Esto evita el crash si import.meta.env es undefined, pero permite el reemplazo de Vite.
+// Verificamos existencia de import.meta.env antes de leer.
 
 // @ts-ignore
 const HCAPTCHA_SITE_TOKEN = (import.meta.env && import.meta.env.VITE_HCAPTCHA_SITE_TOKEN) || "";

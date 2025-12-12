@@ -1,22 +1,13 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Inicialización de Supabase
-// Usamos short-circuit (&&) para asegurar que import.meta.env existe antes de acceder.
-// Esto permite que Vite reemplace las variables estáticamente sin romper la ejecución si env es undefined.
-
-let supabaseUrl = 'https://placeholder.supabase.co';
-let supabaseKey = 'placeholder';
+// Inicialización de Supabase con verificación de seguridad.
+// Usamos (import.meta.env && import.meta.env.VARIABLE) para evitar crashes si env es undefined.
+// Vite reemplazará la segunda parte de la expresión con el valor real durante el build.
 
 // @ts-ignore
-const envUrl = import.meta.env && import.meta.env.VITE_SUPABASE_URL;
+const supabaseUrl = (import.meta.env && import.meta.env.VITE_SUPABASE_URL) || 'https://placeholder.supabase.co';
 // @ts-ignore
-const envKey = import.meta.env && import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseKey = (import.meta.env && import.meta.env.VITE_SUPABASE_ANON_KEY) || 'placeholder';
 
-if (envUrl && typeof envUrl === 'string' && envKey && typeof envKey === 'string') {
-    supabaseUrl = envUrl;
-    supabaseKey = envKey;
-}
-
-// Inicialización del cliente
 export const supabase = createClient(supabaseUrl, supabaseKey);

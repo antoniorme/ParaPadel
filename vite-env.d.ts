@@ -1,3 +1,4 @@
+
 // Manual type definitions for Vite client environment
 // Replaces /// <reference types="vite/client" /> to resolve "Cannot find type definition file" error
 
@@ -45,6 +46,10 @@ interface ImportMetaEnv {
   readonly DEV: boolean;
   readonly PROD: boolean;
   readonly SSR: boolean;
+  // Explicit definitions for our app
+  readonly VITE_SUPABASE_URL: string;
+  readonly VITE_SUPABASE_ANON_KEY: string;
+  readonly VITE_HCAPTCHA_SITE_TOKEN: string;
 }
 
 interface ImportMeta {
