@@ -13,16 +13,38 @@ type AuthView = 'login' | 'register' | 'recovery';
 // ------------------------------------------------------------------
 const TEST_KEY = '10000000-ffff-ffff-ffff-000000000001';
 
-// CORRECCIÓN CRÍTICA:
-// Vite necesita leer 'import.meta.env.VITE_HCAPTCHA_SITE_KEY' literalmente para sustituirlo en build.
-// Usamos optional chaining (?.) para evitar el crash si el objeto env no existe.
-// @ts-ignore
-const SITE_KEY = import.meta?.env?.VITE_HCAPTCHA_SITE_KEY || '';
-// @ts-ignore
-const IS_DEV = import.meta?.env?.DEV || false;
+// HELPERS DE ENTORNO
+// Usamos funciones para evitar errores de acceso directo si el objeto no existe en runtime
+const getEnvKey = () => {
+    try {
+        // Vite reemplaza esto estáticamente en tiempo de compilación
+        return import.meta.env.VITE_HCAPTCHA_SITE_KEY;
+    } catch {
+        return null;
+    }
+};
 
-// Si hay clave real, úsala. Si no, y estamos en local, usa la de test. Si no, vacío.
-const HCAPTCHA_SITE_KEY = SITE_KEY || (IS_DEV ? TEST_KEY : '');
+const getIsDev = () => {
+    try {
+        return import.meta.env.DEV;
+    } catch {
+        return false;
+    }
+};
+
+// LÓGICA DE CLAVE:
+// 1. Intentamos leer la variable de entorno.
+// 2. Si no existe, usamos la clave de TEST para asegurar que el widget siempre salga (evita "no sale el captcha").
+const RAW_KEY = getEnvKey();
+const IS_DEV = getIsDev();
+const HCAPTCHA_SITE_KEY = RAW_KEY || TEST_KEY;
+
+// Debug en consola para ayudar a diagnosticar
+console.log('Captcha Config:', { 
+    hasEnvKey: !!RAW_KEY, 
+    usingKey: HCAPTCHA_SITE_KEY,
+    mode: IS_DEV ? 'DEV' : 'PROD' 
+});
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
@@ -98,7 +120,7 @@ const AuthPage: React.FC = () => {
           return;
       }
       
-      // Captcha Check (Solo si hay clave configurada)
+      // Captcha Check
       if (!captchaToken && !showDevTools && HCAPTCHA_SITE_KEY) {
           setError("Por favor, completa la verificación de seguridad.");
           setLoading(false);
@@ -136,7 +158,6 @@ const AuthPage: React.FC = () => {
     }
 
     // CAPTCHA CHECK
-    // Solo requerimos captcha si existe una clave configurada y visible.
     if (!captchaToken && !showDevTools && HCAPTCHA_SITE_KEY) {
         setError("Por favor, completa el captcha para continuar.");
         setLoading(false);
@@ -352,8 +373,7 @@ const AuthPage: React.FC = () => {
             />
           </div>
 
-          {/* CAPTCHA WIDGET (hCaptcha) - Only render if KEY exists */}
-          {/* Si HCAPTCHA_SITE_KEY está vacía, no se renderiza. Si está, se renderiza. */}
+          {/* CAPTCHA WIDGET (hCaptcha) - Guaranteed Render */}
           {!showDevTools && HCAPTCHA_SITE_KEY && (
               <div className="flex justify-center my-2 transform scale-90 sm:scale-100 origin-center">
                   <HCaptcha
