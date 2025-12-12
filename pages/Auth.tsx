@@ -9,14 +9,25 @@ import HCaptcha from '@hcaptcha/react-hcaptcha';
 type AuthView = 'login' | 'register' | 'recovery';
 
 // ------------------------------------------------------------------
-// CONFIGURACIÓN DE ENTORNO (ACCESO SEGURO)
+// CONFIGURACIÓN DE ENTORNO (BLINDADA)
 // ------------------------------------------------------------------
-// Verificamos existencia de import.meta.env antes de leer.
+// Usamos try-catch para garantizar que si el entorno falla, la app carga igual.
 
-// @ts-ignore
-const HCAPTCHA_SITE_TOKEN = (import.meta.env && import.meta.env.VITE_HCAPTCHA_SITE_TOKEN) || "";
-// @ts-ignore
-const IS_DEV_ENV = (import.meta.env && import.meta.env.DEV) || false;
+let HCAPTCHA_SITE_TOKEN = "";
+let IS_DEV_ENV = false;
+
+try {
+    // Intento de lectura directa para que Vite pueda reemplazarlo
+    if (import.meta.env.VITE_HCAPTCHA_SITE_TOKEN) {
+        HCAPTCHA_SITE_TOKEN = import.meta.env.VITE_HCAPTCHA_SITE_TOKEN;
+    }
+    if (import.meta.env.DEV) {
+        IS_DEV_ENV = import.meta.env.DEV;
+    }
+} catch (e) {
+    // Si falla, nos quedamos con los valores por defecto (vacío/false)
+    console.debug("Env vars access failed, using defaults.");
+}
 
 // Detección de entorno local
 const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
