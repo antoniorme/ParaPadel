@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Clock, Key, Send, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Clock, Key, Send, ShieldAlert, ShieldCheck, Terminal } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery';
@@ -57,6 +57,7 @@ const AuthPage: React.FC = () => {
   const [isPendingVerification, setIsPendingVerification] = useState(false);
 
   const [showDevTools, setShowDevTools] = useState(false);
+  const [showDiagnose, setShowDiagnose] = useState(false);
 
   // DEBUGGING INICIAL
   useEffect(() => {
@@ -65,13 +66,6 @@ const AuthPage: React.FC = () => {
       if (isOfflineMode || isPlaceholder) {
           setShowDevTools(true);
       }
-      
-      // Log para depuración en consola del navegador
-      console.log("Auth Config Status:", {
-          hasToken: !!HCAPTCHA_SITE_TOKEN,
-          isLocal: IS_LOCAL,
-          tokenLength: HCAPTCHA_SITE_TOKEN ? HCAPTCHA_SITE_TOKEN.length : 0
-      });
   }, [isOfflineMode]);
 
   useEffect(() => {
@@ -260,6 +254,26 @@ const AuthPage: React.FC = () => {
       setError(null);
   };
 
+  // DIAGNOSTIC INFO GENERATOR
+  const getDiagnosticInfo = () => {
+      let output = "";
+      try {
+          output += `Host: ${window.location.hostname}\n`;
+          output += `Protocol: ${window.location.protocol}\n`;
+          // @ts-ignore
+          const metaEnv = import.meta.env;
+          output += `Mode: ${metaEnv?.MODE || 'undefined'}\n`;
+          output += `Dev: ${metaEnv?.DEV}\n`;
+          output += `Prod: ${metaEnv?.PROD}\n`;
+          output += `Has Token var: ${'VITE_HCAPTCHA_SITE_TOKEN' in metaEnv ? 'YES' : 'NO'}\n`;
+          output += `Token Length: ${HCAPTCHA_SITE_TOKEN ? HCAPTCHA_SITE_TOKEN.length : 0}\n`;
+          output += `Token Preview: ${HCAPTCHA_SITE_TOKEN ? HCAPTCHA_SITE_TOKEN.substring(0, 4) + '...' : 'EMPTY'}\n`;
+      } catch (e) {
+          output += "Error getting diagnostics.";
+      }
+      return output;
+  };
+
   if (isPendingVerification) {
       return (
         <div className="min-h-screen bg-slate-50 flex flex-col p-6 items-center justify-center text-center">
@@ -419,16 +433,32 @@ const AuthPage: React.FC = () => {
                   </div>
               ) : (
                   // ERROR DE CONFIGURACIÓN CLARO (PRODUCCIÓN)
-                  <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl flex gap-3 text-rose-800">
-                      <ShieldAlert size={24} className="shrink-0 mt-1" />
-                      <div className="text-xs">
-                          <strong className="block text-sm mb-1">Error de Configuración</strong>
-                          <p className="mb-2">La App no detecta el Token del Captcha.</p>
-                          <p className="font-mono bg-rose-100 px-1 py-0.5 rounded text-[10px] break-all">
-                              Variable esperada: VITE_HCAPTCHA_SITE_TOKEN
-                          </p>
-                          <p className="mt-2 text-[10px]">Asegúrate de que está añadida en Vercel y has hecho Redeploy.</p>
+                  <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl flex flex-col gap-3 text-rose-800">
+                      <div className="flex gap-3">
+                        <ShieldAlert size={24} className="shrink-0 mt-1" />
+                        <div className="text-xs">
+                            <strong className="block text-sm mb-1">Error de Configuración</strong>
+                            <p className="mb-2">La App no detecta el Token del Captcha.</p>
+                            <p className="font-mono bg-rose-100 px-1 py-0.5 rounded text-[10px] break-all">
+                                Variable esperada: VITE_HCAPTCHA_SITE_TOKEN
+                            </p>
+                        </div>
                       </div>
+                      
+                      {/* DEBUG TOGGLE */}
+                      <button 
+                        type="button" 
+                        onClick={() => setShowDiagnose(!showDiagnose)} 
+                        className="text-[10px] font-bold uppercase text-rose-600 flex items-center gap-1 hover:underline mt-1"
+                      >
+                          <Terminal size={12}/> {showDiagnose ? 'Ocultar' : 'Ver Detalles Técnicos'}
+                      </button>
+                      
+                      {showDiagnose && (
+                          <div className="bg-slate-900 text-emerald-400 p-3 rounded-lg font-mono text-[10px] whitespace-pre-wrap leading-tight mt-2 overflow-x-auto">
+                              {getDiagnosticInfo()}
+                          </div>
+                      )}
                   </div>
               )
           )}
