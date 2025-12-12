@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Clock, Key, Send, AlertTriangle } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Clock, Key, Send, AlertTriangle, ShieldAlert } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery';
@@ -11,17 +11,14 @@ type AuthView = 'login' | 'register' | 'recovery';
 // ------------------------------------------------------------------
 // CONFIGURACIÓN HCAPTCHA
 // ------------------------------------------------------------------
-const TEST_KEY = '10000000-ffff-ffff-ffff-000000000001';
 
-// LECTURA SEGURA DE VARIABLES DE ENTORNO
-// Usamos funciones para evitar el error "Cannot read properties of undefined"
-// si import.meta.env no existe en tiempo de ejecución.
+// Función segura para leer variables de entorno sin romper la app
 const getEnvKey = () => {
     try {
         // @ts-ignore
         return import.meta.env.VITE_HCAPTCHA_SITE_KEY;
     } catch (e) {
-        return '';
+        return undefined;
     }
 };
 
@@ -34,14 +31,16 @@ const getIsDev = () => {
     }
 };
 
-const RAW_KEY = getEnvKey();
+const SITE_KEY = getEnvKey();
 const IS_DEV = getIsDev();
 
-// LÓGICA DE SELECCIÓN DE CLAVE:
-// 1. Si existe clave real, úsala.
-// 2. Si NO existe clave real y estamos en DEV, usa la de TEST.
-// 3. Si no, vacío (mostrará error en UI).
-const HCAPTCHA_SITE_KEY = RAW_KEY ? RAW_KEY : (IS_DEV ? TEST_KEY : '');
+// Clave de prueba oficial de hCaptcha (solo funciona si se configura explícitamente o en localhost si decidimos usarla)
+const TEST_KEY = '10000000-ffff-ffff-ffff-000000000001';
+
+// LÓGICA ESTRICTA:
+// Solo usamos la clave si existe en el entorno.
+// Si no existe, la variable será undefined y la UI mostrará el error de configuración.
+const HCAPTCHA_SITE_KEY = SITE_KEY; 
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
@@ -117,10 +116,18 @@ const AuthPage: React.FC = () => {
           return;
       }
       
-      if (!captchaToken && !showDevTools && HCAPTCHA_SITE_KEY) {
-          setError("Por favor, completa la verificación de seguridad.");
-          setLoading(false);
-          return;
+      // ESTRICTO: Si no hay clave configurada o no se ha resuelto el captcha
+      if (!showDevTools) {
+          if (!HCAPTCHA_SITE_KEY) {
+              setError("Error crítico: Falta configurar el Captcha en el servidor.");
+              setLoading(false);
+              return;
+          }
+          if (!captchaToken) {
+              setError("Por favor, completa la verificación de seguridad.");
+              setLoading(false);
+              return;
+          }
       }
 
       try {
@@ -153,16 +160,19 @@ const AuthPage: React.FC = () => {
         return;
     }
 
-    if (!HCAPTCHA_SITE_KEY && !showDevTools) {
-        setError("Error Crítico: Falta configurar VITE_HCAPTCHA_SITE_KEY en el servidor.");
-        setLoading(false);
-        return;
-    }
-
-    if (!captchaToken && !showDevTools && HCAPTCHA_SITE_KEY) {
-        setError("Por favor, completa el captcha para continuar.");
-        setLoading(false);
-        return;
+    // ESTRICTO: Bloqueo si falta configuración
+    if (!showDevTools) {
+        if (!HCAPTCHA_SITE_KEY) {
+            setError("Falta configurar VITE_HCAPTCHA_SITE_KEY. No se puede iniciar sesión por seguridad.");
+            setLoading(false);
+            return;
+        }
+        
+        if (!captchaToken) {
+            setError("Por favor, completa el captcha para continuar.");
+            setLoading(false);
+            return;
+        }
     }
 
     try {
@@ -307,19 +317,26 @@ const AuthPage: React.FC = () => {
                         </div>
                         
                         {/* CAPTCHA FOR RECOVERY */}
-                        {!showDevTools && HCAPTCHA_SITE_KEY && (
-                            <div className="flex justify-center my-4">
-                                <HCaptcha
-                                    sitekey={HCAPTCHA_SITE_KEY}
-                                    onVerify={onCaptchaVerify}
-                                    ref={captchaRef}
-                                />
-                            </div>
+                        {!showDevTools && (
+                            HCAPTCHA_SITE_KEY ? (
+                                <div className="flex justify-center my-4">
+                                    <HCaptcha
+                                        sitekey={HCAPTCHA_SITE_KEY}
+                                        onVerify={onCaptchaVerify}
+                                        ref={captchaRef}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-xl text-xs flex items-start gap-2">
+                                    <ShieldAlert size={20} className="shrink-0"/>
+                                    <div><strong>Falta configuración:</strong> Añade <code>VITE_HCAPTCHA_SITE_KEY</code> a tus variables de entorno.</div>
+                                </div>
+                            )
                         )}
 
                         <button
-                            type="submit" disabled={loading}
-                            className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-70 py-4 rounded-2xl font-bold text-white shadow-xl shadow-indigo-200 transition-all active:scale-95 mt-4 flex justify-center items-center text-lg gap-2"
+                            type="submit" disabled={loading || (!HCAPTCHA_SITE_KEY && !showDevTools)}
+                            className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-70 disabled:cursor-not-allowed py-4 rounded-2xl font-bold text-white shadow-xl shadow-indigo-200 transition-all active:scale-95 mt-4 flex justify-center items-center text-lg gap-2"
                         >
                             {loading ? <Loader2 className="animate-spin" /> : <>Enviar Enlace <Send size={20}/></>}
                         </button>
@@ -374,25 +391,26 @@ const AuthPage: React.FC = () => {
             />
           </div>
 
-          {/* CAPTCHA WIDGET */}
-          {!showDevTools && HCAPTCHA_SITE_KEY ? (
-              <div className="flex justify-center my-2 transform scale-90 sm:scale-100 origin-center">
-                  <HCaptcha
-                      sitekey={HCAPTCHA_SITE_KEY}
-                      onVerify={onCaptchaVerify}
-                      ref={captchaRef}
-                  />
-              </div>
-          ) : !showDevTools && (
-              // WARNING SI NO HAY CLAVE EN PROD
-              <div className="bg-amber-50 border border-amber-200 text-amber-700 p-3 rounded-lg text-xs flex items-start gap-2">
-                  <AlertTriangle size={16} className="shrink-0"/>
-                  <div>
-                      <strong>Falta configuración del Captcha:</strong>
-                      <br/>
-                      Añade <code>VITE_HCAPTCHA_SITE_KEY</code> a tus variables de entorno en producción.
+          {/* CAPTCHA WIDGET - STRICT MODE */}
+          {!showDevTools && (
+              HCAPTCHA_SITE_KEY ? (
+                  <div className="flex justify-center my-2 transform scale-90 sm:scale-100 origin-center">
+                      <HCaptcha
+                          sitekey={HCAPTCHA_SITE_KEY}
+                          onVerify={onCaptchaVerify}
+                          ref={captchaRef}
+                      />
                   </div>
-              </div>
+              ) : (
+                  // ERROR DE CONFIGURACIÓN VISIBLE - IMPIDE LOGIN
+                  <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl flex gap-3 text-rose-800 animate-pulse">
+                      <ShieldAlert size={24} className="shrink-0 mt-1" />
+                      <div className="text-xs">
+                          <strong className="block text-sm mb-1">Falta Configuración de Seguridad</strong>
+                          Para habilitar el inicio de sesión, debes añadir la variable de entorno <code>VITE_HCAPTCHA_SITE_KEY</code> en tu servidor o archivo .env.
+                      </div>
+                  </div>
+              )
           )}
 
           {view === 'login' && (
@@ -404,8 +422,8 @@ const AuthPage: React.FC = () => {
           )}
 
           <button
-            type="submit" disabled={loading}
-            className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-70 py-4 rounded-2xl font-bold text-white shadow-xl shadow-indigo-200 transition-all active:scale-95 mt-4 flex justify-center items-center text-lg"
+            type="submit" disabled={loading || (!HCAPTCHA_SITE_KEY && !showDevTools)}
+            className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 disabled:cursor-not-allowed py-4 rounded-2xl font-bold text-white shadow-xl shadow-indigo-200 transition-all active:scale-95 mt-4 flex justify-center items-center text-lg"
           >
             {loading ? <Loader2 className="animate-spin" /> : (view === 'login' ? 'Entrar' : 'Registrarse')}
           </button>
