@@ -3,26 +3,29 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Clock, Key, Send, ShieldAlert } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Clock, Key, Send, ShieldAlert, ShieldCheck } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery';
 
 // ------------------------------------------------------------------
-// CONFIGURACIÓN HCAPTCHA (ESTRICTA)
+// CONFIGURACIÓN HCAPTCHA (SEGURA & HÍBRIDA)
 // ------------------------------------------------------------------
 
-const getEnvKey = () => {
+const getEnvConfig = () => {
     try {
         // @ts-ignore
-        return import.meta.env.VITE_HCAPTCHA_SITE_KEY;
+        const key = import.meta.env.VITE_HCAPTCHA_SITE_KEY;
+        // @ts-ignore
+        const isDev = import.meta.env.DEV; 
+        return { key, isDev };
     } catch (e) {
-        return undefined;
+        // Fallback por si falla el acceso a import.meta
+        return { key: undefined, isDev: false };
     }
 };
 
-// La clave DEBE existir. Si es undefined, la app mostrará error de config.
-const HCAPTCHA_SITE_KEY = getEnvKey();
+const { key: HCAPTCHA_SITE_KEY, isDev: IS_DEV } = getEnvConfig();
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
@@ -98,15 +101,16 @@ const AuthPage: React.FC = () => {
           return;
       }
       
-      // ESTRICTO: Bloqueo si falta config o token
-      if (!showDevTools) {
+      const isLocalBypass = IS_DEV && !HCAPTCHA_SITE_KEY;
+
+      if (!showDevTools && !isLocalBypass) {
           if (!HCAPTCHA_SITE_KEY) {
-              setError("ERROR DE CONFIGURACIÓN: Falta la variable VITE_HCAPTCHA_SITE_KEY en el entorno.");
+              setError("ERROR CONFIG: Falta VITE_HCAPTCHA_SITE_KEY.");
               setLoading(false);
               return;
           }
           if (!captchaToken) {
-              setError("Por favor, completa la verificación de seguridad (Captcha).");
+              setError("Completa el Captcha.");
               setLoading(false);
               return;
           }
@@ -142,10 +146,13 @@ const AuthPage: React.FC = () => {
         return;
     }
 
-    // ESTRICTO: Bloqueo total si falta la clave o el token
-    if (!showDevTools) {
+    // LÓGICA DE BLOQUEO INTELIGENTE
+    // Permitimos paso si hay token, O SI estamos en local y no hay clave configurada.
+    const isLocalBypass = IS_DEV && !HCAPTCHA_SITE_KEY;
+
+    if (!showDevTools && !isLocalBypass) {
         if (!HCAPTCHA_SITE_KEY) {
-            setError("ERROR CRÍTICO: No se detecta la clave del Captcha (VITE_HCAPTCHA_SITE_KEY). Revisa las variables de entorno.");
+            setError("ERROR CRÍTICO: Falta la clave del Captcha en la configuración de Vercel/Environment.");
             setLoading(false);
             return;
         }
@@ -159,7 +166,7 @@ const AuthPage: React.FC = () => {
 
     try {
       let result;
-      // Enviamos el token estrictamente
+      // Solo enviamos el token si existe (si es bypass local, va undefined y Supabase debería aceptarlo si no tiene captcha forzado)
       const authOptions = captchaToken ? { options: { captchaToken } } : undefined;
 
       if (view === 'login') {
@@ -216,6 +223,7 @@ const AuthPage: React.FC = () => {
       else if (message.includes('Invalid login')) message = 'Credenciales incorrectas.';
       else if (message.includes('User already registered')) message = 'Este email ya está registrado.';
       else if (message.includes('Captcha')) message = 'Error de Captcha. Inténtalo de nuevo.';
+      else if (message.includes('security purposes')) message = 'El servidor requiere Captcha pero no se ha enviado. Revisa la configuración.';
       
       setError(message);
       if(captchaRef.current) captchaRef.current.resetCaptcha();
@@ -309,16 +317,20 @@ const AuthPage: React.FC = () => {
                                         ref={captchaRef}
                                     />
                                 </div>
+                            ) : IS_DEV ? (
+                                <div className="bg-amber-50 text-amber-600 text-xs p-2 text-center rounded-lg border border-amber-100">
+                                    Modo Local: Captcha Omitido
+                                </div>
                             ) : (
                                 <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-xl text-xs flex items-start gap-2">
                                     <ShieldAlert size={20} className="shrink-0"/>
-                                    <div><strong>Falta configuración:</strong> VITE_HCAPTCHA_SITE_KEY no encontrada.</div>
+                                    <div><strong>Error Config:</strong> Falta clave Captcha.</div>
                                 </div>
                             )
                         )}
 
                         <button
-                            type="submit" disabled={loading || (!HCAPTCHA_SITE_KEY && !showDevTools)}
+                            type="submit" disabled={loading || (!HCAPTCHA_SITE_KEY && !IS_DEV && !showDevTools)}
                             className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-70 disabled:cursor-not-allowed py-4 rounded-2xl font-bold text-white shadow-xl shadow-indigo-200 transition-all active:scale-95 mt-4 flex justify-center items-center text-lg gap-2"
                         >
                             {loading ? <Loader2 className="animate-spin" /> : <>Enviar Enlace <Send size={20}/></>}
@@ -374,7 +386,7 @@ const AuthPage: React.FC = () => {
             />
           </div>
 
-          {/* CAPTCHA WIDGET - STRICT */}
+          {/* CAPTCHA WIDGET - SMART LOGIC */}
           {!showDevTools && (
               HCAPTCHA_SITE_KEY ? (
                   <div className="flex justify-center my-2 transform scale-90 sm:scale-100 origin-center">
@@ -384,14 +396,19 @@ const AuthPage: React.FC = () => {
                           ref={captchaRef}
                       />
                   </div>
+              ) : IS_DEV ? (
+                  // LOCAL DEV BYPASS MESSAGE
+                  <div className="bg-indigo-50 border border-indigo-100 p-3 rounded-xl flex items-center justify-center gap-2 text-indigo-700 text-xs font-bold mb-2">
+                      <ShieldCheck size={16}/> Modo Local: Captcha Omitido
+                  </div>
               ) : (
-                  // ERROR DE CONFIGURACIÓN CLARO
+                  // ERROR DE CONFIGURACIÓN CLARO (PRODUCCIÓN)
                   <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl flex gap-3 text-rose-800">
                       <ShieldAlert size={24} className="shrink-0 mt-1" />
                       <div className="text-xs">
                           <strong className="block text-sm mb-1">Falta Configuración del Captcha</strong>
                           <p className="mb-1">No se ha encontrado la clave <code>VITE_HCAPTCHA_SITE_KEY</code>.</p>
-                          <p>Por seguridad, no se permite el acceso sin Captcha.</p>
+                          <p>El acceso está bloqueado por seguridad.</p>
                       </div>
                   </div>
               )
@@ -406,7 +423,7 @@ const AuthPage: React.FC = () => {
           )}
 
           <button
-            type="submit" disabled={loading || (!HCAPTCHA_SITE_KEY && !showDevTools)}
+            type="submit" disabled={loading || (!HCAPTCHA_SITE_KEY && !IS_DEV && !showDevTools)}
             className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 disabled:cursor-not-allowed py-4 rounded-2xl font-bold text-white shadow-xl shadow-indigo-200 transition-all active:scale-95 mt-4 flex justify-center items-center text-lg"
           >
             {loading ? <Loader2 className="animate-spin" /> : (view === 'login' ? 'Entrar' : 'Registrarse')}
