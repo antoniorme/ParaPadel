@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, CheckCircle, ShieldAlert, Clock, Key, Send } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, CheckCircle, ShieldAlert, Clock, Key, Send, AlertTriangle } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery';
@@ -24,10 +24,10 @@ const getEnv = (key: string, defaultValue: string): string => {
 
 // ------------------------------------------------------------------
 // CONFIGURACIÓN HCAPTCHA
-// Clave de pruebas oficial de hCaptcha: 10000000-ffff-ffff-ffff-000000000001
-// Usa esta si no tienes una real configurada en .env para evitar errores en local.
+// IMPORTANTE: Ya no usamos clave de prueba por defecto.
+// Si falla, es porque Vercel no está inyectando VITE_HCAPTCHA_SITE_KEY.
 // ------------------------------------------------------------------
-const HCAPTCHA_SITE_KEY = getEnv('VITE_HCAPTCHA_SITE_KEY', '10000000-ffff-ffff-ffff-000000000001');
+const HCAPTCHA_SITE_KEY = getEnv('VITE_HCAPTCHA_SITE_KEY', '');
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
@@ -53,8 +53,8 @@ const AuthPage: React.FC = () => {
 
   useEffect(() => {
       const isPlaceholder = (supabase as any).supabaseUrl === 'https://placeholder.supabase.co';
-      // Si estamos offline o usando la base de datos de prueba
-      if (isOfflineMode || isPlaceholder) {
+      // Si estamos offline, usando la base de datos de prueba, O SI NO HAY KEY DE CAPTCHA
+      if (isOfflineMode || isPlaceholder || !HCAPTCHA_SITE_KEY) {
           setShowDevTools(true);
       }
   }, [isOfflineMode]);
@@ -103,8 +103,8 @@ const AuthPage: React.FC = () => {
           return;
       }
       
-      // Captcha Check
-      if (!captchaToken && !showDevTools) {
+      // Captcha Check (Solo si no estamos en modo dev forzado)
+      if (!captchaToken && !showDevTools && HCAPTCHA_SITE_KEY) {
           setError("Por favor, completa la verificación de seguridad.");
           setLoading(false);
           return;
@@ -140,7 +140,7 @@ const AuthPage: React.FC = () => {
     }
 
     // CAPTCHA CHECK
-    if (!captchaToken && !showDevTools) {
+    if (!captchaToken && !showDevTools && HCAPTCHA_SITE_KEY) {
         setError("Por favor, completa el captcha para continuar.");
         setLoading(false);
         return;
@@ -288,7 +288,7 @@ const AuthPage: React.FC = () => {
                         </div>
                         
                         {/* CAPTCHA FOR RECOVERY */}
-                        {!showDevTools && (
+                        {!showDevTools && HCAPTCHA_SITE_KEY && (
                             <div className="flex justify-center my-4">
                                 <HCaptcha
                                     sitekey={HCAPTCHA_SITE_KEY}
@@ -337,6 +337,16 @@ const AuthPage: React.FC = () => {
           </div>
         )}
 
+        {!HCAPTCHA_SITE_KEY && !isOfflineMode && !showDevTools && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl text-xs mb-6 flex items-start gap-2">
+                <AlertTriangle size={16} className="shrink-0 mt-0.5"/>
+                <span>
+                    <strong>Configuración Incompleta:</strong> No se ha detectado la clave <code>VITE_HCAPTCHA_SITE_KEY</code>.
+                    <br/>Revisa las variables de entorno en Vercel.
+                </span>
+            </div>
+        )}
+
         <form onSubmit={handleAuth} className="space-y-4">
           <div className="relative">
             <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
@@ -356,7 +366,7 @@ const AuthPage: React.FC = () => {
           </div>
 
           {/* CAPTCHA WIDGET (hCaptcha) */}
-          {!showDevTools && (
+          {!showDevTools && HCAPTCHA_SITE_KEY && (
               <div className="flex justify-center my-2 transform scale-90 sm:scale-100 origin-center">
                   <HCaptcha
                       sitekey={HCAPTCHA_SITE_KEY}
@@ -393,6 +403,9 @@ const AuthPage: React.FC = () => {
             <div className="mt-12 pt-8 border-t border-slate-200 animate-fade-in">
                 <div className="flex items-center justify-center gap-2 text-slate-400 text-xs font-bold uppercase mb-4">
                     <Code2 size={16}/> Modo Desarrollador (Simulación)
+                </div>
+                <div className="text-center text-[10px] text-slate-400 mb-2">
+                    Activado porque no se detectaron claves de producción o base de datos real.
                 </div>
                 <div className="grid grid-cols-2 gap-3 mb-3">
                     <button 
