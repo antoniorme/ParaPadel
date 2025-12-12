@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Clock, Key, Send, AlertTriangle } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Clock, Key, Send } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery';
@@ -13,32 +13,16 @@ type AuthView = 'login' | 'register' | 'recovery';
 // ------------------------------------------------------------------
 const TEST_KEY = '10000000-ffff-ffff-ffff-000000000001';
 
-// Definición segura de variables para evitar el crash "Cannot read properties of undefined"
-// Usamos optional chaining y fallback para asegurar que nunca sea undefined.
-const getEnvVar = (key: string) => {
-    try {
-        // @ts-ignore
-        return import.meta.env && import.meta.env[key] ? import.meta.env[key] : '';
-    } catch {
-        return '';
-    }
-};
+// CORRECCIÓN CRÍTICA:
+// Vite necesita leer 'import.meta.env.VITE_HCAPTCHA_SITE_KEY' literalmente para sustituirlo en build.
+// Usamos optional chaining (?.) para evitar el crash si el objeto env no existe.
+// @ts-ignore
+const SITE_KEY = import.meta?.env?.VITE_HCAPTCHA_SITE_KEY || '';
+// @ts-ignore
+const IS_DEV = import.meta?.env?.DEV || false;
 
-const getIsDev = () => {
-    try {
-        // @ts-ignore
-        return import.meta.env && import.meta.env.DEV ? true : false;
-    } catch {
-        return false;
-    }
-}
-
-// Clave real o vacía
-const REAL_SITE_KEY = getEnvVar('VITE_HCAPTCHA_SITE_KEY');
-const IS_DEV_MODE = getIsDev();
-
-// Lógica final: Si hay clave en .env, úsala. Si estamos en DEV y no hay clave, usa la de test.
-const HCAPTCHA_SITE_KEY = REAL_SITE_KEY || (IS_DEV_MODE ? TEST_KEY : '');
+// Si hay clave real, úsala. Si no, y estamos en local, usa la de test. Si no, vacío.
+const HCAPTCHA_SITE_KEY = SITE_KEY || (IS_DEV ? TEST_KEY : '');
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
@@ -152,7 +136,7 @@ const AuthPage: React.FC = () => {
     }
 
     // CAPTCHA CHECK
-    // Solo bloqueamos si EXISTE una clave de captcha configurada y no se ha resuelto.
+    // Solo requerimos captcha si existe una clave configurada y visible.
     if (!captchaToken && !showDevTools && HCAPTCHA_SITE_KEY) {
         setError("Por favor, completa el captcha para continuar.");
         setLoading(false);
@@ -377,13 +361,6 @@ const AuthPage: React.FC = () => {
                       onVerify={onCaptchaVerify}
                       ref={captchaRef}
                   />
-              </div>
-          )}
-
-          {/* FALLBACK WARNING: Si no hay clave y no estamos en dev, muestra aviso sutil para debug (Opcional, pero útil si dices que no sale) */}
-          {!showDevTools && !HCAPTCHA_SITE_KEY && !IS_DEV_MODE && (
-              <div className="text-[10px] text-slate-300 text-center">
-                  Captcha no configurado (Falta variable de entorno)
               </div>
           )}
 
