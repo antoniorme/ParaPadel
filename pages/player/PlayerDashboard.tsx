@@ -3,7 +3,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTournament } from '../../store/TournamentContext';
 import { useHistory } from '../../store/HistoryContext';
-import { useNotifications } from '../../store/NotificationContext'; // IMPORT
+import { useNotifications } from '../../store/NotificationContext';
+import { useAuth } from '../../store/AuthContext'; // Added useAuth
 import { THEME } from '../../utils/theme';
 import { Activity, TrendingUp, Award, Calendar, ChevronRight, LogOut, UserCircle, Bell } from 'lucide-react';
 import { calculateDisplayRanking } from '../../utils/Elo';
@@ -12,7 +13,8 @@ const PlayerDashboard: React.FC = () => {
     const navigate = useNavigate();
     const { state, formatPlayerName } = useTournament();
     const { pastTournaments } = useHistory();
-    const { unreadCount } = useNotifications(); // USE NOTIFICATIONS
+    const { unreadCount } = useNotifications();
+    const { role, signOut } = useAuth(); // Hook auth
 
     // --- IDENTITY SIMULATOR ---
     const [myPlayerId, setMyPlayerId] = useState<string>(() => {
@@ -54,8 +56,15 @@ const PlayerDashboard: React.FC = () => {
 
     }, [currentPlayer, pastTournaments, state]);
 
-    const handleExit = () => {
-        navigate('/dashboard');
+    const handleExit = async () => {
+        if (role === 'admin' || role === 'superadmin') {
+            // Si soy admin, solo salgo de la vista de jugador
+            navigate('/dashboard');
+        } else {
+            // Si soy jugador real, cierro sesión
+            await signOut();
+            navigate('/');
+        }
     };
 
     if (!currentPlayer) {
@@ -74,7 +83,7 @@ const PlayerDashboard: React.FC = () => {
                         <option key={p.id} value={p.id}>{formatPlayerName(p)} ({p.categories?.[0] || 'Sin Nivel'})</option>
                     ))}
                 </select>
-                <button onClick={handleExit} className="mt-8 text-slate-400 font-bold text-sm">Volver al Admin</button>
+                <button onClick={handleExit} className="mt-8 text-slate-400 font-bold text-sm">Volver</button>
             </div>
         );
     }
@@ -85,17 +94,19 @@ const PlayerDashboard: React.FC = () => {
     return (
         <div className="p-6 space-y-8 relative pb-24">
             
-            {/* Identity Switcher */}
-            <div className="bg-slate-100 p-2 rounded-lg flex items-center justify-between text-xs mb-2">
-                <span className="font-bold text-slate-500 uppercase px-2">Viendo como:</span>
-                <select 
-                    value={myPlayerId} 
-                    onChange={(e) => setMyPlayerId(e.target.value)}
-                    className="bg-white border border-slate-200 rounded px-2 py-1 font-bold text-slate-700 outline-none"
-                >
-                    {state.players.map(p => <option key={p.id} value={p.id}>{formatPlayerName(p)}</option>)}
-                </select>
-            </div>
+            {/* Identity Switcher (Solo visible si eres Admin simulando) */}
+            {(role === 'admin' || role === 'superadmin') && (
+                <div className="bg-slate-100 p-2 rounded-lg flex items-center justify-between text-xs mb-2">
+                    <span className="font-bold text-slate-500 uppercase px-2">Viendo como:</span>
+                    <select 
+                        value={myPlayerId} 
+                        onChange={(e) => setMyPlayerId(e.target.value)}
+                        className="bg-white border border-slate-200 rounded px-2 py-1 font-bold text-slate-700 outline-none"
+                    >
+                        {state.players.map(p => <option key={p.id} value={p.id}>{formatPlayerName(p)}</option>)}
+                    </select>
+                </div>
+            )}
 
             {/* Header */}
             <div className="flex justify-between items-center">
@@ -108,7 +119,7 @@ const PlayerDashboard: React.FC = () => {
                         onClick={handleExit}
                         className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-500 rounded-full text-[10px] font-bold uppercase tracking-wide hover:bg-slate-200 transition-colors"
                     >
-                        <LogOut size={12} /> Salir
+                        <LogOut size={12} /> {(role === 'admin' || role === 'superadmin') ? 'Volver' : 'Salir'}
                     </button>
                     <div className="w-12 h-12 rounded-full bg-slate-100 border-2 border-white shadow-md flex items-center justify-center text-lg font-black text-slate-400 overflow-hidden">
                         {currentPlayer.name[0]}

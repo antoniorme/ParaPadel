@@ -164,11 +164,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isOfflineMode) {
         sessionStorage.removeItem('padelpro_dev_mode');
         window.location.reload();
-    } else {
+        return;
+    } 
+    
+    // FORZAMOS LIMPIEZA LOCAL SIEMPRE, INCLUSO SI SUPABASE FALLA
+    try {
         await supabase.auth.signOut();
+    } catch (error) {
+        console.error("Error al cerrar sesión en Supabase (limpiando localmente):", error);
+    } finally {
         setUser(null);
         setSession(null);
         setRole(null);
+        // Limpiamos simulación de jugador por si acaso
+        localStorage.removeItem('padel_sim_player_id');
     }
   };
 
