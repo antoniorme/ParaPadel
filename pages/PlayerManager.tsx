@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
-import { Search, Edit2, Save, Eye, Trophy, Activity, Plus, Check, X, Trash2, AlertTriangle } from 'lucide-react';
+import { Search, Edit2, Save, Eye, Trophy, Activity, Plus, Check, X, Trash2, AlertTriangle, ArrowRightCircle, ArrowLeftCircle, Shuffle } from 'lucide-react';
 import { Player } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { calculateDisplayRanking, calculateInitialElo, manualToElo } from '../utils/Elo';
@@ -22,7 +22,7 @@ const PlayerManager: React.FC = () => {
   const [alertMessage, setAlertMessage] = useState<AlertState | null>(null);
   
   const [isCreating, setIsCreating] = useState(false);
-  const [newPlayer, setNewPlayer] = useState({ name: '', nickname: '', categories: [] as string[], manual_rating: 5, email: '', phone: '' });
+  const [newPlayer, setNewPlayer] = useState({ name: '', nickname: '', categories: [] as string[], manual_rating: 5, email: '', phone: '', preferred_position: undefined as 'right' | 'backhand' | undefined, play_both_sides: false });
 
   const filteredPlayers = state.players.filter(p => {
       const matchesCat = filterCat === 'all' || (p.categories && p.categories.includes(filterCat));
@@ -71,7 +71,7 @@ const PlayerManager: React.FC = () => {
           setAlertMessage({ type: 'error', message: "Error al crear el jugador. Inténtalo de nuevo." });
       } else {
           setIsCreating(false);
-          setNewPlayer({ name: '', nickname: '', categories: [], manual_rating: 5, email: '', phone: '' });
+          setNewPlayer({ name: '', nickname: '', categories: [], manual_rating: 5, email: '', phone: '', preferred_position: undefined, play_both_sides: false });
           setAlertMessage({ type: 'success', message: "Jugador creado correctamente." });
       }
   };
@@ -100,12 +100,26 @@ const PlayerManager: React.FC = () => {
       });
   };
 
+  const getPositionLabel = (pos?: string, both?: boolean) => {
+      if (!pos) return null;
+      let label = pos === 'right' ? 'Derecha' : 'Revés';
+      return (
+          <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold border flex items-center gap-1 ${both ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+              {label} {both && <Shuffle size={8}/>}
+          </span>
+      );
+  };
+
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-8 pb-20">
       <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold text-slate-900">Gestión Jugadores</h2>
-          <button onClick={() => setIsCreating(true)} style={{ backgroundColor: THEME.cta }} className="p-3 text-white rounded-xl shadow-lg transition-all active:scale-95 hover:opacity-90">
-              <Plus size={24} />
+          <button 
+            onClick={() => setIsCreating(true)} 
+            style={{ backgroundColor: THEME.cta }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-white font-bold text-sm shadow-md active:scale-95 transition-transform hover:opacity-90"
+          >
+              <Plus size={18} /> Crear
           </button>
       </div>
 
@@ -142,8 +156,9 @@ const PlayerManager: React.FC = () => {
                           <div className="font-bold text-slate-800 text-lg flex items-center gap-2">
                               {formatPlayerName(player)}
                           </div>
-                          <div className="flex items-center gap-3 mt-1">
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
                               <span className="text-xs text-slate-500 bg-slate-100 px-1.5 rounded">{player.categories?.[0] || 'Sin Cat'}</span>
+                              {getPositionLabel(player.preferred_position, player.play_both_sides)}
                               <span className="text-xs font-bold text-blue-600 flex items-center gap-1"><Activity size={10}/> {rankingScore} pts</span>
                           </div>
                       </div>
@@ -169,6 +184,34 @@ const PlayerManager: React.FC = () => {
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Nombre Completo</label><input autoFocus value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" placeholder="Ej. Juan Pérez" /></div>
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Apodo (Opcional)</label><input value={newPlayer.nickname} onChange={e => setNewPlayer({...newPlayer, nickname: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" placeholder="Ej. Juanito" /></div>
                       
+                      {/* Position Selector */}
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Posición Predilecta</label>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={() => setNewPlayer({...newPlayer, preferred_position: 'right'})}
+                                    className={`flex-1 py-2 text-xs font-bold uppercase rounded-lg flex items-center justify-center gap-1 transition-all border ${newPlayer.preferred_position === 'right' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-600'}`}
+                                >
+                                    <ArrowRightCircle size={14}/> Derecha
+                                </button>
+                                <button 
+                                    onClick={() => setNewPlayer({...newPlayer, preferred_position: 'backhand'})}
+                                    className={`flex-1 py-2 text-xs font-bold uppercase rounded-lg flex items-center justify-center gap-1 transition-all border ${newPlayer.preferred_position === 'backhand' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-600'}`}
+                                >
+                                    <ArrowLeftCircle size={14}/> Revés
+                                </button>
+                            </div>
+                            <div 
+                                onClick={() => setNewPlayer({...newPlayer, play_both_sides: !newPlayer.play_both_sides})}
+                                className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer border transition-colors ${newPlayer.play_both_sides ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-transparent hover:bg-slate-50'}`}
+                            >
+                                <div className={`w-4 h-4 rounded border flex items-center justify-center ${newPlayer.play_both_sides ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
+                                    {newPlayer.play_both_sides && <Check size={10} className="text-white"/>}
+                                </div>
+                                <span className={`text-xs font-bold ${newPlayer.play_both_sides ? 'text-emerald-700' : 'text-slate-500'}`}>Se adapta al otro lado (Versátil)</span>
+                            </div>
+                        </div>
+
                       <div>
                         <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Categorías (Base ELO)</label>
                         <div className="flex flex-wrap gap-2 mb-2">
@@ -219,6 +262,34 @@ const PlayerManager: React.FC = () => {
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Nombre Real</label><input value={editingPlayer.name} onChange={e => setEditingPlayer({...editingPlayer, name: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" /></div>
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Apodo</label><input value={editingPlayer.nickname || ''} onChange={e => setEditingPlayer({...editingPlayer, nickname: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" /></div>
                       
+                      {/* Position Selector */}
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Posición Predilecta</label>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={() => setEditingPlayer({...editingPlayer, preferred_position: 'right'})}
+                                    className={`flex-1 py-2 text-xs font-bold uppercase rounded-lg flex items-center justify-center gap-1 transition-all border ${editingPlayer.preferred_position === 'right' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-600'}`}
+                                >
+                                    <ArrowRightCircle size={14}/> Derecha
+                                </button>
+                                <button 
+                                    onClick={() => setEditingPlayer({...editingPlayer, preferred_position: 'backhand'})}
+                                    className={`flex-1 py-2 text-xs font-bold uppercase rounded-lg flex items-center justify-center gap-1 transition-all border ${editingPlayer.preferred_position === 'backhand' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-600'}`}
+                                >
+                                    <ArrowLeftCircle size={14}/> Revés
+                                </button>
+                            </div>
+                            <div 
+                                onClick={() => setEditingPlayer({...editingPlayer, play_both_sides: !editingPlayer.play_both_sides})}
+                                className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer border transition-colors ${editingPlayer.play_both_sides ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-transparent hover:bg-slate-50'}`}
+                            >
+                                <div className={`w-4 h-4 rounded border flex items-center justify-center ${editingPlayer.play_both_sides ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
+                                    {editingPlayer.play_both_sides && <Check size={10} className="text-white"/>}
+                                </div>
+                                <span className={`text-xs font-bold ${editingPlayer.play_both_sides ? 'text-emerald-700' : 'text-slate-500'}`}>Se adapta al otro lado (Versátil)</span>
+                            </div>
+                        </div>
+
                       <div>
                         <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Categorías (Base ELO)</label>
                         <div className="flex flex-wrap gap-2 mb-2">

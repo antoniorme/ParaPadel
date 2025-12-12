@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTournament } from '../../store/TournamentContext';
 import { useHistory } from '../../store/HistoryContext';
 import { THEME, getFormatColor } from '../../utils/theme';
-import { ArrowLeft, Trophy, Medal, Calendar, Hash, Activity, BarChart2, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Trophy, Medal, Calendar, Hash, Activity, BarChart2, TrendingUp, ChevronDown, ChevronUp, Shuffle } from 'lucide-react';
 import { calculateDisplayRanking, calculateMatchDelta, getPairTeamElo } from '../../utils/Elo';
 import { TournamentState, Match } from '../../types';
 
@@ -182,9 +182,15 @@ const PlayerProfile: React.FC = () => {
                         </div>
                     </div>
                     <h2 className="text-2xl font-black text-slate-900">{currentPlayer.nickname || currentPlayer.name}</h2>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 mt-1 flex-wrap justify-center">
                         <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-xs font-bold uppercase">{currentPlayer.categories?.[0] || 'Sin Nivel'}</span>
-                        <span className="text-[#575AF9] font-black text-lg flex items-center gap-1"><Activity size={16}/> {currentElo} pts</span>
+                        {currentPlayer.preferred_position && (
+                           <span className="bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded text-xs font-bold uppercase border border-indigo-100 flex items-center gap-1">
+                               {currentPlayer.preferred_position === 'right' ? 'Derecha' : 'Revés'}
+                               {currentPlayer.play_both_sides && <Shuffle size={10} className="text-emerald-500"/>}
+                           </span>
+                        )}
+                        <span className="text-[#575AF9] font-black text-lg flex items-center gap-1 ml-2"><Activity size={16}/> {currentElo} pts</span>
                     </div>
                 </div>
 

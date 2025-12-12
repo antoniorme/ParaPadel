@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { useHistory } from '../store/HistoryContext';
-import { ArrowLeft, Trophy, Medal, Edit2, Save, Calendar, User, Smartphone, Mail, Activity, BarChart2, Hash, Trash2 } from 'lucide-react';
+import { ArrowLeft, Trophy, Medal, Edit2, Save, Calendar, User, Smartphone, Mail, Activity, BarChart2, Hash, Trash2, ArrowRightCircle, ArrowLeftCircle, Check, Shuffle } from 'lucide-react';
 import { TournamentState, Match } from '../types';
 import { calculateDisplayRanking, manualToElo, calculateInitialElo, getPairTeamElo, calculateMatchDelta } from '../utils/Elo';
 import { THEME } from '../utils/theme';
@@ -18,7 +18,7 @@ const PlayerProfile: React.FC = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const player = state.players.find(p => p.id === playerId);
-  const [editForm, setEditForm] = useState(player || { name: '', nickname: '', categories: [] as string[], email: '', phone: '', id: '', manual_rating: 5 });
+  const [editForm, setEditForm] = useState(player || { name: '', nickname: '', categories: [] as string[], email: '', phone: '', id: '', manual_rating: 5, preferred_position: undefined as 'right' | 'backhand' | undefined, play_both_sides: false });
 
   const stats = useMemo(() => {
       if (!playerId || !player) return null;
@@ -155,6 +155,12 @@ const PlayerProfile: React.FC = () => {
                    <div className="text-sm font-bold text-slate-400 mb-3">{player.name}</div>
                    <div className="flex flex-wrap gap-2">
                        {player.categories?.map(c => <span key={c} className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold uppercase tracking-wider border border-slate-200">{c}</span>)}
+                       {player.preferred_position && (
+                           <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[10px] font-bold uppercase tracking-wider border border-indigo-100 flex items-center gap-1">
+                               {player.preferred_position === 'right' ? 'Derecha' : 'Revés'}
+                               {player.play_both_sides && <Shuffle size={10} className="text-emerald-500"/>}
+                           </span>
+                       )}
                    </div>
                </div>
           </div>
@@ -257,6 +263,34 @@ const PlayerProfile: React.FC = () => {
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Nombre</label><input value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" /></div>
                       <div><label className="text-xs font-bold text-slate-500 uppercase">Apodo</label><input value={editForm.nickname || ''} onChange={e => setEditForm({...editForm, nickname: e.target.value})} className="w-full border border-slate-300 rounded-lg p-3 mt-1 bg-white text-slate-900" /></div>
                       
+                      {/* Position Selector */}
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Posición Predilecta</label>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={() => setEditForm({...editForm, preferred_position: 'right'})}
+                                    className={`flex-1 py-2 text-xs font-bold uppercase rounded-lg flex items-center justify-center gap-1 transition-all border ${editForm.preferred_position === 'right' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-600'}`}
+                                >
+                                    <ArrowRightCircle size={14}/> Derecha
+                                </button>
+                                <button 
+                                    onClick={() => setEditForm({...editForm, preferred_position: 'backhand'})}
+                                    className={`flex-1 py-2 text-xs font-bold uppercase rounded-lg flex items-center justify-center gap-1 transition-all border ${editForm.preferred_position === 'backhand' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-600'}`}
+                                >
+                                    <ArrowLeftCircle size={14}/> Revés
+                                </button>
+                            </div>
+                            <div 
+                                onClick={() => setEditForm({...editForm, play_both_sides: !editForm.play_both_sides})}
+                                className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer border transition-colors ${editForm.play_both_sides ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-transparent hover:bg-slate-50'}`}
+                            >
+                                <div className={`w-4 h-4 rounded border flex items-center justify-center ${editForm.play_both_sides ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
+                                    {editForm.play_both_sides && <Check size={10} className="text-white"/>}
+                                </div>
+                                <span className={`text-xs font-bold ${editForm.play_both_sides ? 'text-emerald-700' : 'text-slate-500'}`}>Se adapta al otro lado (Versátil)</span>
+                            </div>
+                        </div>
+
                       {/* MANUAL RATING SLIDER */}
                       <div>
                           <label className="text-xs font-bold text-amber-600 uppercase flex items-center gap-1"><Trophy size={12}/> Valoración Manual (1-10)</label>

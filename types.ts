@@ -1,3 +1,4 @@
+
 export interface Player {
   id: string; // UUID
   user_id?: string; // ID del Club (Admin)
@@ -7,6 +8,10 @@ export interface Player {
   email?: string;
   phone?: string;
   categories?: string[]; // Categorías declaradas
+  
+  // POSITION LOGIC
+  preferred_position?: 'right' | 'backhand'; // Solo Derecha o Revés
+  play_both_sides?: boolean; // Versatilidad (Puede jugar en el otro lado)
   
   // ADVANCED ELO SYSTEM
   global_rating?: number; // Rating transversal (amortiguado)

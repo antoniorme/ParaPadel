@@ -37,7 +37,7 @@ const ClubDashboard: React.FC = () => {
                 <div className="text-center py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200">
                     <Calendar size={48} className="mx-auto text-slate-300 mb-4"/>
                     <h3 className="text-lg font-bold text-slate-700">No hay torneos activos</h3>
-                    <p className="text-slate-400 text-sm mb-6">Crea uno nuevo para empezar a jugar.</p>
+                    <p className="text-slate-400 text-sm mb-6">Crea un torneo para empezar a promocionarlo.</p>
                     <button 
                         onClick={() => navigate('/setup')}
                         className="text-[#575AF9] font-bold text-sm hover:underline"

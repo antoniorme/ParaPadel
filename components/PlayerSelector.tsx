@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Player } from '../types';
 import { TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
-import { User, X, Search, Plus, Phone, Check, Database } from 'lucide-react';
+import { User, X, Search, Plus, Phone, Check, Database, ArrowRightCircle, ArrowLeftCircle, Shuffle } from 'lucide-react';
 
 interface PlayerSelectorProps {
     label: string;
@@ -25,6 +25,8 @@ export const PlayerSelector: React.FC<PlayerSelectorProps> = ({ label, selectedI
         nickname: '', 
         phone: '', 
         categories: [] as string[], 
+        preferred_position: undefined as 'right' | 'backhand' | undefined,
+        play_both_sides: false,
         saveRecord: true, 
         manual_rating: 5 
     });
@@ -46,12 +48,14 @@ export const PlayerSelector: React.FC<PlayerSelectorProps> = ({ label, selectedI
             nickname: newPlayer.nickname,
             phone: newPlayer.phone,
             categories: newPlayer.categories,
+            preferred_position: newPlayer.preferred_position,
+            play_both_sides: newPlayer.play_both_sides,
             manual_rating: newPlayer.manual_rating,
         });
 
         if(newId) { 
             onSelect(newId); 
-            setNewPlayer({ name: '', nickname: '', phone: '', categories: [], saveRecord: true, manual_rating: 5 }); 
+            setNewPlayer({ name: '', nickname: '', phone: '', categories: [], preferred_position: undefined, play_both_sides: false, saveRecord: true, manual_rating: 5 }); 
             setTab('search'); 
         }
     };
@@ -72,6 +76,12 @@ export const PlayerSelector: React.FC<PlayerSelectorProps> = ({ label, selectedI
                         <div style={{ color: THEME.cta }} className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center border border-indigo-200"><User size={16} /></div>
                         <div>
                             <div className="font-bold text-slate-800 text-sm">{formatName(selectedPlayer)}</div>
+                            {selectedPlayer?.preferred_position && (
+                                <div className="text-[10px] text-slate-400 uppercase font-bold flex items-center gap-1">
+                                    {selectedPlayer.preferred_position === 'right' ? 'Derecha' : 'Revés'}
+                                    {selectedPlayer.play_both_sides && <Shuffle size={10} className="text-emerald-500"/>}
+                                </div>
+                            )}
                         </div>
                     </div>
                     <button onClick={() => onSelect('')} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><X size={18}/></button>
@@ -88,7 +98,15 @@ export const PlayerSelector: React.FC<PlayerSelectorProps> = ({ label, selectedI
                             <div className="max-h-48 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
                                 {filteredPlayers.slice(0, 50).map(p => (
                                     <button key={p.id} onClick={() => onSelect(p.id)} className="w-full text-left p-2 hover:bg-blue-50 rounded flex items-center justify-between text-sm text-slate-700 border border-transparent hover:border-blue-100 transition-colors">
-                                        <span className="font-medium">{formatName(p)}</span>
+                                        <div className="flex flex-col">
+                                            <span className="font-medium">{formatName(p)}</span>
+                                            {p.preferred_position && (
+                                                <span className="text-[9px] text-slate-400 uppercase flex items-center gap-1">
+                                                    {p.preferred_position === 'right' ? 'Derecha' : 'Revés'}
+                                                    {p.play_both_sides && <Shuffle size={8} className="text-emerald-500"/>}
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="flex items-center gap-2">{p.categories?.[0] && <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{p.categories[0]}</span>}</div>
                                     </button>
                                 ))}
@@ -104,6 +122,34 @@ export const PlayerSelector: React.FC<PlayerSelectorProps> = ({ label, selectedI
                                 <div className="relative">
                                     <Phone size={14} className="absolute left-3 top-3.5 text-slate-400"/>
                                     <input placeholder="Teléfono" value={newPlayer.phone} onChange={e => setNewPlayer({...newPlayer, phone: e.target.value})} className="w-full pl-9 p-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-[#575AF9] text-slate-800 placeholder:text-slate-400" />
+                                </div>
+                            </div>
+
+                            {/* Position Selector */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">Posición Predilecta</label>
+                                <div className="flex gap-2">
+                                    <button 
+                                        onClick={() => setNewPlayer({...newPlayer, preferred_position: 'right'})}
+                                        className={`flex-1 py-2 text-xs font-bold uppercase rounded-lg flex items-center justify-center gap-1 transition-all border ${newPlayer.preferred_position === 'right' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-600'}`}
+                                    >
+                                        <ArrowRightCircle size={14}/> Derecha
+                                    </button>
+                                    <button 
+                                        onClick={() => setNewPlayer({...newPlayer, preferred_position: 'backhand'})}
+                                        className={`flex-1 py-2 text-xs font-bold uppercase rounded-lg flex items-center justify-center gap-1 transition-all border ${newPlayer.preferred_position === 'backhand' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-400 hover:text-slate-600'}`}
+                                    >
+                                        <ArrowLeftCircle size={14}/> Revés
+                                    </button>
+                                </div>
+                                <div 
+                                    onClick={() => setNewPlayer({...newPlayer, play_both_sides: !newPlayer.play_both_sides})}
+                                    className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer border transition-colors ${newPlayer.play_both_sides ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-transparent hover:bg-slate-50'}`}
+                                >
+                                    <div className={`w-4 h-4 rounded border flex items-center justify-center ${newPlayer.play_both_sides ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
+                                        {newPlayer.play_both_sides && <Check size={10} className="text-white"/>}
+                                    </div>
+                                    <span className={`text-xs font-bold ${newPlayer.play_both_sides ? 'text-emerald-700' : 'text-slate-500'}`}>Se adapta al otro lado (Versátil)</span>
                                 </div>
                             </div>
                             
