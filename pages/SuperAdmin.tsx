@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Shield, Users, Building, Plus, Search, Check, AlertTriangle, LogOut, LayoutDashboard, Smartphone, Lock, Unlock, RefreshCw } from 'lucide-react';
+import { Shield, Users, Building, Plus, Search, Check, AlertTriangle, LogOut, LayoutDashboard, Smartphone, Lock, Unlock, RefreshCw, Mail, Key } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface Club {
@@ -26,12 +26,17 @@ const SuperAdmin: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
     
-    // Create Club State
+    // Existing Club Search State
     const [searchEmail, setSearchEmail] = useState('');
     const [foundUser, setFoundUser] = useState<UserResult | null>(null);
     const [clubName, setClubName] = useState('');
     const [createError, setCreateError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+    // New Quick Invite State
+    const [quickEmail, setQuickEmail] = useState('');
+    const [quickClubName, setQuickClubName] = useState('');
+    const [tempCredentials, setTempCredentials] = useState<{email: string, pass: string} | null>(null);
 
     const fetchClubs = async () => {
         setLoading(true);
@@ -57,22 +62,20 @@ const SuperAdmin: React.FC = () => {
         fetchClubs();
     }, []);
 
+    // --- EXISTING USER SEARCH FLOW ---
     const handleSearchUser = async () => {
         if (!searchEmail) return;
         setCreateError(null);
         setFoundUser(null);
 
-        // Search in public.players table as a proxy for registered users
-        // NOTE: AuthPage now ensures all registered users have a players entry.
         const { data, error } = await supabase
             .from('players')
             .select('user_id, name, email')
-            .ilike('email', searchEmail.trim()) // Case insensitive search
+            .ilike('email', searchEmail.trim()) 
             .limit(1)
             .maybeSingle();
 
         if (data) {
-            // Check if they are already a club
             const { data: existingClub } = await supabase.from('clubs').select('id').eq('owner_id', data.user_id).maybeSingle();
             if (existingClub) {
                 setCreateError("Este usuario ya es dueño de un club.");
@@ -80,11 +83,11 @@ const SuperAdmin: React.FC = () => {
                 setFoundUser({ id: data.user_id!, name: data.name, email: data.email! });
             }
         } else {
-            setCreateError("Usuario no encontrado. Asegúrate de que se haya registrado e iniciado sesión en la App al menos una vez.");
+            setCreateError("Usuario no encontrado en registros. Usa el alta rápida abajo.");
         }
     };
 
-    const handleCreateClub = async () => {
+    const handleCreateClubFromExisting = async () => {
         if (!foundUser || !clubName) return;
 
         const { error } = await supabase.from('clubs').insert([{
@@ -96,11 +99,54 @@ const SuperAdmin: React.FC = () => {
         if (error) {
             setCreateError(error.message);
         } else {
-            setSuccessMessage(`Club "${clubName}" creado correctamente.`);
+            setSuccessMessage(`Club "${clubName}" asignado a ${foundUser.email}.`);
             setFoundUser(null);
             setClubName('');
             setSearchEmail('');
             fetchClubs();
+        }
+    };
+
+    // --- NEW QUICK INVITE FLOW ---
+    const handleQuickInvite = async () => {
+        if (!quickEmail || !quickClubName) return;
+        setCreateError(null);
+        
+        // 1. Generate Temp Password
+        const tempPass = "PadelPro" + Math.floor(1000 + Math.random() * 9000);
+
+        try {
+            // 2. Sign Up User (Client Side)
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+                email: quickEmail,
+                password: tempPass,
+            });
+
+            if (authError) throw authError;
+            if (!authData.user) throw new Error("No se pudo crear el usuario.");
+
+            // 3. Create Club Entry
+            const { error: clubError } = await supabase.from('clubs').insert([{
+                owner_id: authData.user.id,
+                name: quickClubName,
+                is_active: true
+            }]);
+
+            if (clubError) throw clubError;
+
+            // 4. Trigger Password Reset Email (So they get a link)
+            await supabase.auth.resetPasswordForEmail(quickEmail, {
+                redirectTo: window.location.origin + '/#/auth?type=recovery'
+            });
+
+            setTempCredentials({ email: quickEmail, pass: tempPass });
+            setSuccessMessage(`Usuario y Club creados. Se ha enviado un email de recuperación.`);
+            setQuickEmail('');
+            setQuickClubName('');
+            fetchClubs();
+
+        } catch (err: any) {
+            setCreateError(err.message);
         }
     };
 
@@ -141,55 +187,109 @@ const SuperAdmin: React.FC = () => {
                 </div>
             </div>
 
-            {/* CREATE CLUB SECTION */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-                    <Plus className="bg-indigo-100 text-indigo-600 p-1 rounded-md" size={24}/> Alta Nuevo Club
-                </h3>
+            {/* ERROR DISPLAY */}
+            {createError && (
+                <div className="bg-rose-50 border-l-4 border-rose-500 text-rose-700 p-4 rounded-r-xl text-sm font-bold flex items-center gap-2 shadow-sm">
+                    <AlertTriangle size={20}/> {createError}
+                </div>
+            )}
+
+            {/* TEMP CREDENTIALS MODAL */}
+            {tempCredentials && (
+                <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-2xl shadow-sm animate-slide-up relative">
+                    <button onClick={() => setTempCredentials(null)} className="absolute top-4 right-4 text-emerald-600 hover:text-emerald-800"><div className="bg-white rounded-full p-1"><Check size={16}/></div></button>
+                    <h3 className="font-bold text-emerald-800 text-lg mb-4 flex items-center gap-2"><Key size={20}/> Credenciales Temporales</h3>
+                    <p className="text-sm text-emerald-700 mb-4">
+                        Entrega estos datos al club. También se ha enviado un email para que cambien la contraseña ellos mismos.
+                    </p>
+                    <div className="bg-white p-4 rounded-xl border border-emerald-100 grid grid-cols-1 gap-2 text-sm font-mono text-slate-700">
+                        <div><strong>Usuario:</strong> {tempCredentials.email}</div>
+                        <div><strong>Pass:</strong> {tempCredentials.pass}</div>
+                        <div className="text-xs text-slate-400 mt-2">Link App: {window.location.origin}</div>
+                    </div>
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Step 1: Find User */}
+                {/* 1. QUICK CREATE (NEW USER) */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
+                        <Plus className="bg-indigo-100 text-indigo-600 p-1 rounded-md" size={24}/> Alta Rápida (Nuevo Usuario)
+                    </h3>
                     <div className="space-y-4">
-                        <label className="text-xs font-bold text-slate-500 uppercase">1. Buscar Usuario (Email)</label>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase">Email del Club</label>
+                            <div className="flex items-center gap-2 mt-1">
+                                <Mail size={16} className="text-slate-400"/>
+                                <input 
+                                    value={quickEmail}
+                                    onChange={e => setQuickEmail(e.target.value)}
+                                    placeholder="contacto@clubpadel.com"
+                                    className="flex-1 bg-slate-50 border-b border-slate-200 p-2 outline-none focus:border-indigo-500 font-medium"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase">Nombre del Club</label>
+                            <div className="flex items-center gap-2 mt-1">
+                                <Building size={16} className="text-slate-400"/>
+                                <input 
+                                    value={quickClubName}
+                                    onChange={e => setQuickClubName(e.target.value)}
+                                    placeholder="Club Padel Norte"
+                                    className="flex-1 bg-slate-50 border-b border-slate-200 p-2 outline-none focus:border-indigo-500 font-medium"
+                                />
+                            </div>
+                        </div>
+                        <button 
+                            onClick={handleQuickInvite} 
+                            disabled={!quickEmail || !quickClubName}
+                            className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
+                        >
+                            Crear Usuario y Club
+                        </button>
+                    </div>
+                </div>
+
+                {/* 2. ASSIGN EXISTING USER */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm opacity-80 hover:opacity-100 transition-opacity">
+                    <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
+                        <Search className="bg-slate-100 text-slate-600 p-1 rounded-md" size={24}/> Asignar a Usuario Existente
+                    </h3>
+                    
+                    <div className="space-y-4">
                         <div className="flex gap-2">
                             <input 
                                 value={searchEmail}
                                 onChange={e => setSearchEmail(e.target.value)}
-                                placeholder="usuario@email.com"
-                                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:border-indigo-500"
+                                placeholder="Buscar email..."
+                                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:border-slate-400 text-sm"
                             />
-                            <button onClick={handleSearchUser} className="bg-slate-900 text-white px-4 rounded-xl font-bold hover:bg-slate-700">
-                                <Search size={20}/>
+                            <button onClick={handleSearchUser} className="bg-slate-200 text-slate-600 px-4 rounded-xl font-bold hover:bg-slate-300">
+                                <Search size={18}/>
                             </button>
                         </div>
-                        {createError && (
-                            <div className="text-xs text-rose-500 font-medium flex items-center gap-1 bg-rose-50 p-2 rounded-lg">
-                                <AlertTriangle size={12}/> {createError}
+
+                        {foundUser && (
+                            <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 animate-fade-in">
+                                <div className="text-xs text-emerald-800 font-bold mb-1">Usuario Encontrado</div>
+                                <div className="text-sm font-bold text-slate-800">{foundUser.name}</div>
+                                <div className="text-xs text-slate-500 mb-3">{foundUser.email}</div>
+                                
+                                <div className="flex gap-2">
+                                    <input 
+                                        value={clubName}
+                                        onChange={e => setClubName(e.target.value)}
+                                        placeholder="Nombre Club..."
+                                        className="flex-1 bg-white border border-slate-200 rounded-lg p-2 text-sm outline-none"
+                                    />
+                                    <button onClick={handleCreateClubFromExisting} className="bg-emerald-500 text-white px-3 rounded-lg font-bold text-xs hover:bg-emerald-600">
+                                        Asignar
+                                    </button>
+                                </div>
                             </div>
                         )}
-                    </div>
-
-                    {/* Step 2: Confirm & Create */}
-                    <div className={`space-y-4 transition-opacity ${foundUser ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-                        <label className="text-xs font-bold text-slate-500 uppercase">2. Asignar Nombre Club</label>
-                        <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 mb-2">
-                            <div className="text-xs text-emerald-800 font-bold flex items-center gap-2">
-                                <Check size={14}/> Usuario Encontrado
-                            </div>
-                            <div className="text-sm font-bold text-slate-800">{foundUser?.name}</div>
-                            <div className="text-xs text-slate-500">{foundUser?.email}</div>
-                        </div>
-                        <div className="flex gap-2">
-                            <input 
-                                value={clubName}
-                                onChange={e => setClubName(e.target.value)}
-                                placeholder="Nombre del Club..."
-                                className="flex-1 bg-white border border-slate-300 rounded-xl p-3 outline-none focus:border-emerald-500 font-bold"
-                            />
-                            <button onClick={handleCreateClub} className="bg-emerald-500 text-white px-6 rounded-xl font-bold hover:bg-emerald-600 shadow-lg shadow-emerald-100">
-                                Crear
-                            </button>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -237,22 +337,6 @@ const SuperAdmin: React.FC = () => {
                     </div>
                 )}
             </div>
-
-            {/* SUCCESS MODAL */}
-            {successMessage && (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
-                        <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-600">
-                            <Check size={32} />
-                        </div>
-                        <h3 className="text-xl font-black text-slate-900 mb-2">¡Club Creado!</h3>
-                        <p className="text-slate-500 mb-6">{successMessage}</p>
-                        <button onClick={() => setSuccessMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">
-                            Entendido
-                        </button>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

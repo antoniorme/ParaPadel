@@ -317,7 +317,7 @@ const ActiveTournament: React.FC = () => {
   return (
     <div className="space-y-6 pb-32">
       
-      {/* ROUND HEADER - Removed Sticky/Overlap Hacks */}
+      {/* ROUND HEADER */}
       <div style={{ backgroundColor: themeColor }} className="rounded-2xl shadow-lg p-4 flex items-center justify-between text-white transition-colors duration-300">
             <div className="flex items-center gap-2">
                 <h2 className="text-xl font-black tracking-tight">Ronda {state.currentRound}</h2>
@@ -432,9 +432,24 @@ const ActiveTournament: React.FC = () => {
         </div>
       )}
       
+      {/* SCORE MODAL - IMPROVED WITH CLOSE BUTTON & BACKDROP CLICK */}
       {selectedMatchId && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in">
-              <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in">
+          <div 
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in"
+            onClick={() => setSelectedMatchId(null)} // Close on backdrop click
+          >
+              <div 
+                className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in relative"
+                onClick={(e) => e.stopPropagation()} // Prevent close when clicking inside
+              >
+                  {/* CLOSE BUTTON (X) */}
+                  <button 
+                    onClick={() => setSelectedMatchId(null)} 
+                    className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors"
+                  >
+                      <X size={20}/>
+                  </button>
+
                   <div className="text-center mb-6">
                       <h3 className="text-3xl font-black text-slate-900 mb-1">
                           PISTA {state.matches.find(m => m.id === selectedMatchId)?.courtId}

@@ -82,6 +82,35 @@ const JoinTournament: React.FC = () => {
             await loadData();
             
             if (clubId) {
+                // 1. OFFLINE / LOCAL STORAGE FALLBACK
+                // If we are testing on the same device or offline mode, try to get data from local storage
+                try {
+                    const localClubStr = localStorage.getItem('padelpro_club_v1');
+                    if (localClubStr) {
+                        const localClub = JSON.parse(localClubStr);
+                        if (localClub.name) setRealClubName(localClub.name);
+                        
+                        // If we found local club data, try to find local active tournament
+                        const localTourneyStr = localStorage.getItem('padelpro_local_db_v3');
+                        if (localTourneyStr) {
+                            const localTourney = JSON.parse(localTourneyStr);
+                            if (localTourney.status !== 'finished' && localTourney.title) {
+                                setActiveTournamentInfo({
+                                    name: localTourney.title,
+                                    date: localTourney.startDate || new Date().toISOString(),
+                                    clubName: localClub.name,
+                                    clubLogo: '🎾',
+                                    address: localClub.address || '',
+                                    mapsUrl: localClub.mapsUrl || ''
+                                });
+                            }
+                        }
+                    }
+                } catch(e) {
+                    console.warn("Local storage read failed", e);
+                }
+
+                // 2. SUPABASE FETCH (Online)
                 try {
                     // Fetch Club & Tournament Info
                     const { data: clubData } = await supabase.from('clubs').select('name, address, maps_url').eq('owner_id', clubId).single();
@@ -108,7 +137,7 @@ const JoinTournament: React.FC = () => {
                     }
 
                 } catch (error) {
-                    console.warn("Error fetching data", error);
+                    console.warn("Error fetching public data from Supabase", error);
                 }
             }
         };
@@ -418,6 +447,15 @@ const JoinTournament: React.FC = () => {
                                 <div>
                                     <label className="text-xs font-bold text-slate-500 uppercase">Teléfono</label>
                                     <input value={myPhone} onChange={e => setMyPhone(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl mt-1 text-sm font-bold text-slate-800 outline-none focus:border-[#575AF9]" placeholder="600..."/>
+                                </div>
+                            </div>
+
+                            {/* EMAIL FIELD */}
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase">Email</label>
+                                <div className="relative mt-1">
+                                    <AtSign size={16} className="absolute left-3 top-3.5 text-slate-400"/>
+                                    <input value={myEmail} onChange={e => setMyEmail(e.target.value)} className="w-full pl-9 p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#575AF9]" placeholder="usuario@email.com"/>
                                 </div>
                             </div>
                             

@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useHistory } from '../store/HistoryContext';
 import { THEME } from '../utils/theme';
-import { Building, Check, UserCog, Users, Trophy, History, ArrowRight } from 'lucide-react';
+import { Building, Check, UserCog, Users, Trophy, History, ArrowRight, LayoutGrid, Clock } from 'lucide-react';
 
 const Onboarding: React.FC = () => {
     const navigate = useNavigate();
@@ -25,28 +26,28 @@ const Onboarding: React.FC = () => {
 
     const tourSlides = [
         {
-            title: "Gestión de Jugadores",
-            text: "Crea tu base de datos de jugadores una sola vez. Se guardan para siempre en el club y podrás seleccionarlos rápidamente para futuros torneos.",
-            icon: UserCog,
-            color: "text-blue-500"
+            title: "Configuración Inicial",
+            text: "Acabas de configurar las pistas de tu club. El sistema usará este dato para saber si debe hacer turnos con descansos (menos de 8 pistas) o simultáneos.",
+            icon: Building,
+            color: "text-slate-800 bg-slate-100"
         },
         {
-            title: "Parejas de Torneo",
-            text: "Para cada torneo, crea parejas vinculando a dos jugadores. Al terminar, la pareja se disuelve pero los jugadores y sus estadísticas individuales persisten.",
+            title: "Jugadores vs Parejas",
+            text: "Concepto Clave: Un 'Jugador' es permanente en tu club (con historial y ELO). Una 'Pareja' es temporal y solo existe para el torneo actual.",
             icon: Users,
-            color: "text-emerald-500"
+            color: "text-blue-600 bg-blue-100"
         },
         {
-            title: "Formatos Flexibles",
-            text: "Elige entre Mini 8, 10, 12 o 16. El sistema calcula automáticamente los grupos, los descansos (si hay pocas pistas) y los cruces de Playoffs.",
+            title: "Gestiona Torneos",
+            text: "Crea eventos Mini 8, 10, 12 o 16. La app gestiona inscripciones, genera cruces automáticos (por Nivel o Mix) y controla los tiempos.",
             icon: Trophy,
-            color: "text-amber-500"
+            color: "text-amber-600 bg-amber-100"
         },
         {
-            title: "Historial Completo",
-            text: "Todos los resultados se guardan. Consulta estadísticas de victorias, títulos y evolución de nivel en el perfil de cada jugador.",
-            icon: History,
-            color: "text-purple-500"
+            title: "Resultados en Vivo",
+            text: "Durante el torneo, asigna pistas, introduce resultados y avanza rondas. Los jugadores podrán ver su clasificación y el cuadro en tiempo real.",
+            icon: Clock,
+            color: "text-emerald-600 bg-emerald-100"
         }
     ];
 
@@ -99,18 +100,19 @@ const Onboarding: React.FC = () => {
             )}
 
             {phase === 'tour' && (
-                <div className="max-w-md w-full bg-white rounded-3xl p-8 shadow-2xl animate-slide-left relative overflow-hidden min-h-[500px] flex flex-col justify-between">
-                    <div className="text-center pt-8">
+                <div className="max-w-md w-full bg-white rounded-3xl p-8 shadow-2xl animate-slide-left relative overflow-hidden min-h-[500px] flex flex-col justify-between text-center">
+                    
+                    <div className="pt-4">
                         {tourSlides.map((slide, idx) => {
                              if (idx !== tourStep) return null;
                              const Icon = slide.icon;
                              return (
-                                 <div key={idx} className="animate-fade-in">
-                                     <div className={`w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-8 ${slide.color}`}>
+                                 <div key={idx} className="animate-fade-in flex flex-col items-center">
+                                     <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-8 shadow-sm ${slide.color}`}>
                                          <Icon size={48} />
                                      </div>
                                      <h2 className="text-2xl font-black text-slate-900 mb-4">{slide.title}</h2>
-                                     <p className="text-slate-500 leading-relaxed text-lg">
+                                     <p className="text-slate-500 leading-relaxed text-lg max-w-xs mx-auto">
                                          {slide.text}
                                      </p>
                                  </div>
@@ -118,12 +120,12 @@ const Onboarding: React.FC = () => {
                         })}
                     </div>
 
-                    <div className="flex flex-col gap-6 items-center">
+                    <div className="flex flex-col gap-8 items-center mt-8">
                         <div className="flex gap-2">
                             {tourSlides.map((_, idx) => (
                                 <div 
                                     key={idx} 
-                                    className={`w-2 h-2 rounded-full transition-all duration-300 ${idx === tourStep ? 'bg-[#575AF9] w-8' : 'bg-slate-200'}`}
+                                    className={`h-1.5 rounded-full transition-all duration-300 ${idx === tourStep ? 'bg-[#575AF9] w-8' : 'bg-slate-200 w-2'}`}
                                 />
                             ))}
                         </div>
@@ -139,7 +141,7 @@ const Onboarding: React.FC = () => {
                             {tourStep < tourSlides.length - 1 ? (
                                 <>Siguiente <ArrowRight size={20} /></>
                             ) : (
-                                <>¡Empezar a Gestionar!</>
+                                <>¡Entendido, vamos!</>
                             )}
                         </button>
                     </div>
