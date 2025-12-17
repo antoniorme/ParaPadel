@@ -1,10 +1,21 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
 import { Shield, Users, Building, Plus, Search, Check, AlertTriangle, LogOut, LayoutDashboard, Smartphone, Lock, Unlock, RefreshCw, Mail, Key } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { createClient } from '@supabase/supabase-js';
+import HCaptcha from '@hcaptcha/react-hcaptcha';
+
+// ENVIRONMENT CHECK FOR CAPTCHA
+let HCAPTCHA_SITE_TOKEN = "";
+try {
+    // @ts-ignore
+    if (import.meta && import.meta.env && import.meta.env.VITE_HCAPTCHA_SITE_TOKEN) {
+        // @ts-ignore
+        HCAPTCHA_SITE_TOKEN = import.meta.env.VITE_HCAPTCHA_SITE_TOKEN;
+    }
+} catch (e) {}
 
 interface Club {
     id: string;
@@ -15,7 +26,7 @@ interface Club {
 }
 
 interface UserResult {
-    id: string; // The user_id (linked to auth.users in concept)
+    id: string; 
     name: string;
     email: string;
 }
@@ -38,6 +49,10 @@ const SuperAdmin: React.FC = () => {
     const [quickEmail, setQuickEmail] = useState('');
     const [quickClubName, setQuickClubName] = useState('');
     const [tempCredentials, setTempCredentials] = useState<{email: string, pass: string} | null>(null);
+    
+    // CAPTCHA STATE FOR ADMIN ACTIONS
+    const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+    const captchaRef = useRef<HCaptcha>(null);
 
     const fetchClubs = async () => {
         setLoading(true);
@@ -116,25 +131,32 @@ const SuperAdmin: React.FC = () => {
         // 1. Generate Temp Password
         const tempPass = "PadelPro" + Math.floor(1000 + Math.random() * 9000);
 
+        // 2. CHECK CAPTCHA IF NOT OFFLINE
+        if (!isOfflineMode && HCAPTCHA_SITE_TOKEN && !captchaToken) {
+            setCreateError("SuperAdmin: Por favor completa el Captcha para crear el usuario.");
+            return;
+        }
+
         try {
-            // CRITICAL: We must create a SEPARATE client instance to sign up the new user.
-            // If we use the main `supabase` client, `auth.signUp` will detect a session change and LOG OUT the admin.
-            // By using a fresh client, we keep the admin session intact.
+            // 3. Create SEPARATE client instance to sign up the new user
             const tempClient = createClient(
                 import.meta.env.VITE_SUPABASE_URL,
                 import.meta.env.VITE_SUPABASE_ANON_KEY
             );
 
-            // 2. Sign Up User (Using Temp Client)
+            // 4. Sign Up User (Using Temp Client + Captcha)
             const { data: authData, error: authError } = await tempClient.auth.signUp({
                 email: quickEmail,
                 password: tempPass,
+                options: {
+                    captchaToken: captchaToken || undefined
+                }
             });
 
             if (authError) throw authError;
             if (!authData.user) throw new Error("No se pudo crear el usuario (Auth Error).");
 
-            // 3. Create Club Entry (Using MAIN Admin Client - requires authenticated session)
+            // 5. Create Club Entry (Using MAIN Admin Client)
             const { error: clubError } = await supabase.from('clubs').insert([{
                 owner_id: authData.user.id,
                 name: quickClubName,
@@ -143,7 +165,7 @@ const SuperAdmin: React.FC = () => {
 
             if (clubError) throw clubError;
 
-            // 4. Trigger Password Reset Email (Optional, uses Temp Client context)
+            // 6. Trigger Password Reset Email
             await tempClient.auth.resetPasswordForEmail(quickEmail, {
                 redirectTo: window.location.origin + '/#/auth?type=recovery'
             });
@@ -152,10 +174,14 @@ const SuperAdmin: React.FC = () => {
             setSuccessMessage(`Usuario y Club creados. Se ha enviado un email de recuperación.`);
             setQuickEmail('');
             setQuickClubName('');
+            if(captchaRef.current) captchaRef.current.resetCaptcha();
+            setCaptchaToken(null);
             fetchClubs();
 
         } catch (err: any) {
             setCreateError(err.message || "Error al crear usuario.");
+            if(captchaRef.current) captchaRef.current.resetCaptcha();
+            setCaptchaToken(null);
         }
     };
 
@@ -251,6 +277,18 @@ const SuperAdmin: React.FC = () => {
                                 />
                             </div>
                         </div>
+
+                        {/* CAPTCHA FOR SUPERADMIN */}
+                        {!isOfflineMode && HCAPTCHA_SITE_TOKEN && (
+                            <div className="flex justify-center mt-2">
+                                <HCaptcha
+                                    sitekey={HCAPTCHA_SITE_TOKEN}
+                                    onVerify={token => setCaptchaToken(token)}
+                                    ref={captchaRef}
+                                />
+                            </div>
+                        )}
+
                         <button 
                             onClick={handleQuickInvite} 
                             disabled={!quickEmail || !quickClubName}

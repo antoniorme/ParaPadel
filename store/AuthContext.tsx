@@ -23,7 +23,7 @@ const AuthContext = createContext<AuthContextType>({
   role: null,
   signOut: async () => {},
   isOfflineMode: false,
-  checkUserRole: async () => 'pending',
+  checkUserRole: async () => 'player',
   loginWithDevBypass: () => {},
 });
 
@@ -34,7 +34,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
 
-  // Función crítica: Determina si es Club (Admin), SuperAdmin o Jugador (Pending por defecto)
+  // Función crítica: Determina si es Club (Admin), SuperAdmin o Jugador
   const checkUserRole = async (uid: string, userEmail?: string): Promise<UserRole> => {
       // 1. SUPER ADMIN CHECK (DB + Fallback)
       if (userEmail) {
@@ -51,7 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               
               if (saData) return 'superadmin';
           } catch (e) {
-              console.warn('Error checking superadmin table, falling back to basic role check');
+              console.warn('Error checking superadmin table');
           }
       }
 
@@ -60,25 +60,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (userEmail?.includes('admin') || userEmail?.includes('club')) {
               return 'admin';
           }
-          // En modo local simulamos que "player" es un jugador activo, no pendiente
           return 'player';
       }
 
-      // 3. MODO PRODUCCIÓN (Supabase - Club Check)
+      // 3. MODO PRODUCCIÓN (Supabase)
       try {
-          // Consultamos si este usuario está en la tabla de clubs como dueño
+          // Consultamos si este usuario está en la tabla de CLUBS ACTIVOS
           const { data, error } = await supabase
               .from('clubs')
               .select('id')
               .eq('owner_id', uid)
               .maybeSingle();
           
-          if (error) {
-              return 'pending'; 
+          if (data) {
+              return 'admin'; // Es un Club
           }
-          return data ? 'admin' : 'pending';
+          
+          // SI NO ES CLUB NI SUPERADMIN -> ES JUGADOR AUTOMÁTICAMENTE
+          return 'player';
+
       } catch (e) {
-          return 'pending';
+          console.error("Error checking role:", e);
+          return 'player'; // Fallback seguro
       }
   };
 
@@ -131,7 +134,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setRole(r);
             }
         } catch (error) {
-            setIsOfflineMode(true);
+            console.warn("Session check failed, defaulting to offline logic if necessary", error);
+            // Don't force offline mode on session error, just clear state
             setSession(null);
             setUser(null);
             setRole(null);
@@ -168,16 +172,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
     } 
     
-    // FORZAMOS LIMPIEZA LOCAL SIEMPRE, INCLUSO SI SUPABASE FALLA
     try {
         await supabase.auth.signOut();
     } catch (error) {
-        console.error("Error al cerrar sesión en Supabase (limpiando localmente):", error);
+        console.error("Error al cerrar sesión en Supabase:", error);
     } finally {
         setUser(null);
         setSession(null);
         setRole(null);
-        // Limpiamos simulación de jugador por si acaso
         localStorage.removeItem('padel_sim_player_id');
     }
   };
