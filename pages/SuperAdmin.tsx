@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Shield, Users, Building, Plus, Search, Check, AlertTriangle, LogOut, LayoutDashboard, Smartphone, Lock, Unlock, RefreshCw, Mail, Key } from 'lucide-react';
+import { Shield, Users, Building, Plus, Search, Check, AlertTriangle, LogOut, LayoutDashboard, Smartphone, Lock, Unlock, RefreshCw, Mail, Key, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { createClient } from '@supabase/supabase-js';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
@@ -49,6 +49,9 @@ const SuperAdmin: React.FC = () => {
     const [quickEmail, setQuickEmail] = useState('');
     const [quickClubName, setQuickClubName] = useState('');
     const [tempCredentials, setTempCredentials] = useState<{email: string, pass: string} | null>(null);
+    
+    // DELETE STATE
+    const [clubToDelete, setClubToDelete] = useState<Club | null>(null);
     
     // CAPTCHA STATE FOR ADMIN ACTIONS
     const [captchaToken, setCaptchaToken] = useState<string | null>(null);
@@ -193,6 +196,33 @@ const SuperAdmin: React.FC = () => {
         }
     };
 
+    const handleDeleteClub = async () => {
+        if (!clubToDelete) return;
+        
+        try {
+            // NOTE: This deletes the CLUB entry only.
+            // The players, tournaments and matches are linked to the auth.user_id, not the club_id directly.
+            // So data is preserved, but admin access is revoked.
+            const { error } = await supabase.from('clubs').delete().eq('id', clubToDelete.id);
+            
+            if (error) {
+                if (error.message.includes('foreign key constraint')) {
+                    throw new Error("No se puede eliminar: El club tiene dependencias directas. Bloquéalo en su lugar.");
+                }
+                throw error;
+            }
+
+            setClubs(clubs.filter(c => c.id !== clubToDelete.id));
+            setClubToDelete(null);
+            setSuccessMessage("Club eliminado. El usuario ahora es 'Jugador' pero sus datos persisten.");
+            setTimeout(() => setSuccessMessage(null), 3000);
+
+        } catch (err: any) {
+            setCreateError(err.message || "Error al eliminar club.");
+            setClubToDelete(null);
+        }
+    };
+
     return (
         <div className="space-y-8 pb-20">
             {/* HEADER */}
@@ -226,6 +256,13 @@ const SuperAdmin: React.FC = () => {
             {createError && (
                 <div className="bg-rose-50 border-l-4 border-rose-500 text-rose-700 p-4 rounded-r-xl text-sm font-bold flex items-center gap-2 shadow-sm">
                     <AlertTriangle size={20}/> {createError}
+                </div>
+            )}
+            
+            {/* SUCCESS DISPLAY */}
+            {successMessage && !tempCredentials && (
+                <div className="bg-emerald-50 border-l-4 border-emerald-500 text-emerald-700 p-4 rounded-r-xl text-sm font-bold flex items-center gap-2 shadow-sm">
+                    <Check size={20}/> {successMessage}
                 </div>
             )}
 
@@ -366,13 +403,20 @@ const SuperAdmin: React.FC = () => {
                                 <div className="text-xs text-slate-400 font-mono">ID: {club.id}</div>
                                 <div className="text-xs text-slate-500 mt-1">Creado: {new Date(club.created_at).toLocaleDateString()}</div>
                             </div>
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
                                 <button 
                                     onClick={() => toggleClubStatus(club)}
-                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${club.is_active ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100' : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'}`}
+                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border transition-colors ${club.is_active ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100' : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'}`}
                                 >
                                     {club.is_active ? <Unlock size={14}/> : <Lock size={14}/>}
                                     {club.is_active ? 'Activo' : 'Bloqueado'}
+                                </button>
+                                <button 
+                                    onClick={() => setClubToDelete(club)}
+                                    className="p-2 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 transition-colors"
+                                    title="Eliminar Club"
+                                >
+                                    <Trash2 size={16}/>
                                 </button>
                             </div>
                         </div>
@@ -384,6 +428,35 @@ const SuperAdmin: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            {/* DELETE CONFIRMATION MODAL */}
+            {clubToDelete && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                        <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-600">
+                            <Trash2 size={32} />
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 mb-2">¿Eliminar Club?</h3>
+                        <p className="text-slate-500 mb-4 text-sm">
+                            Estás a punto de eliminar el acceso de administrador para <strong>{clubToDelete.name}</strong>.
+                        </p>
+                        <div className="bg-rose-50 p-3 rounded-lg border border-rose-100 text-left mb-6">
+                            <p className="text-xs text-rose-700 font-bold flex items-start gap-2">
+                                <AlertTriangle size={14} className="shrink-0 mt-0.5"/>
+                                <span>Advertencia: Esto eliminará el perfil del Club. El usuario pasará a ser 'Jugador' pero los datos históricos (torneos, partidos) se mantendrán en la base de datos.</span>
+                            </p>
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={() => setClubToDelete(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200">
+                                Cancelar
+                            </button>
+                            <button onClick={handleDeleteClub} className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold shadow-lg hover:bg-rose-700">
+                                Confirmar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

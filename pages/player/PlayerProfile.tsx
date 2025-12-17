@@ -3,8 +3,9 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTournament } from '../../store/TournamentContext';
 import { useHistory } from '../../store/HistoryContext';
+import { useAuth } from '../../store/AuthContext';
 import { THEME, getFormatColor } from '../../utils/theme';
-import { ArrowLeft, Trophy, Medal, Calendar, Hash, Activity, BarChart2, TrendingUp, ChevronDown, ChevronUp, Shuffle } from 'lucide-react';
+import { ArrowLeft, Trophy, Medal, Calendar, Hash, Activity, BarChart2, TrendingUp, ChevronDown, ChevronUp, Shuffle, Trash2, AlertTriangle, LogOut } from 'lucide-react';
 import { calculateDisplayRanking, calculateMatchDelta, getPairTeamElo } from '../../utils/Elo';
 import { TournamentState, Match } from '../../types';
 
@@ -32,14 +33,16 @@ interface ProcessedTournament {
 
 const PlayerProfile: React.FC = () => {
     const navigate = useNavigate();
-    const { state, formatPlayerName } = useTournament();
+    const { state, formatPlayerName, deletePlayerDB } = useTournament();
     const { pastTournaments } = useHistory();
+    const { signOut, user } = useAuth();
 
     // ID Simulator
     const [myPlayerId, setMyPlayerId] = useState<string>(() => localStorage.getItem('padel_sim_player_id') || '');
     const currentPlayer = state.players.find(p => p.id === myPlayerId);
 
     const [expandedTournamentId, setExpandedTournamentId] = useState<string | null>(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     // --- DATA PROCESSING ENGINE ---
     const historyData = useMemo(() => {
@@ -151,6 +154,18 @@ const PlayerProfile: React.FC = () => {
         return { tournaments: processedTournaments, stats };
 
     }, [currentPlayer, pastTournaments, state]);
+
+    const handleDeleteAccount = async () => {
+        if (!currentPlayer) return;
+        try {
+            await deletePlayerDB(currentPlayer.id);
+            localStorage.removeItem('padel_sim_player_id');
+            if (user) await signOut();
+            navigate('/');
+        } catch (e) {
+            console.error("Error deleting account", e);
+        }
+    };
 
     if (!currentPlayer) {
         return (
@@ -292,6 +307,39 @@ const PlayerProfile: React.FC = () => {
                     })
                 )}
             </div>
+
+            {/* DELETE ACCOUNT BUTTON */}
+            <div className="p-6 pt-0">
+                <button 
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="w-full py-4 rounded-2xl border-2 border-rose-100 bg-rose-50 text-rose-600 font-bold text-sm flex items-center justify-center gap-2 hover:bg-rose-100 hover:border-rose-200 transition-colors"
+                >
+                    <Trash2 size={18}/> Eliminar mi Cuenta
+                </button>
+            </div>
+
+            {/* CONFIRM DELETE MODAL */}
+            {showDeleteConfirm && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                        <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-600">
+                            <AlertTriangle size={32} />
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 mb-2">¿Estás seguro?</h3>
+                        <p className="text-slate-500 mb-6 text-sm">
+                            Esta acción es irreversible. Se borrará tu perfil, tu historial de partidos y tu ranking ELO.
+                        </p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200">
+                                Cancelar
+                            </button>
+                            <button onClick={handleDeleteAccount} className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold shadow-lg hover:bg-rose-700">
+                                Sí, eliminar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

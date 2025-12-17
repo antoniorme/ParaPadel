@@ -1,13 +1,20 @@
 
 import React, { useState } from 'react';
 import { useHistory } from '../store/HistoryContext';
+import { useAuth } from '../store/AuthContext';
 import { THEME } from '../utils/theme';
-import { Save, Building, Image as ImageIcon, Upload, MapPin, Check } from 'lucide-react';
+import { Save, Building, Image as ImageIcon, Upload, MapPin, Check, Trash2, AlertTriangle } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 
 const ClubProfile: React.FC = () => {
   const { clubData, updateClubData } = useHistory();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  
   const [form, setForm] = useState(clubData);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleSave = (e: React.FormEvent) => {
       e.preventDefault();
@@ -23,6 +30,22 @@ const ClubProfile: React.FC = () => {
               setForm(prev => ({ ...prev, logoUrl: reader.result as string }));
           };
           reader.readAsDataURL(file);
+      }
+  };
+
+  const handleDeleteClub = async () => {
+      if (!user) return;
+      try {
+          // Delete from clubs table - RLS/Constraint must allow owner to delete
+          const { error } = await supabase.from('clubs').delete().eq('owner_id', user.id);
+          if (error) {
+              console.error("Error deleting club:", error);
+              // Handle error visually if needed
+          }
+          await signOut();
+          navigate('/');
+      } catch (e) {
+          console.error("Exception deleting club", e);
       }
   };
 
@@ -120,6 +143,15 @@ const ClubProfile: React.FC = () => {
           </form>
       </div>
 
+      <div className="pt-6 border-t border-slate-200">
+          <button 
+            onClick={() => setShowDeleteConfirm(true)}
+            className="w-full py-4 rounded-xl border-2 border-rose-100 bg-rose-50 text-rose-600 font-bold text-sm flex items-center justify-center gap-2 hover:bg-rose-100 hover:border-rose-200 transition-colors"
+          >
+              <Trash2 size={18}/> Darse de Baja (Club)
+          </button>
+      </div>
+
       {showSuccess && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
               <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
@@ -131,6 +163,29 @@ const ClubProfile: React.FC = () => {
                   <button onClick={() => setShowSuccess(false)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">
                       Entendido
                   </button>
+              </div>
+          </div>
+      )}
+
+      {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                  <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-600">
+                      <AlertTriangle size={32} />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 mb-2">¿Darse de Baja?</h3>
+                  <div className="text-slate-600 mb-6 text-sm space-y-2 text-left bg-slate-50 p-4 rounded-xl border border-slate-200">
+                      <p><strong>1. Acceso:</strong> Perderás el acceso inmediato al panel de gestión del club.</p>
+                      <p><strong>2. Datos:</strong> Los jugadores, torneos y estadísticas <strong>SE CONSERVARÁN</strong> en la base de datos para no afectar a los rankings globales, pero dejarán de estar visibles para ti.</p>
+                  </div>
+                  <div className="flex gap-3">
+                      <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200">
+                          Cancelar
+                      </button>
+                      <button onClick={handleDeleteClub} className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold shadow-lg hover:bg-rose-700">
+                          Confirmar Baja
+                      </button>
+                  </div>
               </div>
           </div>
       )}
