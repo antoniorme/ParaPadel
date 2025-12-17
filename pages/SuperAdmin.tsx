@@ -61,6 +61,7 @@ const SuperAdmin: React.FC = () => {
     // REPAIR / MANUAL EMAIL MODAL STATE
     const [clubToRepair, setClubToRepair] = useState<Club | null>(null);
     const [manualEmailInput, setManualEmailInput] = useState('');
+    const [modalMode, setModalMode] = useState<'repair' | 'send'>('send');
 
     // CAPTCHA STATE FOR ADMIN ACTIONS
     const [captchaToken, setCaptchaToken] = useState<string | null>(null);
@@ -281,37 +282,36 @@ const SuperAdmin: React.FC = () => {
         setCreateError(null);
 
         try {
-            // 1. Find the email associated with this club (owner_id -> player -> email)
+            // 1. Find the email associated with this club
             const { data: playerData } = await supabase
                 .from('players')
                 .select('email')
                 .eq('user_id', club.owner_id)
                 .maybeSingle();
 
+            // ALWAYS open modal to require Captcha
+            setClubToRepair(club);
+            
             if (playerData?.email) {
-                // Email found, send directly
-                const { error: resetError } = await supabase.auth.resetPasswordForEmail(playerData.email, {
-                    redirectTo: window.location.origin + '/#/auth?type=recovery'
-                });
-                if (resetError) throw resetError;
-                setSuccessMessage(`Email de recuperación enviado a ${playerData.email}`);
-                setResendingId(null);
+                setManualEmailInput(playerData.email);
+                setModalMode('send');
             } else {
-                // FALLBACK: Email missing, open UI Modal to ask for it + Captcha
-                setClubToRepair(club);
                 setManualEmailInput('');
-                if(captchaRef.current) captchaRef.current.resetCaptcha();
-                setCaptchaToken(null);
-                setResendingId(null);
+                setModalMode('repair');
             }
+            
+            // Reset Captcha
+            if(captchaRef.current) captchaRef.current.resetCaptcha();
+            setCaptchaToken(null);
 
         } catch (err: any) {
-            setCreateError(err.message || "Error al reenviar correo.");
+            setCreateError(err.message || "Error al comprobar datos.");
+        } finally {
             setResendingId(null);
         }
     };
 
-    // --- HANDLE REPAIR SUBMIT (FROM MODAL) ---
+    // --- HANDLE REPAIR/SEND SUBMIT (FROM MODAL) ---
     const handleRepairAndSend = async () => {
         if (!clubToRepair || !manualEmailInput) return;
         setCreateError(null);
@@ -329,17 +329,25 @@ const SuperAdmin: React.FC = () => {
         }
 
         try {
-            // 1. AUTO-REPAIR: Create the missing player record
-            const { error: repairError } = await supabase.from('players').insert([{
-                user_id: clubToRepair.owner_id,
-                email: manualEmailInput,
-                name: clubToRepair.name,
-                categories: ['Admin'],
-                manual_rating: 5
-            }]);
-
-            if (repairError) {
-                console.warn("Could not repair player record (might exist now?):", repairError);
+            // 1. ENSURE PLAYER RECORD EXISTS (Upsert Logic)
+            const { data: existing } = await supabase
+                .from('players')
+                .select('id')
+                .eq('user_id', clubToRepair.owner_id)
+                .maybeSingle();
+            
+            if (existing) {
+                // Update email if changed
+                await supabase.from('players').update({ email: manualEmailInput }).eq('id', existing.id);
+            } else {
+                // Insert new record (Repair)
+                await supabase.from('players').insert([{
+                    user_id: clubToRepair.owner_id,
+                    email: manualEmailInput,
+                    name: clubToRepair.name,
+                    categories: ['Admin'],
+                    manual_rating: 5
+                }]);
             }
 
             // 2. Trigger Password Reset (Using Captcha if provided)
@@ -350,7 +358,7 @@ const SuperAdmin: React.FC = () => {
 
             if (resetError) throw resetError;
 
-            setSuccessMessage(`Ficha reparada y email enviado a ${manualEmailInput}`);
+            setSuccessMessage(`Email enviado a ${manualEmailInput}`);
             
             // Close modal
             setClubToRepair(null);
@@ -457,7 +465,7 @@ const SuperAdmin: React.FC = () => {
                 </div>
             )}
 
-            {/* --- REPAIR / MANUAL EMAIL MODAL --- */}
+            {/* --- REPAIR / SEND EMAIL MODAL --- */}
             {clubToRepair && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-scale-in">
                     <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl relative">
@@ -466,19 +474,25 @@ const SuperAdmin: React.FC = () => {
                         </button>
 
                         <div className="text-center mb-6">
-                            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-600">
-                                <AlertTriangle size={32}/>
+                            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${modalMode === 'repair' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
+                                {modalMode === 'repair' ? <AlertTriangle size={32}/> : <Mail size={32}/>}
                             </div>
-                            <h3 className="text-xl font-black text-slate-900 mb-2">Faltan Datos</h3>
+                            <h3 className="text-xl font-black text-slate-900 mb-2">
+                                {modalMode === 'repair' ? 'Faltan Datos' : 'Enviar Acceso'}
+                            </h3>
                             <p className="text-sm text-slate-500">
-                                No encontramos el email de <strong>{clubToRepair.name}</strong> en la base de datos.
+                                {modalMode === 'repair' 
+                                    ? `No encontramos el email de ${clubToRepair.name}.` 
+                                    : `Confirmar envío de claves a ${clubToRepair.name}.`}
                             </p>
                         </div>
 
                         <div className="space-y-4">
-                            <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 text-xs text-amber-800">
-                                Introduce el email del administrador para reparar su ficha y enviarle un enlace de acceso.
-                            </div>
+                            {modalMode === 'repair' && (
+                                <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 text-xs text-amber-800">
+                                    Introduce el email del administrador para reparar su ficha y enviarle un enlace de acceso.
+                                </div>
+                            )}
 
                             <div>
                                 <label className="text-xs font-bold text-slate-500 uppercase mb-1">Email del Administrador</label>
@@ -487,8 +501,8 @@ const SuperAdmin: React.FC = () => {
                                     value={manualEmailInput}
                                     onChange={e => setManualEmailInput(e.target.value)}
                                     placeholder="admin@club.com"
-                                    className="w-full p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-amber-500 font-bold text-slate-800"
-                                    autoFocus
+                                    className="w-full p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-slate-500 font-bold text-slate-800"
+                                    autoFocus={modalMode === 'repair'}
                                 />
                             </div>
 
@@ -511,7 +525,8 @@ const SuperAdmin: React.FC = () => {
                                 onClick={handleRepairAndSend}
                                 className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg hover:bg-slate-800 flex items-center justify-center gap-2"
                             >
-                                <ShieldCheck size={18}/> Reparar y Enviar
+                                {modalMode === 'repair' ? <ShieldCheck size={18}/> : <Send size={18}/>}
+                                {modalMode === 'repair' ? 'Reparar y Enviar' : 'Confirmar Envío'}
                             </button>
                         </div>
                     </div>
