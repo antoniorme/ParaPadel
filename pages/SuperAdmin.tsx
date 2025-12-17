@@ -183,8 +183,17 @@ const SuperAdmin: React.FC = () => {
 
             if (clubError) throw clubError;
 
-            // 6. Trigger Password Reset Email (Optional but helpful)
-            // This ensures they get an email link too, in case you forget to copy the password.
+            // 6. CRITICAL: Create Player Record (To store email for future lookups/resets)
+            // This is safe because AuthContext checks 'clubs' table FIRST for role assignment.
+            await supabase.from('players').insert([{
+                user_id: authData.user.id,
+                email: quickEmail,
+                name: quickClubName, // Use club name as initial player name
+                categories: ['Admin'],
+                manual_rating: 5
+            }]);
+
+            // 7. Trigger Password Reset Email (Optional but helpful)
             try {
                 await tempClient.auth.resetPasswordForEmail(quickEmail, {
                     redirectTo: window.location.origin + '/#/auth?type=recovery'
@@ -193,7 +202,7 @@ const SuperAdmin: React.FC = () => {
                 console.warn("Could not trigger reset email (SMTP might not be configured)", e);
             }
 
-            // 7. SHOW CREDENTIALS MODAL
+            // 8. SHOW CREDENTIALS MODAL
             setTempCredentials({ email: quickEmail, pass: tempPass });
             
             // Clean up UI
@@ -271,27 +280,56 @@ const SuperAdmin: React.FC = () => {
 
         try {
             // 1. Find the email associated with this club (owner_id -> player -> email)
-            const { data: playerData, error: fetchError } = await supabase
+            let targetEmail = '';
+            
+            const { data: playerData } = await supabase
                 .from('players')
                 .select('email')
                 .eq('user_id', club.owner_id)
                 .maybeSingle();
 
-            if (fetchError || !playerData?.email) {
-                throw new Error("No se encontró el email del administrador.");
+            if (playerData?.email) {
+                targetEmail = playerData.email;
+            } else {
+                // FALLBACK: If email is missing (old record), prompt the admin to enter it manually
+                // This allows self-repair of the database.
+                const manualEmail = prompt(`⚠️ ATENCIÓN: No se encontró el email asociado a "${club.name}" en la base de datos.\n\nPor favor, introduce el email del administrador para enviarle las claves y reparar su ficha:`);
+                
+                if (!manualEmail) {
+                    setResendingId(null);
+                    return;
+                }
+
+                // Verify basic email format
+                if (!manualEmail.includes('@') || !manualEmail.includes('.')) {
+                    throw new Error("Email inválido.");
+                }
+
+                // AUTO-REPAIR: Create the missing player record
+                const { error: repairError } = await supabase.from('players').insert([{
+                    user_id: club.owner_id,
+                    email: manualEmail,
+                    name: club.name,
+                    categories: ['Admin'],
+                    manual_rating: 5
+                }]);
+
+                if (repairError) {
+                    console.warn("Could not repair player record:", repairError);
+                    // Continue anyway to try sending the email
+                }
+
+                targetEmail = manualEmail;
             }
 
             // 2. Trigger Password Reset
-            // We use the temporary client trick again if we needed captcha, but for Reset 
-            // usually standard client works if rate limits aren't hit.
-            // However, to be safe and avoid context issues, let's use the main client first.
-            const { error: resetError } = await supabase.auth.resetPasswordForEmail(playerData.email, {
+            const { error: resetError } = await supabase.auth.resetPasswordForEmail(targetEmail, {
                 redirectTo: window.location.origin + '/#/auth?type=recovery'
             });
 
             if (resetError) throw resetError;
 
-            setSuccessMessage(`Email de recuperación enviado a ${playerData.email}`);
+            setSuccessMessage(`Email de recuperación enviado a ${targetEmail}`);
 
         } catch (err: any) {
             setCreateError(err.message || "Error al reenviar correo.");
