@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Shield, Users, Building, Plus, Search, Check, AlertTriangle, LogOut, LayoutDashboard, Smartphone, Lock, Unlock, RefreshCw, Mail, Key, Trash2, X } from 'lucide-react';
+import { Shield, Users, Building, Plus, Search, Check, AlertTriangle, LogOut, LayoutDashboard, Smartphone, Lock, Unlock, RefreshCw, Mail, Key, Trash2, X, Copy, Edit2, Send, Save } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { createClient } from '@supabase/supabase-js';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
@@ -48,10 +48,15 @@ const SuperAdmin: React.FC = () => {
     // New Quick Invite State
     const [quickEmail, setQuickEmail] = useState('');
     const [quickClubName, setQuickClubName] = useState('');
+    
+    // TEMP CREDENTIALS STATE (For the Modal)
     const [tempCredentials, setTempCredentials] = useState<{email: string, pass: string} | null>(null);
     
-    // DELETE STATE
+    // EDIT & DELETE STATE
     const [clubToDelete, setClubToDelete] = useState<Club | null>(null);
+    const [clubToEdit, setClubToEdit] = useState<Club | null>(null); // For renaming
+    const [newName, setNewName] = useState('');
+    const [resendingId, setResendingId] = useState<string | null>(null); // For loading state of email resend
     
     // CAPTCHA STATE FOR ADMIN ACTIONS
     const [captchaToken, setCaptchaToken] = useState<string | null>(null);
@@ -130,9 +135,11 @@ const SuperAdmin: React.FC = () => {
     const handleQuickInvite = async () => {
         if (!quickEmail || !quickClubName) return;
         setCreateError(null);
+        setSuccessMessage(null);
         
-        // 1. Generate Temp Password
-        const tempPass = "PadelPro" + Math.floor(1000 + Math.random() * 9000);
+        // 1. Generate Temp Password (Random but readable)
+        const randomDigits = Math.floor(1000 + Math.random() * 9000); // 4 digits
+        const tempPass = `PadelPro${randomDigits}!`;
 
         // 2. CHECK CAPTCHA IF NOT OFFLINE
         if (!isOfflineMode && HCAPTCHA_SITE_TOKEN && !captchaToken) {
@@ -143,7 +150,6 @@ const SuperAdmin: React.FC = () => {
         try {
             // 3. Create SEPARATE client instance to sign up the new user
             // CRITICAL FIX: Enable autoRefreshToken: false and persistSession: false
-            // This prevents the new user session from overwriting the Admin's session in localStorage.
             const tempClient = createClient(
                 import.meta.env.VITE_SUPABASE_URL,
                 import.meta.env.VITE_SUPABASE_ANON_KEY,
@@ -177,13 +183,20 @@ const SuperAdmin: React.FC = () => {
 
             if (clubError) throw clubError;
 
-            // 6. Trigger Password Reset Email
-            await tempClient.auth.resetPasswordForEmail(quickEmail, {
-                redirectTo: window.location.origin + '/#/auth?type=recovery'
-            });
+            // 6. Trigger Password Reset Email (Optional but helpful)
+            // This ensures they get an email link too, in case you forget to copy the password.
+            try {
+                await tempClient.auth.resetPasswordForEmail(quickEmail, {
+                    redirectTo: window.location.origin + '/#/auth?type=recovery'
+                });
+            } catch (e) {
+                console.warn("Could not trigger reset email (SMTP might not be configured)", e);
+            }
 
+            // 7. SHOW CREDENTIALS MODAL
             setTempCredentials({ email: quickEmail, pass: tempPass });
-            setSuccessMessage(`Usuario y Club creados. Se ha enviado un email de recuperación.`);
+            
+            // Clean up UI
             setQuickEmail('');
             setQuickClubName('');
             if(captchaRef.current) captchaRef.current.resetCaptcha();
@@ -209,9 +222,6 @@ const SuperAdmin: React.FC = () => {
         if (!clubToDelete) return;
         
         try {
-            // NOTE: This deletes the CLUB entry only.
-            // The players, tournaments and matches are linked to the auth.user_id, not the club_id directly.
-            // So data is preserved, but admin access is revoked.
             const { error } = await supabase.from('clubs').delete().eq('id', clubToDelete.id);
             
             if (error) {
@@ -229,6 +239,64 @@ const SuperAdmin: React.FC = () => {
         } catch (err: any) {
             setCreateError(err.message || "Error al eliminar club.");
             setClubToDelete(null);
+        }
+    };
+
+    // --- NEW: EDIT CLUB NAME ---
+    const openEditModal = (club: Club) => {
+        setClubToEdit(club);
+        setNewName(club.name);
+    };
+
+    const handleUpdateName = async () => {
+        if (!clubToEdit || !newName) return;
+        
+        const { error } = await supabase.from('clubs').update({ name: newName }).eq('id', clubToEdit.id);
+        
+        if (error) {
+            setCreateError("Error al renombrar: " + error.message);
+        } else {
+            setClubs(clubs.map(c => c.id === clubToEdit.id ? { ...c, name: newName } : c));
+            setSuccessMessage("Nombre del club actualizado.");
+            setTimeout(() => setSuccessMessage(null), 3000);
+        }
+        setClubToEdit(null);
+    };
+
+    // --- NEW: RESEND PASSWORD RESET ---
+    const handleResendEmail = async (club: Club) => {
+        setResendingId(club.id);
+        setSuccessMessage(null);
+        setCreateError(null);
+
+        try {
+            // 1. Find the email associated with this club (owner_id -> player -> email)
+            const { data: playerData, error: fetchError } = await supabase
+                .from('players')
+                .select('email')
+                .eq('user_id', club.owner_id)
+                .maybeSingle();
+
+            if (fetchError || !playerData?.email) {
+                throw new Error("No se encontró el email del administrador.");
+            }
+
+            // 2. Trigger Password Reset
+            // We use the temporary client trick again if we needed captcha, but for Reset 
+            // usually standard client works if rate limits aren't hit.
+            // However, to be safe and avoid context issues, let's use the main client first.
+            const { error: resetError } = await supabase.auth.resetPasswordForEmail(playerData.email, {
+                redirectTo: window.location.origin + '/#/auth?type=recovery'
+            });
+
+            if (resetError) throw resetError;
+
+            setSuccessMessage(`Email de recuperación enviado a ${playerData.email}`);
+
+        } catch (err: any) {
+            setCreateError(err.message || "Error al reenviar correo.");
+        } finally {
+            setResendingId(null);
         }
     };
 
@@ -268,25 +336,59 @@ const SuperAdmin: React.FC = () => {
                 </div>
             )}
             
-            {/* SUCCESS DISPLAY */}
+            {/* SUCCESS DISPLAY (General) */}
             {successMessage && !tempCredentials && (
-                <div className="bg-emerald-50 border-l-4 border-emerald-500 text-emerald-700 p-4 rounded-r-xl text-sm font-bold flex items-center gap-2 shadow-sm">
+                <div className="bg-emerald-50 border-l-4 border-emerald-500 text-emerald-700 p-4 rounded-r-xl text-sm font-bold flex items-center gap-2 shadow-sm animate-fade-in">
                     <Check size={20}/> {successMessage}
                 </div>
             )}
 
-            {/* TEMP CREDENTIALS MODAL */}
+            {/* --- TEMP CREDENTIALS MODAL --- */}
             {tempCredentials && (
-                <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-2xl shadow-sm animate-slide-up relative">
-                    <button onClick={() => setTempCredentials(null)} className="absolute top-4 right-4 text-emerald-600 hover:text-emerald-800"><div className="bg-white rounded-full p-1"><Check size={16}/></div></button>
-                    <h3 className="font-bold text-emerald-800 text-lg mb-4 flex items-center gap-2"><Key size={20}/> Credenciales Temporales</h3>
-                    <p className="text-sm text-emerald-700 mb-4">
-                        Entrega estos datos al club. También se ha enviado un email para que cambien la contraseña ellos mismos.
-                    </p>
-                    <div className="bg-white p-4 rounded-xl border border-emerald-100 grid grid-cols-1 gap-2 text-sm font-mono text-slate-700">
-                        <div><strong>Usuario:</strong> {tempCredentials.email}</div>
-                        <div><strong>Pass:</strong> {tempCredentials.pass}</div>
-                        <div className="text-xs text-slate-400 mt-2">Link App: {window.location.origin}</div>
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-2xl max-w-md w-full relative animate-scale-in">
+                        <button onClick={() => setTempCredentials(null)} className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200 transition-colors">
+                            <X size={20}/>
+                        </button>
+                        
+                        <div className="text-center mb-6">
+                            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-600">
+                                <Key size={32}/>
+                            </div>
+                            <h3 className="font-black text-slate-900 text-2xl mb-2">¡Club Creado!</h3>
+                            <p className="text-slate-500 text-sm">
+                                Copia estas credenciales y envíaselas al dueño del club ahora mismo.
+                            </p>
+                        </div>
+
+                        <div className="bg-slate-50 p-6 rounded-2xl border-2 border-dashed border-slate-200 space-y-4">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Email (Usuario)</label>
+                                <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200 mt-1">
+                                    <code className="text-slate-800 font-bold select-all">{tempCredentials.email}</code>
+                                    <button onClick={() => navigator.clipboard.writeText(tempCredentials.email)} className="text-slate-400 hover:text-blue-500"><Copy size={16}/></button>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Contraseña Temporal</label>
+                                <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200 mt-1">
+                                    <code className="text-emerald-600 font-black text-lg select-all">{tempCredentials.pass}</code>
+                                    <button onClick={() => navigator.clipboard.writeText(tempCredentials.pass)} className="text-slate-400 hover:text-blue-500"><Copy size={16}/></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 bg-blue-50 p-4 rounded-xl flex gap-3 items-start text-xs text-blue-800">
+                            <Mail size={16} className="shrink-0 mt-0.5"/>
+                            <p>También hemos enviado un email de "Restablecer Contraseña" a esta dirección, por si prefieren poner la suya propia.</p>
+                        </div>
+
+                        <button 
+                            onClick={() => setTempCredentials(null)}
+                            className="w-full mt-6 py-4 bg-slate-900 text-white rounded-xl font-bold shadow-lg hover:bg-slate-800"
+                        >
+                            He copiado los datos, cerrar
+                        </button>
                     </div>
                 </div>
             )}
@@ -340,7 +442,7 @@ const SuperAdmin: React.FC = () => {
                             disabled={!quickEmail || !quickClubName}
                             className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
                         >
-                            Crear Usuario y Club
+                            Crear y Generar Claves
                         </button>
                     </div>
                 </div>
@@ -406,13 +508,36 @@ const SuperAdmin: React.FC = () => {
 
                 {loading ? <div className="text-center py-10 text-slate-400">Cargando clubs...</div> : (
                     clubs.map(club => (
-                        <div key={club.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
+                        <div key={club.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                             <div>
-                                <div className="font-black text-slate-800 text-lg">{club.name}</div>
+                                <div className="font-black text-slate-800 text-lg flex items-center gap-2">
+                                    {club.name}
+                                </div>
                                 <div className="text-xs text-slate-400 font-mono">ID: {club.id}</div>
                                 <div className="text-xs text-slate-500 mt-1">Creado: {new Date(club.created_at).toLocaleDateString()}</div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            
+                            <div className="flex items-center gap-2 flex-wrap">
+                                {/* EDIT NAME */}
+                                <button 
+                                    onClick={() => openEditModal(club)}
+                                    className="p-2 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100 transition-colors"
+                                    title="Editar Nombre"
+                                >
+                                    <Edit2 size={16}/>
+                                </button>
+
+                                {/* RESEND EMAIL */}
+                                <button 
+                                    onClick={() => handleResendEmail(club)}
+                                    disabled={resendingId === club.id}
+                                    className="p-2 rounded-lg bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100 transition-colors disabled:opacity-50"
+                                    title="Reenviar Email de Acceso"
+                                >
+                                    {resendingId === club.id ? <RefreshCw size={16} className="animate-spin"/> : <Send size={16}/>}
+                                </button>
+
+                                {/* STATUS TOGGLE */}
                                 <button 
                                     onClick={() => toggleClubStatus(club)}
                                     className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border transition-colors ${club.is_active ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100' : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'}`}
@@ -420,6 +545,8 @@ const SuperAdmin: React.FC = () => {
                                     {club.is_active ? <Unlock size={14}/> : <Lock size={14}/>}
                                     {club.is_active ? 'Activo' : 'Bloqueado'}
                                 </button>
+                                
+                                {/* DELETE */}
                                 <button 
                                     onClick={() => setClubToDelete(club)}
                                     className="p-2 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 transition-colors"
@@ -437,6 +564,30 @@ const SuperAdmin: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            {/* EDIT NAME MODAL */}
+            {clubToEdit && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in">
+                        <h3 className="text-xl font-black text-slate-900 mb-4">Editar Nombre</h3>
+                        <input 
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 mb-6"
+                            placeholder="Nombre del club"
+                            autoFocus
+                        />
+                        <div className="flex gap-3">
+                            <button onClick={() => setClubToEdit(null)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200">
+                                Cancelar
+                            </button>
+                            <button onClick={handleUpdateName} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 flex items-center justify-center gap-2">
+                                <Save size={18}/> Guardar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* DELETE CONFIRMATION MODAL */}
             {clubToDelete && (
