@@ -27,6 +27,7 @@ interface ClubWithStats extends Club {
     playerCount: number;
     activeTourneys: number;
     finishedTourneys: number;
+    ownerEmail?: string;
 }
 
 interface Club {
@@ -92,7 +93,7 @@ const SuperAdmin: React.FC = () => {
         if (isOfflineMode) {
             setClubs([{ 
                 id: 'local-c1', owner_id: 'local-o1', name: 'Club Local Test', is_active: true, created_at: new Date().toISOString(),
-                playerCount: 16, activeTourneys: 1, finishedTourneys: 5
+                playerCount: 16, activeTourneys: 1, finishedTourneys: 5, ownerEmail: 'admin@local.test'
             }]);
             setGlobalStats({ totalClubs: 1, totalPlayers: 16, activeTourneys: 1, finishedTourneys: 5 });
             setLoading(false);
@@ -104,18 +105,21 @@ const SuperAdmin: React.FC = () => {
             const { data: clubsData, error: clubsError } = await supabase.from('clubs').select('*').order('created_at', { ascending: false });
             if (clubsError) throw clubsError;
 
-            // 2. Fetch Aggregated Stats
-            const { data: allPlayers } = await supabase.from('players').select('user_id');
+            // 2. Fetch Aggregated Stats & Emails
+            const { data: allPlayers } = await supabase.from('players').select('user_id, email');
             const { data: allTourneys } = await supabase.from('tournaments').select('user_id, status');
 
             const mappedClubs: ClubWithStats[] = (clubsData || []).map(club => {
                 const clubPlayers = allPlayers?.filter(p => p.user_id === club.owner_id).length || 0;
                 const clubTourneys = allTourneys?.filter(t => t.user_id === club.owner_id) || [];
+                const ownerRecord = allPlayers?.find(p => p.user_id === club.owner_id);
+                
                 return {
                     ...club,
                     playerCount: clubPlayers,
                     activeTourneys: clubTourneys.filter(t => t.status !== 'finished').length,
-                    finishedTourneys: clubTourneys.filter(t => t.status === 'finished').length
+                    finishedTourneys: clubTourneys.filter(t => t.status === 'finished').length,
+                    ownerEmail: ownerRecord?.email
                 };
             });
 
@@ -321,13 +325,20 @@ const SuperAdmin: React.FC = () => {
                             Array.from({length: 4}).map((_, i) => <div key={i} className="h-24 bg-slate-100 animate-pulse rounded-2xl"></div>)
                         ) : clubs.map(club => (
                             <div key={club.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-emerald-200 transition-colors flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                <div className="flex-1">
+                                <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-3 mb-1">
-                                        <h4 className="font-black text-slate-800 text-lg leading-tight">{club.name}</h4>
-                                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${club.is_active ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
+                                        <h4 className="font-black text-slate-800 text-lg leading-tight truncate">{club.name}</h4>
+                                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0 ${club.is_active ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
                                             {club.is_active ? 'ACTIVO' : 'BLOQUEADO'}
                                         </span>
                                     </div>
+                                    
+                                    {/* OWNER EMAIL DISPLAY */}
+                                    <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium mb-1">
+                                        <Mail size={12} className="text-slate-300"/>
+                                        <span className="truncate">{club.ownerEmail || 'Sin email asociado'}</span>
+                                    </div>
+
                                     <div className="flex flex-wrap gap-x-4 gap-y-2 mt-3">
                                         <div className="flex items-center gap-1.5 text-xs text-slate-500 font-bold">
                                             <Users size={14} className="text-blue-500"/> {club.playerCount} <span className="font-normal text-slate-400">Jugadores</span>
@@ -440,7 +451,10 @@ const SuperAdmin: React.FC = () => {
                                     <Building size={24} className="text-emerald-400"/>
                                     <h2 className="text-2xl font-black">{inspectedClub.name}</h2>
                                 </div>
-                                <p className="text-slate-400 text-xs font-mono">Owner ID: {inspectedClub.owner_id}</p>
+                                <div className="flex flex-col gap-0.5">
+                                    <p className="text-slate-400 text-xs font-mono">Owner ID: {inspectedClub.owner_id}</p>
+                                    <p className="text-emerald-400 text-xs font-bold">{inspectedClub.ownerEmail}</p>
+                                </div>
                             </div>
                             <button onClick={() => setInspectedClub(null)} className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-colors">
                                 <X size={24}/>
