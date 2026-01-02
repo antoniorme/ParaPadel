@@ -47,64 +47,58 @@ const AuthPage: React.FC = () => {
       if (isOfflineMode || isPlaceholder) setShowDevTools(true);
   }, [isOfflineMode]);
 
-  // --- SOLUCIÓN PARA EL ERROR "AUTH SESSION MISSING" ---
+  // LOGICA DE RECUPERACION REFORZADA
   useEffect(() => {
-    const handleRecoveryFlow = async () => {
-        const hash = window.location.hash;
-        const type = searchParams.get('type');
+    const processRecovery = async () => {
+        // Obtenemos la URL pura del navegador para no depender del router
+        const currentHref = window.location.href;
         
-        // Si hay access_token en la URL o el tipo es recovery
-        if (type === 'recovery' || hash.includes('access_token=')) {
+        if (currentHref.includes('access_token=') || searchParams.get('type') === 'recovery') {
             setVerifyingSession(true);
             setView('update-password');
-            // Bloqueamos redirecciones en App.tsx usando sessionStorage
-            sessionStorage.setItem('padelpro_recovery_mode', 'true');
-            
-            try {
-                // 1. Intentamos obtener sesión de forma normal
-                const { data: { session } } = await supabase.auth.getSession();
-                
-                if (!session) {
-                    // 2. Si falla (común en HashRouter), PARSEAMOS MANUALMENTE EL HASH
-                    const fragment = hash.includes('#access_token') 
-                        ? hash.substring(hash.lastIndexOf('#') + 1) 
-                        : hash.substring(hash.indexOf('access_token'));
-                    
-                    const params = new URLSearchParams(fragment);
-                    const accessToken = params.get('access_token');
-                    const refreshToken = params.get('refresh_token');
+            sessionStorage.setItem('recovery_lock', 'true');
 
-                    if (accessToken && refreshToken) {
-                        // 3. INYECTAMOS LA SESIÓN MANUALMENTE EN EL SDK
-                        const { error: setSessionError } = await supabase.auth.setSession({
-                            access_token: accessToken,
-                            refresh_token: refreshToken
-                        });
-                        
-                        if (setSessionError) throw setSessionError;
-                        setSuccessMsg("Identidad verificada. Crea tu nueva clave.");
-                    } else {
-                        throw new Error("El enlace no contiene tokens válidos.");
-                    }
-                } else {
+            // Timeout de seguridad: si en 4s no hay respuesta, forzamos salida del modo verificación
+            const timer = setTimeout(() => {
+                setVerifyingSession(false);
+                setError("La verificación está tardando demasiado. Prueba a recargar la página.");
+            }, 4000);
+
+            try {
+                // Intentamos capturar tokens del hash (incluso si hay varios # debido al HashRouter)
+                const hashPart = currentHref.split('#').pop() || '';
+                const params = new URLSearchParams(hashPart.includes('access_token') ? hashPart : window.location.search.substring(1));
+                
+                const accessToken = params.get('access_token');
+                const refreshToken = params.get('refresh_token');
+
+                if (accessToken) {
+                    const { error: sessionErr } = await supabase.auth.setSession({
+                        access_token: accessToken,
+                        refresh_token: refreshToken || '',
+                    });
+
+                    if (sessionErr) throw sessionErr;
                     setSuccessMsg("Identidad verificada. Introduce tu nueva contraseña.");
+                } else {
+                    // Si no hay token en el hash, probamos si ya hay sesión (Supabase lo procesó solo)
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (!session) throw new Error("No se encontró información de acceso en el enlace.");
+                    setSuccessMsg("Introduce tu nueva contraseña para recuperar el acceso.");
                 }
             } catch (err: any) {
                 console.error("Recovery Flow Error:", err);
-                setError("El enlace no es válido o ha caducado. Solicita uno nuevo.");
+                setError(err.message || "Enlace inválido o caducado.");
                 setView('recovery');
-                sessionStorage.removeItem('padelpro_recovery_mode');
+                sessionStorage.removeItem('recovery_lock');
             } finally {
+                clearTimeout(timer);
                 setVerifyingSession(false);
             }
         }
     };
 
-    handleRecoveryFlow();
-
-    if (searchParams.get('mode') === 'register') {
-      setView('register');
-    }
+    processRecovery();
   }, [searchParams]);
 
   const switchView = (newView: AuthView) => {
@@ -114,7 +108,7 @@ const AuthPage: React.FC = () => {
       setCaptchaToken(null);
       if(captchaRef.current) captchaRef.current.resetCaptcha();
       if (newView !== 'update-password') {
-          sessionStorage.removeItem('padelpro_recovery_mode');
+          sessionStorage.removeItem('recovery_lock');
       }
   };
 
@@ -129,6 +123,7 @@ const AuthPage: React.FC = () => {
           return;
       }
 
+      // IMPORTANTE: Aseguramos que la URL de retorno sea limpia para el HashRouter
       const redirectTo = `${window.location.origin}/#/auth?type=recovery`;
 
       try {
@@ -137,7 +132,7 @@ const AuthPage: React.FC = () => {
               captchaToken: captchaToken || undefined 
           });
           if (error) throw error;
-          setSuccessMsg("Revisa tu bandeja de entrada.");
+          setSuccessMsg("¡Enviado! Revisa tu email (incluso SPAM).");
       } catch (err: any) {
           setError(err.message || "Error al solicitar recuperación.");
           if(captchaRef.current) captchaRef.current.resetCaptcha();
@@ -159,23 +154,20 @@ const AuthPage: React.FC = () => {
       }
 
       try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) throw new Error("No se detectó una sesión activa. Usa el enlace del email o solicita uno nuevo.");
-
           const { error } = await supabase.auth.updateUser({ password });
           if (error) throw error;
           
-          setSuccessMsg("¡Contraseña guardada! Entrando...");
-          sessionStorage.removeItem('padelpro_recovery_mode');
+          setSuccessMsg("¡Contraseña actualizada con éxito!");
+          sessionStorage.removeItem('recovery_lock');
           
-          // FORZAMOS RECARGA DE ROL Y NAVEGACIÓN
+          // Redirección forzada para limpiar estados
           setTimeout(() => {
               window.location.href = window.location.origin + '/#/dashboard';
               window.location.reload(); 
-          }, 1000);
+          }, 1500);
 
       } catch (err: any) {
-          setError(err.message || "Fallo al actualizar.");
+          setError(err.message || "Fallo al actualizar contraseña.");
       } finally {
           setLoading(false);
       }
@@ -229,7 +221,7 @@ const AuthPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col p-6">
-      <button onClick={() => { sessionStorage.removeItem('padelpro_recovery_mode'); navigate('/'); }} className="text-slate-500 flex items-center gap-2 mb-8 font-bold text-sm hover:text-slate-800 transition-colors">
+      <button onClick={() => { sessionStorage.removeItem('recovery_lock'); navigate('/'); }} className="text-slate-500 flex items-center gap-2 mb-8 font-bold text-sm hover:text-slate-800 transition-colors">
         <ArrowLeft size={20} /> Volver
       </button>
 
@@ -265,8 +257,9 @@ const AuthPage: React.FC = () => {
         )}
 
         {verifyingSession ? (
-            <div className="flex justify-center py-10">
-                <Loader2 className="animate-spin text-[#575AF9]" size={40}/>
+            <div className="flex flex-col items-center justify-center py-10 gap-4">
+                <Loader2 className="animate-spin text-[#575AF9]" size={48}/>
+                <span className="text-xs font-bold text-slate-400 animate-pulse uppercase tracking-widest">Estableciendo conexión segura...</span>
             </div>
         ) : view === 'update-password' ? (
             <form onSubmit={handleUpdatePassword} className="space-y-4">

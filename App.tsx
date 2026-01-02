@@ -78,15 +78,15 @@ const AppRoutes = () => {
 
   if (loading) return null;
 
-  // CRITICAL: Robust recovery check. 
-  // We check for access_token or type=recovery. 
-  // We also check session storage as a secondary flag that AuthPage sets to "lock" this view.
-  const isRecoveryInURL = location.hash.includes('access_token=') || location.search.includes('type=recovery');
-  const isRecoveryLocked = sessionStorage.getItem('padelpro_recovery_mode') === 'true';
-  const isRecovery = isRecoveryInURL || isRecoveryLocked;
+  // DETECCIÓN CRÍTICA DE RECUPERACIÓN
+  // Miramos la URL completa del navegador, no solo lo que react-router ve
+  const fullUrl = window.location.href;
+  const isRecoveryMode = fullUrl.includes('access_token=') || 
+                        fullUrl.includes('type=recovery') || 
+                        sessionStorage.getItem('recovery_lock') === 'true';
 
   const getHomeRoute = () => {
-      if (isRecovery) return <AuthPage />;
+      if (isRecoveryMode) return <AuthPage />;
       if (!user) return <Landing />;
       if (role === 'superadmin') return <Navigate to="/superadmin" replace />;
       if (role === 'admin') return <Navigate to="/dashboard" replace />;
@@ -105,6 +105,7 @@ const AppRoutes = () => {
         <Route path="/notifications/settings" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
 
         <Route path="/p/*" element={
+            isRecoveryMode ? <AuthPage /> : (
             <ProtectedRoute>
                 <PlayerLayout>
                     <Routes>
@@ -117,6 +118,7 @@ const AppRoutes = () => {
                     </Routes>
                 </PlayerLayout>
             </ProtectedRoute>
+            )
         } />
 
         <Route path="/superadmin" element={
@@ -128,6 +130,7 @@ const AppRoutes = () => {
         } />
 
         <Route path="/*" element={
+            isRecoveryMode ? <AuthPage /> : (
             <Layout>
                 <Routes>
                     <Route path="/dashboard" element={<ProtectedRoute requireAdmin><Dashboard /></ProtectedRoute>} />
@@ -152,6 +155,7 @@ const AppRoutes = () => {
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
             </Layout>
+            )
         } />
     </Routes>
   );
