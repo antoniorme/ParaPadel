@@ -1,7 +1,7 @@
-
 import React, { useEffect } from 'react';
 import { useLeague } from '../store/LeagueContext';
 import { useTournament } from '../store/TournamentContext';
+import { useAuth } from '../store/AuthContext';
 import { THEME } from '../utils/theme';
 import { Plus, ChevronRight, Calendar, Users, Trophy, Activity, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -10,23 +10,30 @@ import LeaguePromo from './LeaguePromo';
 const LeagueDashboard: React.FC = () => {
     const { leaguesList, fetchLeagues, selectLeague, isLeagueModuleEnabled } = useLeague();
     const { formatPlayerName } = useTournament();
+    const { role } = useAuth();
     const navigate = useNavigate();
 
     useEffect(() => {
-        if (isLeagueModuleEnabled) {
+        // We allow fetch if enabled OR if superadmin
+        if (isLeagueModuleEnabled || role === 'superadmin') {
             fetchLeagues();
         }
-    }, [fetchLeagues, isLeagueModuleEnabled]);
+    }, [fetchLeagues, isLeagueModuleEnabled, role]);
 
-    // IF NOT ENABLED -> SHOW PROMO
-    if (!isLeagueModuleEnabled) {
+    // IF NOT ENABLED AND NOT SUPERADMIN -> SHOW PROMO
+    if (!isLeagueModuleEnabled && role !== 'superadmin') {
         return <LeaguePromo />;
     }
 
     return (
         <div className="space-y-8 pb-20 animate-fade-in">
             <div className="flex justify-between items-center px-1">
-                <h2 className="text-2xl font-black text-white drop-shadow-sm">Gestión de Liga</h2>
+                <div className="flex flex-col">
+                    <h2 className="text-2xl font-black text-white drop-shadow-sm">Gestión de Liga</h2>
+                    {role === 'superadmin' && !isLeagueModuleEnabled && (
+                        <span className="text-[10px] font-bold text-amber-300 uppercase tracking-tighter">Acceso SuperAdmin (Módulo desactivado para este club)</span>
+                    )}
+                </div>
                 <button 
                     onClick={() => navigate('/league/setup')} 
                     className="flex items-center gap-2 px-5 py-2.5 bg-white text-indigo-500 rounded-xl font-bold text-sm shadow-xl shadow-indigo-600/20 active:scale-95 transition-transform hover:bg-indigo-50"
