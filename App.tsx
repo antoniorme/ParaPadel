@@ -74,10 +74,15 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
 
 const AppRoutes = () => {
   const { user, role, loading } = useAuth();
+  const location = useLocation();
 
-  if (loading) null;
+  if (loading) return null;
+
+  // CRITICAL: If we are in a recovery/reset flow, DO NOT redirect
+  const isRecovery = location.hash.includes('access_token=') || location.search.includes('type=recovery');
 
   const getHomeRoute = () => {
+      if (isRecovery) return <AuthPage />;
       if (!user) return <Landing />;
       if (role === 'superadmin') return <Navigate to="/superadmin" replace />;
       if (role === 'admin') return <Navigate to="/dashboard" replace />;
@@ -88,7 +93,7 @@ const AppRoutes = () => {
   return (
     <Routes>
         <Route path="/" element={getHomeRoute()} />
-        <Route path="/auth" element={user ? getHomeRoute() : <AuthPage />} />
+        <Route path="/auth" element={isRecovery ? <AuthPage /> : (user ? getHomeRoute() : <AuthPage />)} />
         <Route path="/pending" element={<ProtectedRoute><PendingVerification /></ProtectedRoute>} />
         <Route path="/join/:clubId" element={<JoinTournament />} />
         <Route path="/onboarding" element={<ProtectedRoute requireAdmin><Onboarding /></ProtectedRoute>} />

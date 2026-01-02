@@ -25,7 +25,7 @@ const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hos
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
-  const { loginWithDevBypass, isOfflineMode } = useAuth();
+  const { loginWithDevBypass, isOfflineMode, checkUserRole } = useAuth();
   const [searchParams] = useSearchParams();
   
   const [view, setView] = useState<AuthView>('login');
@@ -63,7 +63,6 @@ const AuthPage: React.FC = () => {
             
             if (!session) {
                 // 2. Si falla (común en HashRouter), PARSEAMOS MANUALMENTE EL HASH
-                // Supabase suele enviar: /#/auth#access_token=...&refresh_token=...
                 try {
                     const fragment = hash.includes('#access_token') 
                         ? hash.substring(hash.lastIndexOf('#') + 1) 
@@ -83,14 +82,14 @@ const AuthPage: React.FC = () => {
                         if (setSessionError) throw setSessionError;
                         setSuccessMsg("Identidad verificada correctamente.");
                     } else {
-                        throw new Error("Tokens no encontrados en el enlace.");
+                        throw new Error("Enlace incompleto.");
                     }
                 } catch (err: any) {
-                    setError("El enlace no es válido o ha caducado. Solicita uno nuevo.");
+                    setError("El enlace no es válido. Solicita uno nuevo.");
                     setView('recovery');
                 }
             } else {
-                setSuccessMsg("Identidad verificada. Introduce tu nueva contraseña.");
+                setSuccessMsg("Introduce tu nueva contraseña.");
             }
             setVerifyingSession(false);
         }
@@ -122,7 +121,6 @@ const AuthPage: React.FC = () => {
           return;
       }
 
-      // IMPORTANTE: Redirigimos exactamente a la ruta que maneja el useEffect anterior
       const redirectTo = `${window.location.origin}/#/auth?type=recovery`;
 
       try {
@@ -153,15 +151,20 @@ const AuthPage: React.FC = () => {
       }
 
       try {
-          // Última comprobación de sesión antes de actualizar
           const { data: { session } } = await supabase.auth.getSession();
-          if (!session) throw new Error("Sesión no detectada. Usa el enlace del email de nuevo.");
+          if (!session) throw new Error("Sesión caducada.");
 
           const { error } = await supabase.auth.updateUser({ password });
           if (error) throw error;
           
           setSuccessMsg("¡Contraseña guardada! Entrando...");
-          setTimeout(() => navigate('/dashboard'), 1500);
+          
+          // FORZAMOS RECARGA DE ROL Y NAVEGACIÓN
+          setTimeout(() => {
+              window.location.href = window.location.origin + '/#/dashboard';
+              window.location.reload(); // Hard refresh to clear any weird auth states
+          }, 1000);
+
       } catch (err: any) {
           setError(err.message || "Fallo al actualizar.");
       } finally {
@@ -227,13 +230,13 @@ const AuthPage: React.FC = () => {
              <Trophy size={48} className="text-[#575AF9]" />
           </div>
           <h1 className="text-3xl font-black text-slate-900 mb-2">
-            {verifyingSession ? 'Validando...' : 
-             view === 'login' ? 'Bienvenido' : 
+            {verifyingSession ? 'Verificando...' : 
+             view === 'login' ? 'Hola de nuevo' : 
              view === 'recovery' ? 'Recuperar' : 
              view === 'update-password' ? 'Nueva Clave' : 'Registro'}
           </h1>
           <p className="text-slate-400 text-sm">
-            {verifyingSession ? 'Verificando enlace de seguridad' :
+            {verifyingSession ? 'Validando enlace de seguridad' :
              view === 'login' ? 'Introduce tus credenciales' : 
              view === 'recovery' ? 'Escribe tu email registrado' : 
              view === 'update-password' ? 'Introduce tu nueva contraseña' : 'Crea tu cuenta de club'}
@@ -270,7 +273,7 @@ const AuthPage: React.FC = () => {
                     <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Confirmar Nueva Contraseña"/>
                 </div>
                 <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg">
-                    {loading ? <Loader2 className="animate-spin" /> : <>GUARDAR CAMBIOS <Key size={20}/></>}
+                    {loading ? <Loader2 className="animate-spin" /> : <>GUARDAR Y ENTRAR <Key size={20}/></>}
                 </button>
             </form>
         ) : view === 'recovery' ? (
