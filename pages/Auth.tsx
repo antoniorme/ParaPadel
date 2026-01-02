@@ -25,7 +25,7 @@ const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hos
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
-  const { loginWithDevBypass, isOfflineMode, checkUserRole } = useAuth();
+  const { loginWithDevBypass, isOfflineMode } = useAuth();
   const [searchParams] = useSearchParams();
   
   const [view, setView] = useState<AuthView>('login');
@@ -57,13 +57,15 @@ const AuthPage: React.FC = () => {
         if (type === 'recovery' || hash.includes('access_token=')) {
             setVerifyingSession(true);
             setView('update-password');
+            // Bloqueamos redirecciones en App.tsx usando sessionStorage
+            sessionStorage.setItem('padelpro_recovery_mode', 'true');
             
-            // 1. Intentamos obtener sesión de forma normal
-            const { data: { session } } = await supabase.auth.getSession();
-            
-            if (!session) {
-                // 2. Si falla (común en HashRouter), PARSEAMOS MANUALMENTE EL HASH
-                try {
+            try {
+                // 1. Intentamos obtener sesión de forma normal
+                const { data: { session } } = await supabase.auth.getSession();
+                
+                if (!session) {
+                    // 2. Si falla (común en HashRouter), PARSEAMOS MANUALMENTE EL HASH
                     const fragment = hash.includes('#access_token') 
                         ? hash.substring(hash.lastIndexOf('#') + 1) 
                         : hash.substring(hash.indexOf('access_token'));
@@ -80,18 +82,21 @@ const AuthPage: React.FC = () => {
                         });
                         
                         if (setSessionError) throw setSessionError;
-                        setSuccessMsg("Identidad verificada correctamente.");
+                        setSuccessMsg("Identidad verificada. Crea tu nueva clave.");
                     } else {
-                        throw new Error("Enlace incompleto.");
+                        throw new Error("El enlace no contiene tokens válidos.");
                     }
-                } catch (err: any) {
-                    setError("El enlace no es válido. Solicita uno nuevo.");
-                    setView('recovery');
+                } else {
+                    setSuccessMsg("Identidad verificada. Introduce tu nueva contraseña.");
                 }
-            } else {
-                setSuccessMsg("Introduce tu nueva contraseña.");
+            } catch (err: any) {
+                console.error("Recovery Flow Error:", err);
+                setError("El enlace no es válido o ha caducado. Solicita uno nuevo.");
+                setView('recovery');
+                sessionStorage.removeItem('padelpro_recovery_mode');
+            } finally {
+                setVerifyingSession(false);
             }
-            setVerifyingSession(false);
         }
     };
 
@@ -108,6 +113,9 @@ const AuthPage: React.FC = () => {
       setSuccessMsg(null);
       setCaptchaToken(null);
       if(captchaRef.current) captchaRef.current.resetCaptcha();
+      if (newView !== 'update-password') {
+          sessionStorage.removeItem('padelpro_recovery_mode');
+      }
   };
 
   const handlePasswordResetRequest = async (e: React.FormEvent) => {
@@ -152,17 +160,18 @@ const AuthPage: React.FC = () => {
 
       try {
           const { data: { session } } = await supabase.auth.getSession();
-          if (!session) throw new Error("Sesión caducada.");
+          if (!session) throw new Error("No se detectó una sesión activa. Usa el enlace del email o solicita uno nuevo.");
 
           const { error } = await supabase.auth.updateUser({ password });
           if (error) throw error;
           
           setSuccessMsg("¡Contraseña guardada! Entrando...");
+          sessionStorage.removeItem('padelpro_recovery_mode');
           
           // FORZAMOS RECARGA DE ROL Y NAVEGACIÓN
           setTimeout(() => {
               window.location.href = window.location.origin + '/#/dashboard';
-              window.location.reload(); // Hard refresh to clear any weird auth states
+              window.location.reload(); 
           }, 1000);
 
       } catch (err: any) {
@@ -220,7 +229,7 @@ const AuthPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col p-6">
-      <button onClick={() => navigate('/')} className="text-slate-500 flex items-center gap-2 mb-8 font-bold text-sm hover:text-slate-800 transition-colors">
+      <button onClick={() => { sessionStorage.removeItem('padelpro_recovery_mode'); navigate('/'); }} className="text-slate-500 flex items-center gap-2 mb-8 font-bold text-sm hover:text-slate-800 transition-colors">
         <ArrowLeft size={20} /> Volver
       </button>
 

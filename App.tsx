@@ -78,8 +78,12 @@ const AppRoutes = () => {
 
   if (loading) return null;
 
-  // CRITICAL: If we are in a recovery/reset flow, DO NOT redirect
-  const isRecovery = location.hash.includes('access_token=') || location.search.includes('type=recovery');
+  // CRITICAL: Robust recovery check. 
+  // We check for access_token or type=recovery. 
+  // We also check session storage as a secondary flag that AuthPage sets to "lock" this view.
+  const isRecoveryInURL = location.hash.includes('access_token=') || location.search.includes('type=recovery');
+  const isRecoveryLocked = sessionStorage.getItem('padelpro_recovery_mode') === 'true';
+  const isRecovery = isRecoveryInURL || isRecoveryLocked;
 
   const getHomeRoute = () => {
       if (isRecovery) return <AuthPage />;
@@ -93,7 +97,7 @@ const AppRoutes = () => {
   return (
     <Routes>
         <Route path="/" element={getHomeRoute()} />
-        <Route path="/auth" element={isRecovery ? <AuthPage /> : (user ? getHomeRoute() : <AuthPage />)} />
+        <Route path="/auth" element={<AuthPage />} />
         <Route path="/pending" element={<ProtectedRoute><PendingVerification /></ProtectedRoute>} />
         <Route path="/join/:clubId" element={<JoinTournament />} />
         <Route path="/onboarding" element={<ProtectedRoute requireAdmin><Onboarding /></ProtectedRoute>} />
