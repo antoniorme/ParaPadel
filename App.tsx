@@ -9,7 +9,7 @@ import { TimerProvider } from './store/TimerContext';
 import { NotificationProvider } from './store/NotificationContext';
 import { Layout } from './components/Layout';
 import { PlayerLayout } from './components/PlayerLayout';
-import { ShieldAlert, RefreshCw } from 'lucide-react';
+import { ShieldAlert, RefreshCw, Terminal, User, Shield, Crown } from 'lucide-react';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -49,7 +49,7 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
   const { clubData } = useHistory();
   const location = useLocation();
 
-  if (loading) return null; // El componente padre maneja el loading
+  if (loading) return null; 
   if (!user) return <Navigate to="/" replace />;
   
   if (role === 'pending' && location.pathname !== '/pending') return <Navigate to="/pending" replace />;
@@ -61,14 +61,14 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
 };
 
 const AppRoutes = () => {
-  const { user, role, loading, authStatus } = useAuth();
+  const { user, role, loading, authStatus, loginWithDevBypass } = useAuth();
   const location = useLocation();
-  const [showForceButton, setShowForceButton] = useState(false);
+  const [showDevBypass, setShowDevBypass] = useState(false);
 
   useEffect(() => {
       const timer = setTimeout(() => {
-          if (loading) setShowForceButton(true);
-      }, 5000);
+          if (loading) setShowDevBypass(true);
+      }, 3000); // Mostrar bypass si tarda más de 3s
       return () => clearTimeout(timer);
   }, [loading]);
 
@@ -76,7 +76,7 @@ const AppRoutes = () => {
 
   if (loading && !isAuthPage) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400 p-10 text-center font-sans">
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400 p-6 text-center font-sans">
         <div className="relative mb-8">
             <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
             <div className="absolute inset-0 flex items-center justify-center">
@@ -85,23 +85,43 @@ const AppRoutes = () => {
         </div>
         
         <h2 className="text-white font-black text-xl mb-2 tracking-tight uppercase">PadelPro</h2>
-        <p className="text-indigo-400 font-bold text-xs uppercase tracking-[0.2em] mb-8 animate-pulse">
+        <p className="text-indigo-400 font-bold text-[10px] uppercase tracking-[0.2em] mb-12 animate-pulse">
             {authStatus}
         </p>
 
-        {showForceButton && (
-            <div className="mt-4 animate-slide-up space-y-4 max-w-xs">
-                <div className="bg-rose-900/20 border border-rose-500/30 p-4 rounded-2xl flex items-start gap-3 text-left">
-                    <ShieldAlert className="text-rose-500 shrink-0" size={20}/>
-                    <p className="text-[10px] text-rose-200 leading-relaxed font-medium">
-                        La conexión está tardando más de lo esperado. Puede ser debido a tu red o a los servidores de Supabase.
-                    </p>
+        {showDevBypass && (
+            <div className="mt-4 animate-slide-up space-y-6 w-full max-w-xs">
+                <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-4">
+                    <div className="flex items-center gap-2 text-slate-500 font-black text-[10px] uppercase tracking-widest mb-2">
+                        <Terminal size={14}/> Acceso Rápido (Dev)
+                    </div>
+                    <div className="grid grid-cols-1 gap-2">
+                        <button 
+                            onClick={() => loginWithDevBypass('admin')}
+                            className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-white transition-all text-left border border-white/5"
+                        >
+                            <Shield size={16} className="text-blue-400"/> ENTRAR COMO ADMIN
+                        </button>
+                        <button 
+                            onClick={() => loginWithDevBypass('player')}
+                            className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-white transition-all text-left border border-white/5"
+                        >
+                            <User size={16} className="text-emerald-400"/> ENTRAR COMO JUGADOR
+                        </button>
+                        <button 
+                            onClick={() => loginWithDevBypass('superadmin')}
+                            className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-white transition-all text-left border border-white/5"
+                        >
+                            <Crown size={16} className="text-amber-400"/> ENTRAR COMO SUPERADMIN
+                        </button>
+                    </div>
                 </div>
+
                 <button 
                     onClick={() => window.location.reload()}
-                    className="w-full py-3 bg-white text-slate-950 rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-slate-100 transition-all active:scale-95"
+                    className="w-full py-4 bg-white text-slate-950 rounded-2xl font-black text-xs flex items-center justify-center gap-2 hover:bg-slate-100 transition-all active:scale-95 shadow-xl"
                 >
-                    <RefreshCw size={14}/> REINTENTAR CONEXIÓN
+                    <RefreshCw size={14}/> REINTENTAR CONEXIÓN REAL
                 </button>
             </div>
         )}

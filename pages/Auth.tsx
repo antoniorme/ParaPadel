@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Key, Send, Eye, EyeOff, ShieldAlert, CheckCircle2, Terminal, Globe } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Key, Send, Eye, EyeOff, ShieldAlert, CheckCircle2, Terminal, Globe, User, Shield, Crown } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery' | 'update-password';
@@ -31,7 +31,7 @@ const translateError = (msg: string) => {
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
-  const { session, user: authUser, checkUserRole } = useAuth();
+  const { session, user: authUser, checkUserRole, loginWithDevBypass } = useAuth();
   const [searchParams] = useSearchParams();
   
   const [view, setView] = useState<AuthView>('login');
@@ -60,7 +60,6 @@ const AuthPage: React.FC = () => {
             setView('update-password');
         }
     } else if (session && view !== 'update-password') {
-        // Si ya hay sesión y no estamos cambiando clave, vamos al dashboard
         navigate('/dashboard');
     }
   }, [session, searchParams, navigate, view]);
@@ -94,7 +93,6 @@ const AuthPage: React.FC = () => {
 
       const accessToken = session?.access_token;
       if (!accessToken) {
-          addLog("Sesión inválida.");
           setError("La sesión ha expirado. Solicita un nuevo enlace.");
           setLoading(false);
           return;
@@ -106,8 +104,6 @@ const AuthPage: React.FC = () => {
       const sbKey = supabase.supabaseKey;
 
       try {
-          addLog("Enviando actualización...");
-          
           const response = await fetch(`${sbUrl}/auth/v1/user`, {
               method: 'PUT',
               headers: {
@@ -120,21 +116,13 @@ const AuthPage: React.FC = () => {
           });
 
           const result = await response.json();
-          addLog(`Respuesta: HTTP ${response.status}`);
-
           if (!response.ok) {
               const rawMsg = result.msg || result.error_description || "Error desconocido";
-              addLog(`Error detectado: ${rawMsg}`);
               throw new Error(translateError(rawMsg));
           }
 
-          addLog("¡Contraseña actualizada!");
           setSuccessMsg("¡Contraseña actualizada con éxito!");
-          
-          // En lugar de un reload agresivo, esperamos un poco y navegamos
-          setTimeout(() => {
-              navigate('/dashboard');
-          }, 1500);
+          setTimeout(() => { navigate('/dashboard'); }, 1500);
 
       } catch (err: any) {
           setError(err.message);
@@ -230,30 +218,13 @@ const AuthPage: React.FC = () => {
 
                 {HCAPTCHA_SITE_TOKEN && (
                     <div className="flex justify-center my-2 scale-90 min-h-[78px]">
-                        <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={(t) => { addLog("Captcha verificado"); setCaptchaToken(t); }} ref={captchaRef}/>
+                        <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={(t) => setCaptchaToken(t)} ref={captchaRef}/>
                     </div>
                 )}
 
                 <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg active:scale-95 transition-all">
                     {loading ? <Loader2 className="animate-spin" size={20} /> : <>ACTUALIZAR Y ENTRAR <Key size={20}/></>}
                 </button>
-
-                <div className="mt-8 p-4 bg-slate-900 rounded-2xl border border-slate-700 shadow-inner overflow-hidden">
-                    <div className="flex items-center gap-2 text-indigo-400 font-bold text-[10px] uppercase tracking-widest mb-3">
-                        <Globe size={14}/> Estado de Conexión
-                    </div>
-                    <div className="space-y-1 max-h-40 overflow-y-auto no-scrollbar">
-                        {debugLogs.length === 0 ? (
-                            <p className="text-slate-600 text-[10px] italic">Esperando acción...</p>
-                        ) : (
-                            debugLogs.map((log, i) => (
-                                <p key={i} className="text-slate-300 text-[10px] font-mono leading-tight border-l border-indigo-500/30 pl-2">
-                                    {log}
-                                </p>
-                            ))
-                        )}
-                    </div>
-                </div>
             </form>
         ) : view === 'recovery' ? (
             <form onSubmit={handlePasswordResetRequest} className="space-y-4">
@@ -312,10 +283,28 @@ const AuthPage: React.FC = () => {
         )}
 
         {view !== 'update-password' && (
-            <div className="mt-8 text-center">
+            <div className="mt-8 text-center space-y-12">
                 <button onClick={() => switchView(view === 'login' ? 'register' : 'login')} className="text-slate-500 text-sm font-medium hover:text-[#575AF9]">
                     {view === 'login' ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
                 </button>
+
+                {/* DEV BYPASS SECTION */}
+                <div className="bg-slate-100 p-6 rounded-3xl border border-slate-200 space-y-4 shadow-inner">
+                    <div className="flex items-center gap-2 text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] justify-center">
+                        <Terminal size={14}/> Accesos Rápidos (DEV)
+                    </div>
+                    <div className="grid grid-cols-1 gap-2">
+                        <button onClick={() => loginWithDevBypass('admin')} className="w-full py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 text-xs flex items-center justify-center gap-2 hover:bg-indigo-50 hover:border-indigo-200 transition-all">
+                            <Shield size={14} className="text-blue-500"/> CLUB ADMIN
+                        </button>
+                        <button onClick={() => loginWithDevBypass('player')} className="w-full py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 text-xs flex items-center justify-center gap-2 hover:bg-emerald-50 hover:border-emerald-200 transition-all">
+                            <User size={14} className="text-emerald-500"/> APP JUGADOR
+                        </button>
+                        <button onClick={() => loginWithDevBypass('superadmin')} className="w-full py-3 bg-slate-900 border border-slate-800 rounded-xl font-bold text-white text-xs flex items-center justify-center gap-2 hover:bg-slate-800 transition-all">
+                            <Crown size={14} className="text-amber-400"/> SUPER ADMIN
+                        </button>
+                    </div>
+                </div>
             </div>
         )}
       </div>
