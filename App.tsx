@@ -74,19 +74,10 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
 
 const AppRoutes = () => {
   const { user, role, loading } = useAuth();
-  const location = useLocation();
 
   if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400 font-bold">Cargando aplicación...</div>;
 
-  // DETECCIÓN CRÍTICA DE RECUPERACIÓN (Incluso con doble hash /#/auth...#access_token)
-  const fullUrl = window.location.href;
-  const isRecoveryMode = fullUrl.includes('access_token=') || 
-                        fullUrl.includes('type=recovery') || 
-                        sessionStorage.getItem('recovery_lock') === 'true';
-
   const getHomeRoute = () => {
-      // Si estamos en recuperación, FORZAMOS la página de Auth ignorando todo lo demás
-      if (isRecoveryMode) return <AuthPage />;
       if (!user) return <Landing />;
       if (role === 'superadmin') return <Navigate to="/superadmin" replace />;
       if (role === 'admin') return <Navigate to="/dashboard" replace />;
@@ -105,7 +96,6 @@ const AppRoutes = () => {
         <Route path="/notifications/settings" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
 
         <Route path="/p/*" element={
-            isRecoveryMode ? <AuthPage /> : (
             <ProtectedRoute>
                 <PlayerLayout>
                     <Routes>
@@ -118,7 +108,6 @@ const AppRoutes = () => {
                     </Routes>
                 </PlayerLayout>
             </ProtectedRoute>
-            )
         } />
 
         <Route path="/superadmin" element={
@@ -130,7 +119,6 @@ const AppRoutes = () => {
         } />
 
         <Route path="/*" element={
-            isRecoveryMode ? <AuthPage /> : (
             <Layout>
                 <Routes>
                     <Route path="/dashboard" element={<ProtectedRoute requireAdmin><Dashboard /></ProtectedRoute>} />
@@ -155,7 +143,6 @@ const AppRoutes = () => {
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
             </Layout>
-            )
         } />
     </Routes>
   );

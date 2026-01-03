@@ -47,64 +47,49 @@ const AuthPage: React.FC = () => {
       if (isOfflineMode || isPlaceholder) setShowDevTools(true);
   }, [isOfflineMode]);
 
-  // --- LÓGICA DE RECUPERACIÓN RADICAL (REGEX) ---
+  // --- ESCÁNER DE TOKENS ULTRA-AGRESIVO ---
   useEffect(() => {
-    const processRecoveryFlow = async () => {
-        const fullUrl = window.location.href;
+    const processTokens = async () => {
+        const url = window.location.href;
         
-        // 1. Detección por Regex (Mucho más fiable que split con HashRouter)
-        const tokenMatch = fullUrl.match(/[#&]access_token=([^&]+)/);
-        const refreshMatch = fullUrl.match(/[#&]refresh_token=([^&]+)/);
-        const isRecoveryUrl = fullUrl.includes('type=recovery') || searchParams.get('type') === 'recovery';
+        // Buscamos access_token en cualquier parte de la cadena
+        const tokenMatch = url.match(/access_token=([^&]+)/);
+        const refreshMatch = url.match(/refresh_token=([^&]+)/);
+        const isRecovery = url.includes('type=recovery') || searchParams.get('type') === 'recovery';
 
-        if (tokenMatch || isRecoveryUrl) {
+        if (tokenMatch) {
             setVerifyingSession(true);
-            setView('update-password');
-            sessionStorage.setItem('recovery_lock', 'true');
-
-            // Timeout de seguridad de 5 segundos para evitar spinner infinito
-            const safetyTimeout = setTimeout(() => {
-                setVerifyingSession(false);
-                if (!successMsg) setError("La validación está tardando demasiado. Prueba a recargar.");
-            }, 5000);
-
             try {
-                if (tokenMatch) {
-                    const accessToken = tokenMatch[1];
-                    const refreshToken = refreshMatch ? refreshMatch[1] : '';
+                const accessToken = tokenMatch[1];
+                const refreshToken = refreshMatch ? refreshMatch[1] : '';
 
-                    const { error: setErr } = await supabase.auth.setSession({
-                        access_token: accessToken,
-                        refresh_token: refreshToken,
-                    });
+                // Sincronizamos manualmente el estado de Supabase con el token rescatado
+                const { error: sessionError } = await supabase.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: refreshToken,
+                });
 
-                    if (setErr) throw setErr;
+                if (sessionError) throw sessionError;
 
-                    // Limpieza inmediata de la URL para que no interfiera en recargas
-                    window.history.replaceState(null, '', window.location.origin + window.location.pathname + '#/auth');
-                    setSuccessMsg("¡Acceso validado! Cambia tu contraseña ahora.");
-                } else {
-                    // Si entramos por recarga (sin token en URL) comprobamos si ya hay sesión activa
-                    const { data: { session } } = await supabase.auth.getSession();
-                    if (!session) throw new Error("Sesión de recuperación caducada.");
-                }
+                // Limpiamos la URL de "suciedad" (dobles hashes, etc)
+                window.history.replaceState(null, '', window.location.origin + window.location.pathname + '#/auth');
+                
+                setView('update-password');
+                setSuccessMsg("¡Enlace validado! Cambia tu contraseña ahora.");
             } catch (err: any) {
-                console.error("Critical Auth Error:", err);
-                setError(err.message || "Enlace no válido.");
-                // Si falla y no hay sesión, devolvemos a vista de recuperación
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session) {
-                    setView('recovery');
-                    sessionStorage.removeItem('recovery_lock');
-                }
+                console.error("Auth Emergency Rescue Failed:", err);
+                setError("El enlace ha caducado o es incorrecto.");
             } finally {
-                clearTimeout(safetyTimeout);
                 setVerifyingSession(false);
             }
+        } else if (isRecovery) {
+            // Si no hay token pero es tipo recovery, comprobamos si hay sesión persistente
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) setView('update-password');
         }
     };
 
-    processRecoveryFlow();
+    processTokens();
   }, [searchParams]);
 
   const switchView = (newView: AuthView) => {
@@ -113,9 +98,6 @@ const AuthPage: React.FC = () => {
       setSuccessMsg(null);
       setCaptchaToken(null);
       if(captchaRef.current) captchaRef.current.resetCaptcha();
-      if (newView !== 'update-password') {
-          sessionStorage.removeItem('recovery_lock');
-      }
   };
 
   const handlePasswordResetRequest = async (e: React.FormEvent) => {
@@ -129,6 +111,7 @@ const AuthPage: React.FC = () => {
           return;
       }
 
+      // IMPORTANTE: Aseguramos que el redirect incluya el hash para que el Router lo entienda al volver
       const redirectTo = `${window.location.origin}/#/auth?type=recovery`;
 
       try {
@@ -137,7 +120,7 @@ const AuthPage: React.FC = () => {
               captchaToken: captchaToken || undefined 
           });
           if (error) throw error;
-          setSuccessMsg("¡Revisa tu correo! Te hemos mandado un enlace.");
+          setSuccessMsg("Enlace enviado. Mira en tu correo.");
       } catch (err: any) {
           setError(err.message || "Error al solicitar recuperación.");
           if(captchaRef.current) captchaRef.current.resetCaptcha();
@@ -162,17 +145,16 @@ const AuthPage: React.FC = () => {
           const { error } = await supabase.auth.updateUser({ password });
           if (error) throw error;
           
-          setSuccessMsg("¡Contraseña actualizada!");
-          sessionStorage.removeItem('recovery_lock');
+          setSuccessMsg("¡Contraseña cambiada con éxito!");
           
-          // RECARGA LIMPIA
+          // Redirección forzada tras guardado
           setTimeout(() => {
               window.location.href = window.location.origin + '/#/dashboard';
-              window.location.reload(); 
-          }, 1000);
+              window.location.reload();
+          }, 1500);
 
       } catch (err: any) {
-          setError(err.message || "Error al actualizar la contraseña.");
+          setError(err.message || "Error al actualizar.");
       } finally {
           setLoading(false);
       }
@@ -224,9 +206,19 @@ const AuthPage: React.FC = () => {
     }
   };
 
+  if (verifyingSession) {
+      return (
+          <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+              <RefreshCcw className="animate-spin text-[#575AF9] mb-4" size={48}/>
+              <h2 className="text-xl font-black text-slate-800">Verificando Seguridad</h2>
+              <p className="text-sm text-slate-400 mt-2">Estamos validando tu enlace de acceso...</p>
+          </div>
+      );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col p-6">
-      <button onClick={() => { sessionStorage.removeItem('recovery_lock'); navigate('/'); }} className="text-slate-500 flex items-center gap-2 mb-8 font-bold text-sm hover:text-slate-800 transition-colors">
+      <button onClick={() => navigate('/')} className="text-slate-500 flex items-center gap-2 mb-8 font-bold text-sm hover:text-slate-800 transition-colors">
         <ArrowLeft size={20} /> Volver
       </button>
 
@@ -236,46 +228,30 @@ const AuthPage: React.FC = () => {
              <Trophy size={48} className="text-[#575AF9]" />
           </div>
           <h1 className="text-3xl font-black text-slate-900 mb-2">
-            {verifyingSession ? 'Verificando...' : 
-             view === 'login' ? 'Hola de nuevo' : 
+            {view === 'login' ? 'Hola de nuevo' : 
              view === 'recovery' ? 'Recuperar' : 
              view === 'update-password' ? 'Nueva Clave' : 'Registro'}
           </h1>
           <p className="text-slate-400 text-sm">
-            {verifyingSession ? 'Validando enlace de seguridad' :
-             view === 'login' ? 'Introduce tus credenciales' : 
+            {view === 'login' ? 'Introduce tus credenciales' : 
              view === 'recovery' ? 'Escribe tu email registrado' : 
              view === 'update-password' ? 'Introduce tu nueva contraseña' : 'Crea tu cuenta de club'}
           </p>
         </div>
 
-        {successMsg && !verifyingSession && (
+        {successMsg && (
             <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-4 rounded-xl text-sm mb-6 text-center font-bold shadow-sm animate-fade-in flex items-center justify-center gap-2">
                 <CheckCircle2 size={18}/> {successMsg}
             </div>
         )}
 
-        {error && !verifyingSession && (
+        {error && (
           <div className="bg-rose-50 border border-rose-100 text-rose-600 p-4 rounded-xl text-sm mb-6 text-center font-medium shadow-sm flex items-center gap-2">
             <ShieldAlert size={18} className="shrink-0"/> {error}
           </div>
         )}
 
-        {verifyingSession ? (
-            <div className="flex flex-col items-center justify-center py-10 gap-6">
-                <div className="relative">
-                    <Loader2 className="animate-spin text-[#575AF9]" size={64}/>
-                    <ShieldCheck size={24} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-[#575AF9]" />
-                </div>
-                <div className="text-center space-y-2">
-                    <span className="block text-xs font-black text-slate-400 animate-pulse uppercase tracking-[0.2em]">Comprobando Identidad</span>
-                    <p className="text-[10px] text-slate-400 max-w-[200px]">Si tarda demasiado, intenta recargar la página desde tu navegador.</p>
-                </div>
-                <button onClick={() => window.location.reload()} className="mt-4 flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-full text-xs font-bold hover:bg-slate-200">
-                    <RefreshCcw size={14}/> RECARGAR AHORA
-                </button>
-            </div>
-        ) : view === 'update-password' ? (
+        {view === 'update-password' ? (
             <form onSubmit={handleUpdatePassword} className="space-y-4">
                  <div className="relative">
                     <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
@@ -353,7 +329,7 @@ const AuthPage: React.FC = () => {
             </div>
         )}
 
-        {showDevTools && !verifyingSession && (
+        {showDevTools && (
             <div className="mt-12 pt-8 border-t border-slate-200 animate-fade-in">
                 <div className="flex items-center justify-center gap-2 text-slate-400 text-xs font-bold uppercase mb-4"><Code2 size={16}/> SIMULACIÓN (Offline)</div>
                 <div className="grid grid-cols-2 gap-3">
