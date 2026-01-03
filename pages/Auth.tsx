@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Key, Send, Eye, EyeOff, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Key, Send, Eye, EyeOff, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery' | 'update-password';
@@ -30,54 +30,29 @@ const AuthPage: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [verifyingSession, setVerifyingSession] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
 
-  // Captura de sesión de Supabase (especialmente para recovery)
+  // Verificación de vista inicial
   useEffect(() => {
-    const checkRecovery = async () => {
+    const checkView = async () => {
         const url = window.location.href;
-        const hash = window.location.hash;
-        
-        // Supabase manda tokens en el fragmento (#access_token=...)
-        // En HashRouter, la URL puede verse como .../#/auth?type=recovery#access_token=...
-        const isRecoveryUrl = url.includes('type=recovery') || searchParams.get('type') === 'recovery';
-        const hasAccessToken = url.includes('access_token=');
-
-        if (isRecoveryUrl && hasAccessToken) {
-            setVerifyingSession(true);
-            try {
-                // Intentamos que el SDK pille la sesión del hash automáticamente
-                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-                
-                if (session) {
-                    setView('update-password');
-                    setSuccessMsg("Sesión verificada. Elige tu nueva contraseña.");
-                } else {
-                    // Intento manual de extracción si el SDK falla por la estructura de la URL
-                    const fragment = url.split('access_token=')[1];
-                    if (fragment) {
-                        const token = fragment.split('&')[0];
-                        // Solo con el token en la URL, Supabase Auth suele activarse,
-                        // si no, forzamos un segundo de espera.
-                        setTimeout(async () => {
-                            const { data: { session: retrySession } } = await supabase.auth.getSession();
-                            if (retrySession) setView('update-password');
-                            else setError("No se ha podido validar el enlace. Intenta solicitar uno nuevo.");
-                        }, 1000);
-                    }
-                }
-            } catch (err) {
-                console.error("Recovery check failed", err);
-            } finally {
-                setVerifyingSession(false);
+        // Si hay un access_token y venimos de recuperación, forzar vista de password
+        if (url.includes('access_token=') && (url.includes('type=recovery') || searchParams.get('type') === 'recovery')) {
+            // El AuthContext ya debió procesar la sesión, así que comprobamos si estamos logueados
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                setView('update-password');
+                setSuccessMsg("Identidad confirmada. Elige tu nueva clave.");
+            } else {
+                // Si el contexto falló, intentamos una vez más aquí
+                setError("La sesión no se ha podido validar automáticamente. Intenta refrescar.");
             }
         }
     };
-    checkRecovery();
+    checkView();
   }, [searchParams]);
 
   const switchView = (newView: AuthView) => {
@@ -99,7 +74,7 @@ const AuthPage: React.FC = () => {
           return;
       }
 
-      // IMPORTANTE: URL con # para que HashRouter lo pille bien
+      // IMPORTANTE: URL que obliga a Supabase a volver a la ruta del HashRouter
       const redirectTo = `${window.location.origin}/#/auth?type=recovery`;
 
       try {
@@ -108,7 +83,7 @@ const AuthPage: React.FC = () => {
               captchaToken: captchaToken || undefined 
           });
           if (error) throw error;
-          setSuccessMsg("¡Enlace enviado! Revisa tu bandeja de entrada.");
+          setSuccessMsg("¡Enlace enviado! Revisa tu email.");
       } catch (err: any) {
           setError(err.message || "Error al solicitar recuperación.");
           if(captchaRef.current) captchaRef.current.resetCaptcha();
@@ -133,10 +108,10 @@ const AuthPage: React.FC = () => {
           const { error } = await supabase.auth.updateUser({ password });
           if (error) throw error;
           
-          setSuccessMsg("¡Contraseña actualizada! Entrando...");
+          setSuccessMsg("¡Nueva contraseña guardada! Entrando...");
           
-          // RECARGA TOTAL para limpiar tokens y fragmentos de la URL
           setTimeout(() => {
+              // Limpiar URL de fragmentos de token y redirigir
               window.location.href = window.location.origin + '/#/dashboard';
               window.location.reload();
           }, 1500);
@@ -192,16 +167,6 @@ const AuthPage: React.FC = () => {
       setLoading(false);
     }
   };
-
-  if (verifyingSession) {
-      return (
-          <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
-              <Loader2 className="animate-spin text-[#575AF9] mb-4" size={48} />
-              <h2 className="text-xl font-black text-slate-800">Verificando Acceso</h2>
-              <p className="text-sm text-slate-400 mt-2">Estamos validando tu identidad...</p>
-          </div>
-      );
-  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col p-6">

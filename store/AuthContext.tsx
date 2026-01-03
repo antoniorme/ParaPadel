@@ -41,10 +41,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
           const { data: saData } = await supabase.from('superadmins').select('id').eq('email', userEmail).maybeSingle();
           if (saData) return 'superadmin';
-
           const { data: clubData } = await supabase.from('clubs').select('id').eq('owner_id', uid).maybeSingle();
           if (clubData) return 'admin';
-          
           return 'player';
       } catch (e) {
           return 'player';
@@ -72,20 +70,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         try {
-            // CRITICAL: Detectar si estamos en flujo de recuperación para no bloquear
-            const hasToken = window.location.href.includes('access_token=');
-            
+            // CAZADOR DE TOKENS (Para HashRouter)
+            // Si la URL tiene access_token, lo extraemos manualmente y forzamos sesión
+            const url = window.location.href;
+            if (url.includes('access_token=')) {
+                const fragment = url.split('access_token=')[1];
+                const accessToken = fragment.split('&')[0];
+                const refreshTokenMatch = url.match(/refresh_token=([^&]+)/);
+                const refreshToken = refreshTokenMatch ? refreshTokenMatch[1] : '';
+
+                if (accessToken) {
+                    const { data, error } = await supabase.auth.setSession({
+                        access_token: accessToken,
+                        refresh_token: refreshToken
+                    });
+                    if (!error && data.session) {
+                        setSession(data.session);
+                        setUser(data.session.user);
+                        const r = await checkUserRole(data.session.user.id, data.session.user.email);
+                        setRole(r);
+                    }
+                }
+            }
+
+            // Intento normal si no hay tokens o ya se procesaron
             const { data: { session: currentSession } } = await supabase.auth.getSession();
-            
             if (currentSession) {
                 setSession(currentSession);
                 setUser(currentSession.user);
                 const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
                 setRole(r);
-            } else if (hasToken) {
-                // Si hay token pero no sesión aún, damos un respiro para que el SDK procese el fragmento
-                // pero no bloqueamos el App.tsx
-                console.log("Token detected, allowing app to load for Auth page processing");
             }
         } catch (error) {
             console.warn("Auth initialization error", error);
