@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
@@ -34,20 +34,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
 
-  const checkUserRole = async (uid: string, userEmail?: string): Promise<UserRole> => {
+  const checkUserRole = useCallback(async (uid: string, userEmail?: string): Promise<UserRole> => {
+      if (!uid) return null;
       if (userEmail === 'antoniorme@gmail.com') return 'superadmin';
-      if (isOfflineMode) return (userEmail?.includes('admin') || userEmail?.includes('club')) ? 'admin' : 'player';
+      
+      // Si estamos en modo placeholder (sin URL de Supabase), devolvemos admin por defecto para desarrollo
+      // @ts-ignore
+      if (supabase.supabaseUrl.includes('placeholder')) return 'admin';
 
       try {
-          const { data: saData } = await supabase.from('superadmins').select('id').eq('email', userEmail).maybeSingle();
+          // Buscamos en superadmins
+          const { data: saData, error: saError } = await supabase.from('superadmins').select('id').eq('email', userEmail).maybeSingle();
           if (saData) return 'superadmin';
-          const { data: clubData } = await supabase.from('clubs').select('id').eq('owner_id', uid).maybeSingle();
+
+          // Buscamos en clubs
+          const { data: clubData, error: clubError } = await supabase.from('clubs').select('id').eq('owner_id', uid).maybeSingle();
           if (clubData) return 'admin';
+
           return 'player';
       } catch (e) {
+          console.error("Error checking role, defaulting to player", e);
           return 'player';
       }
-  };
+  }, []);
 
   const loginWithDevBypass = (targetRole: 'admin' | 'player' | 'superadmin') => {
       setIsOfflineMode(true);
@@ -63,6 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initSession = async () => {
         const url = window.location.href;
         
+        // 1. Manejo de tokens en URL (Recovery / Invite)
         if (url.includes('access_token=')) {
             try {
                 const parts = url.split('#');
@@ -74,7 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     const refresh_token = params.get('refresh_token');
 
                     if (access_token) {
-                        const { data, error } = await supabase.auth.setSession({
+                        const { data } = await supabase.auth.setSession({
                             access_token,
                             refresh_token: refresh_token || '',
                         });
@@ -84,28 +94,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                             setUser(data.session.user);
                             const r = await checkUserRole(data.session.user.id, data.session.user.email);
                             setRole(r);
-                            
-                            // LIMPIEZA CRITICA: Borramos el hash para que no interfiera con el cambio de clave
                             window.history.replaceState(null, '', window.location.origin + '/#/auth?type=recovery_verified');
                         }
                     }
                 }
             } catch (e) {
-                console.error("Error in manual token injection", e);
+                console.error("Error initializing from token", e);
             } finally {
                 setLoading(false);
-                return;
             }
+            return;
         }
 
+        // 2. Modo Desarrollo o Placeholder
         const storedDevMode = sessionStorage.getItem('padelpro_dev_mode') === 'true';
         // @ts-ignore
-        if (storedDevMode || (supabase as any).supabaseUrl === 'https://placeholder.supabase.co') {
+        const isPlaceholder = supabase.supabaseUrl.includes('placeholder');
+
+        if (storedDevMode || isPlaceholder) {
             setIsOfflineMode(true);
+            // Si ya hay algo en session storage, intentamos restaurar el rol simulado
+            if (storedDevMode) {
+                setRole('admin'); // Fallback razonable
+            }
             setLoading(false);
             return;
         }
 
+        // 3. Sesión Real
         try {
             const { data: { session: currentSession } } = await supabase.auth.getSession();
             if (currentSession) {
@@ -115,7 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setRole(r);
             }
         } catch (error) {
-            console.warn("Auth initialization error", error);
+            console.warn("Auth init error", error);
         } finally {
             setLoading(false);
         }
@@ -123,33 +139,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     initSession();
 
+    // Listener de cambios de estado con protección contra bloqueos
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!isOfflineMode) {
+      try {
           setSession(session);
           const currentUser = session?.user ?? null;
           setUser(currentUser);
+          
           if (currentUser) {
               const r = await checkUserRole(currentUser.id, currentUser.email);
               setRole(r);
           } else {
               setRole(null);
           }
+      } catch (err) {
+          console.error("Error in auth state change listener", err);
+      } finally {
           setLoading(false);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [isOfflineMode]);
+  }, [checkUserRole]);
 
   const signOut = async () => {
-    if (isOfflineMode) {
-        sessionStorage.removeItem('padelpro_dev_mode');
-        window.location.reload();
-        return;
-    } 
-    await supabase.auth.signOut();
-    setUser(null); setSession(null); setRole(null);
-    localStorage.removeItem('padel_sim_player_id');
+    setLoading(true);
+    try {
+        if (isOfflineMode) {
+            sessionStorage.removeItem('padelpro_dev_mode');
+            window.location.reload();
+            return;
+        } 
+        await supabase.auth.signOut();
+    } finally {
+        setUser(null); 
+        setSession(null); 
+        setRole(null);
+        localStorage.removeItem('padel_sim_player_id');
+        setLoading(false);
+    }
   };
 
   return (

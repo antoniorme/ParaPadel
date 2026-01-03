@@ -25,12 +25,13 @@ const translateError = (msg: string) => {
     if (msg.includes('Invalid login credentials')) return "Email o contraseña incorrectos.";
     if (msg.includes('User already registered')) return "Este email ya está registrado.";
     if (msg.includes('Captcha')) return "Error en la verificación del Captcha.";
+    if (msg.includes('refresh_token_not_found')) return "La sesión ha caducado. Solicita un nuevo enlace.";
     return msg;
 };
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
-  const { session, user: authUser } = useAuth();
+  const { session, user: authUser, checkUserRole } = useAuth();
   const [searchParams] = useSearchParams();
   
   const [view, setView] = useState<AuthView>('login');
@@ -59,6 +60,7 @@ const AuthPage: React.FC = () => {
             setView('update-password');
         }
     } else if (session && view !== 'update-password') {
+        // Si ya hay sesión y no estamos cambiando clave, vamos al dashboard
         navigate('/dashboard');
     }
   }, [session, searchParams, navigate, view]);
@@ -104,7 +106,7 @@ const AuthPage: React.FC = () => {
       const sbKey = supabase.supabaseKey;
 
       try {
-          addLog("Enviando PUT a la API de Auth...");
+          addLog("Enviando actualización...");
           
           const response = await fetch(`${sbUrl}/auth/v1/user`, {
               method: 'PUT',
@@ -126,12 +128,12 @@ const AuthPage: React.FC = () => {
               throw new Error(translateError(rawMsg));
           }
 
-          addLog("¡Contraseña actualizada con éxito!");
-          setSuccessMsg("¡Contraseña actualizada! Redirigiendo...");
+          addLog("¡Contraseña actualizada!");
+          setSuccessMsg("¡Contraseña actualizada con éxito!");
           
+          // En lugar de un reload agresivo, esperamos un poco y navegamos
           setTimeout(() => {
-              window.location.href = window.location.origin + '/#/dashboard';
-              window.location.reload();
+              navigate('/dashboard');
           }, 1500);
 
       } catch (err: any) {
@@ -238,7 +240,7 @@ const AuthPage: React.FC = () => {
 
                 <div className="mt-8 p-4 bg-slate-900 rounded-2xl border border-slate-700 shadow-inner overflow-hidden">
                     <div className="flex items-center gap-2 text-indigo-400 font-bold text-[10px] uppercase tracking-widest mb-3">
-                        <Globe size={14}/> Monitor de Estado
+                        <Globe size={14}/> Estado de Conexión
                     </div>
                     <div className="space-y-1 max-h-40 overflow-y-auto no-scrollbar">
                         {debugLogs.length === 0 ? (
