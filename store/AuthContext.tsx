@@ -63,10 +63,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initSession = async () => {
         const url = window.location.href;
         
-        // 1. DETECCIÓN AGRESIVA DE TOKEN (Fix para HashRouter)
         if (url.includes('access_token=')) {
             try {
-                // Extraemos el fragmento después del último #
                 const parts = url.split('#');
                 const tokenPart = parts.find(p => p.includes('access_token='));
                 
@@ -76,28 +74,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     const refresh_token = params.get('refresh_token');
 
                     if (access_token) {
-                        const { data } = await supabase.auth.setSession({
+                        const { data, error } = await supabase.auth.setSession({
                             access_token,
                             refresh_token: refresh_token || '',
                         });
+                        
                         if (data.session) {
                             setSession(data.session);
                             setUser(data.session.user);
                             const r = await checkUserRole(data.session.user.id, data.session.user.email);
                             setRole(r);
+                            
+                            // LIMPIEZA CRITICA: Borramos el hash para que no interfiera con el cambio de clave
+                            window.history.replaceState(null, '', window.location.origin + '/#/auth?type=recovery_verified');
                         }
                     }
                 }
             } catch (e) {
                 console.error("Error in manual token injection", e);
             } finally {
-                // IMPORTANTE: Siempre desbloqueamos la carga aquí
                 setLoading(false);
                 return;
             }
         }
 
-        // 2. MODO OFFLINE / NORMAL
         const storedDevMode = sessionStorage.getItem('padelpro_dev_mode') === 'true';
         // @ts-ignore
         if (storedDevMode || (supabase as any).supabaseUrl === 'https://placeholder.supabase.co') {
@@ -134,7 +134,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } else {
               setRole(null);
           }
-          // Garantizamos que tras cualquier cambio de estado, la carga termine
           setLoading(false);
       }
     });

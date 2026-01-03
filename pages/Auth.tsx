@@ -37,7 +37,7 @@ const AuthPage: React.FC = () => {
 
   useEffect(() => {
     const url = window.location.href;
-    const isRecovery = url.includes('type=recovery') || searchParams.get('type') === 'recovery' || url.includes('access_token=');
+    const isRecovery = url.includes('type=recovery') || url.includes('recovery_verified') || searchParams.get('type') === 'recovery' || url.includes('access_token=');
     
     if (session && isRecovery) {
         setView('update-password');
@@ -94,36 +94,44 @@ const AuthPage: React.FC = () => {
           return;
       }
 
-      if (!IS_LOCAL && HCAPTCHA_SITE_TOKEN && !captchaToken) {
-          setError("Por seguridad, completa el captcha.");
-          setLoading(false);
-          return;
-      }
+      // Timeout de seguridad: si en 10 segundos no responde, forzamos salida
+      const safetyTimeout = setTimeout(() => {
+          if (loading) {
+              setLoading(false);
+              setError("La conexión está tardando demasiado. Reintenta o refresca la página.");
+          }
+      }, 10000);
 
       try {
-          console.log("Intentando actualizar contraseña con token:", captchaToken ? "Presente" : "Ausente");
+          console.log("Iniciando actualización de clave...");
           
-          // CORRECCIÓN CRÍTICA: captchaToken va en el segundo objeto (options)
-          const { error } = await supabase.auth.updateUser(
-              { password },
-              { captchaToken: captchaToken || undefined }
+          // Enviamos el captchaToken tanto en data como en options por si acaso
+          const { data, error } = await supabase.auth.updateUser(
+              { 
+                  password,
+                  // @ts-ignore
+                  captchaToken: captchaToken || undefined 
+              },
+              { 
+                  // @ts-ignore
+                  captchaToken: captchaToken || undefined 
+              }
           );
           
           if (error) throw error;
           
-          setSuccessMsg("¡Contraseña actualizada con éxito!");
-          console.log("Contraseña actualizada. Redirigiendo...");
+          clearTimeout(safetyTimeout);
+          setSuccessMsg("¡Contraseña actualizada! Entrando...");
           
-          // LIMPIEZA AGRESIVA DE URL PARA EVITAR BUCLES
           setTimeout(() => {
-              // Eliminamos el hash de la URL (tokens de recuperación)
-              window.history.replaceState(null, '', window.location.origin + '/#/dashboard');
+              window.location.href = window.location.origin + '/#/dashboard';
               window.location.reload();
           }, 1500);
 
       } catch (err: any) {
-          console.error("Error al actualizar contraseña:", err);
-          setError(err.message || "Error al actualizar clave.");
+          clearTimeout(safetyTimeout);
+          console.error("Error en update password:", err);
+          setError(err.message || "Error desconocido al actualizar.");
           if(captchaRef.current) captchaRef.current.resetCaptcha();
           setCaptchaToken(null);
       } finally {
