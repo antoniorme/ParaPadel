@@ -70,30 +70,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         try {
-            // CAZADOR DE TOKENS (Para HashRouter)
-            // Si la URL tiene access_token, lo extraemos manualmente y forzamos sesión
             const url = window.location.href;
+            
+            // EXTRACTOR MANUAL DE TOKENS (Soporta doble # de HashRouter)
+            // Buscamos access_token en cualquier parte de la URL completa
             if (url.includes('access_token=')) {
-                const fragment = url.split('access_token=')[1];
-                const accessToken = fragment.split('&')[0];
-                const refreshTokenMatch = url.match(/refresh_token=([^&]+)/);
-                const refreshToken = refreshTokenMatch ? refreshTokenMatch[1] : '';
+                console.log("Token detected in URL, performing manual injection...");
+                
+                // Extraer access_token y refresh_token usando URLSearchParams sobre el fragmento final
+                // Supabase pega los tokens después del último '#'
+                const parts = url.split('#');
+                const lastPart = parts[parts.length - 1]; 
+                // Si el último fragmento empieza por access_token o contiene la cadena
+                const params = new URLSearchParams(lastPart.includes('access_token') ? lastPart : lastPart.split('?')[1]);
+                
+                const accessToken = params.get('access_token');
+                const refreshToken = params.get('refresh_token');
 
                 if (accessToken) {
                     const { data, error } = await supabase.auth.setSession({
                         access_token: accessToken,
-                        refresh_token: refreshToken
+                        refresh_token: refreshToken || ''
                     });
+                    
                     if (!error && data.session) {
+                        console.log("Session manually injected successfully");
                         setSession(data.session);
                         setUser(data.session.user);
                         const r = await checkUserRole(data.session.user.id, data.session.user.email);
                         setRole(r);
+                        setLoading(false);
+                        return; // Salimos, ya tenemos sesión
                     }
                 }
             }
 
-            // Intento normal si no hay tokens o ya se procesaron
+            // Intento estándar si no hubo inyección manual
             const { data: { session: currentSession } } = await supabase.auth.getSession();
             if (currentSession) {
                 setSession(currentSession);
@@ -110,7 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     initSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isOfflineMode) {
           setSession(session);
           const currentUser = session?.user ?? null;

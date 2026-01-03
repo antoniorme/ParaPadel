@@ -21,7 +21,7 @@ const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hos
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
-  const { loginWithDevBypass, isOfflineMode } = useAuth();
+  const { session, user } = useAuth();
   const [searchParams] = useSearchParams();
   
   const [view, setView] = useState<AuthView>('login');
@@ -35,25 +35,20 @@ const AuthPage: React.FC = () => {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
 
-  // Verificación de vista inicial
+  // Lógica de detección de vista basada en sesión
   useEffect(() => {
-    const checkView = async () => {
-        const url = window.location.href;
-        // Si hay un access_token y venimos de recuperación, forzar vista de password
-        if (url.includes('access_token=') && (url.includes('type=recovery') || searchParams.get('type') === 'recovery')) {
-            // El AuthContext ya debió procesar la sesión, así que comprobamos si estamos logueados
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session) {
-                setView('update-password');
-                setSuccessMsg("Identidad confirmada. Elige tu nueva clave.");
-            } else {
-                // Si el contexto falló, intentamos una vez más aquí
-                setError("La sesión no se ha podido validar automáticamente. Intenta refrescar.");
-            }
-        }
-    };
-    checkView();
-  }, [searchParams]);
+    const url = window.location.href;
+    const isRecovery = url.includes('type=recovery') || searchParams.get('type') === 'recovery';
+    
+    // Si tenemos sesión y venimos de un flujo de recovery, vamos directos a cambiar password
+    if (session && isRecovery) {
+        setView('update-password');
+        setSuccessMsg("Sesión iniciada mediante enlace. Define tu nueva contraseña.");
+    } else if (session) {
+        // Si hay sesión pero no es recovery, vamos al dashboard
+        navigate('/dashboard');
+    }
+  }, [session, searchParams, navigate]);
 
   const switchView = (newView: AuthView) => {
       setView(newView);
@@ -74,7 +69,6 @@ const AuthPage: React.FC = () => {
           return;
       }
 
-      // IMPORTANTE: URL que obliga a Supabase a volver a la ruta del HashRouter
       const redirectTo = `${window.location.origin}/#/auth?type=recovery`;
 
       try {
@@ -108,10 +102,10 @@ const AuthPage: React.FC = () => {
           const { error } = await supabase.auth.updateUser({ password });
           if (error) throw error;
           
-          setSuccessMsg("¡Nueva contraseña guardada! Entrando...");
+          setSuccessMsg("¡Contraseña actualizada! Redirigiendo...");
           
+          // RECARGA LIMPIA para borrar fragmentos de la URL
           setTimeout(() => {
-              // Limpiar URL de fragmentos de token y redirigir
               window.location.href = window.location.origin + '/#/dashboard';
               window.location.reload();
           }, 1500);
