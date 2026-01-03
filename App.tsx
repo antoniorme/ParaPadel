@@ -43,15 +43,9 @@ import PlayerTournaments from './pages/player/PlayerTournaments';
 import TournamentBrowser from './pages/player/TournamentBrowser';
 import PlayerAppProfile from './pages/player/PlayerProfile';
 
-// DETECCIÓN AGRESIVA DE DESARROLLO / SANDBOX (Google AI Studio usa .googleusercontent.com)
-const IS_DEV_ENV = 
-  (typeof import.meta !== 'undefined' && import.meta.env?.DEV) || 
-  window.location.hostname === 'localhost' || 
-  window.location.hostname === '127.0.0.1' || 
-  window.location.hostname.includes('google') || 
-  window.location.hostname.includes('webcontainer') ||
-  window.location.hostname.includes('stackblitz') ||
-  window.location.hostname.includes('vercel.app'); // Permite ver herramientas en despliegues de prueba
+// DETECCIÓN UNIVERSAL: Si no es el dominio oficial de producción, ES DESARROLLO/SANDBOX
+const IS_PROD = window.location.hostname === 'minisdepadel.com'; // Cambia esto al dominio real cuando lo tengas
+const IS_DEV_ENV = !IS_PROD || window.location.port !== '' || window.location.hostname.includes('google') || window.location.hostname.includes('webcontainer');
 
 const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = false }: { children?: React.ReactNode, requireAdmin?: boolean, requireSuperAdmin?: boolean }) => {
   const { user, loading, role } = useAuth();
@@ -76,8 +70,7 @@ const AppRoutes = () => {
   const isAuthPage = location.pathname.includes('/auth');
 
   if (loading && !isAuthPage) {
-    // Si NO es desarrollo, pantalla limpia
-    if (!IS_DEV_ENV) {
+    if (IS_PROD) {
         return (
             <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
                 <div className="w-20 h-20 bg-white rounded-3xl shadow-xl shadow-indigo-100 flex items-center justify-center mb-8 animate-bounce">
@@ -90,36 +83,37 @@ const AppRoutes = () => {
         );
     }
 
-    // Si es DESARROLLO (incluido Google AI Studio), mostrar terminal de logs
     return (
       <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center p-6 font-mono overflow-hidden">
-        <div className="w-full max-w-sm space-y-8">
+        <div className="w-full max-w-md space-y-8">
             <div className="text-center">
                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-400 text-[10px] font-bold uppercase tracking-widest mb-6">
-                    <Activity size={12} className="animate-pulse"/> Sandbox Kernel v2.3
+                    <Activity size={12} className="animate-pulse"/> Sandbox Monitor v2.5
                 </div>
-                <h1 className="text-white font-black text-2xl tracking-tighter italic">PADEL PRO <span className="text-indigo-500">OS</span></h1>
+                <h1 className="text-white font-black text-2xl tracking-tighter italic uppercase">SISTEMA DE <span className="text-indigo-500">GESTIÓN</span></h1>
             </div>
 
             <div className="bg-[#121214] border border-white/5 rounded-2xl p-5 shadow-2xl relative">
-                <div className="flex items-center gap-2 mb-4">
-                    <div className="w-2 h-2 rounded-full bg-rose-500"></div>
-                    <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                    <span className="text-white/20 text-[9px] font-bold uppercase ml-2 tracking-widest">Auth & DB Debugger</span>
+                <div className="flex justify-between items-center mb-4">
+                    <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-rose-500"></div>
+                        <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                        <span className="text-white/20 text-[9px] font-bold uppercase ml-2 tracking-widest">Console Logs</span>
+                    </div>
                 </div>
                 
-                <div className="space-y-1.5 h-64 overflow-y-auto no-scrollbar text-[11px]">
+                <div className="space-y-1.5 h-64 overflow-y-auto no-scrollbar text-[11px] leading-relaxed">
                     {authLogs.map((log, i) => {
-                        const isError = log.includes('!!!') || log.includes('ERROR') || log.includes('Fallo');
-                        const isSuccess = log.includes('OK') || log.includes('detectado') || log.includes('encontrada');
+                        const isError = log.includes('!!!') || log.includes('ERROR') || log.includes('Fallo') || log.includes('No se encontró');
+                        const isSuccess = log.includes('OK') || log.includes('Detectado') || log.includes('concedido');
                         return (
-                            <div key={i} className={`${isError ? 'text-rose-400 bg-rose-400/5' : isSuccess ? 'text-emerald-400' : 'text-slate-400'} px-2 py-0.5 rounded border-l-2 ${isError ? 'border-rose-500' : isSuccess ? 'border-emerald-500' : 'border-transparent'}`}>
+                            <div key={i} className={`${isError ? 'text-rose-400 bg-rose-400/5' : isSuccess ? 'text-emerald-400' : 'text-slate-400'} px-2 py-1 rounded`}>
                                 {log}
                             </div>
                         );
                     })}
-                    <div className="text-indigo-500 animate-pulse px-2">_ ANALYZING_USER_ROLE...</div>
+                    <div className="text-indigo-500 animate-pulse px-2">_ ANALIZANDO_IDENTIDAD...</div>
                 </div>
             </div>
 
@@ -129,17 +123,17 @@ const AppRoutes = () => {
                         <RefreshCw size={12}/> REINTENTAR
                     </button>
                     <button onClick={() => signOut()} className="flex-1 py-3 bg-white/5 text-white border border-white/10 rounded-xl font-black text-[10px] flex items-center justify-center gap-2">
-                        <ShieldAlert size={12}/> FORZAR LOGOUT
+                        <ShieldAlert size={12}/> LOGOUT
                     </button>
                 </div>
 
                 <div className="p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-2xl mt-4">
                     <div className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <Code size={14}/> Sandbox Dev Tools
+                        <Terminal size={14}/> Acceso Rápido Sandbox
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                        <button onClick={() => loginWithDevBypass('admin')} className="py-2 bg-white/5 text-white text-[9px] font-bold rounded-lg border border-white/5 hover:bg-white/10">MODO CLUB</button>
-                        <button onClick={() => loginWithDevBypass('superadmin')} className="py-2 bg-white/5 text-white text-[9px] font-bold rounded-lg border border-white/5 hover:bg-white/10">MODO SA</button>
+                        <button onClick={() => loginWithDevBypass('admin')} className="py-2 bg-white/5 text-white text-[9px] font-bold rounded-lg border border-white/5 hover:bg-white/10">SOY CLUB</button>
+                        <button onClick={() => loginWithDevBypass('superadmin')} className="py-2 bg-white/5 text-white text-[9px] font-bold rounded-lg border border-white/5 hover:bg-white/10">SOY SA</button>
                     </div>
                 </div>
             </div>
