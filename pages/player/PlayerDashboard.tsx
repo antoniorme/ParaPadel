@@ -6,7 +6,7 @@ import { useHistory } from '../../store/HistoryContext';
 import { useNotifications } from '../../store/NotificationContext';
 import { useAuth } from '../../store/AuthContext';
 import { THEME } from '../../utils/theme';
-import { Activity, TrendingUp, Award, Calendar, ChevronRight, LogOut, UserCircle, Bell, ShieldAlert, ArrowLeft } from 'lucide-react';
+import { Activity, TrendingUp, Award, Calendar, ChevronRight, LogOut, UserCircle, Bell, ShieldAlert, ArrowLeft, Terminal } from 'lucide-react';
 import { calculateDisplayRanking } from '../../utils/Elo';
 
 const PlayerDashboard: React.FC = () => {
@@ -30,14 +30,15 @@ const PlayerDashboard: React.FC = () => {
     const isAdmin = role === 'admin' || role === 'superadmin';
     const currentPlayer = state.players.find(p => p.id === myPlayerId);
 
-    // Si eres ADMIN y NO tienes un ID de jugador seleccionado aún,
-    // vamos a intentar buscar si existe un jugador con tu mismo nombre o email
+    // Búsqueda automática de perfil de jugador vinculado al usuario de Supabase
     useEffect(() => {
-        if (isAdmin && !myPlayerId && state.players.length > 0) {
-            const autoPlayer = state.players.find(p => p.email === user?.email);
-            if (autoPlayer) setMyPlayerId(autoPlayer.id);
+        if (!myPlayerId && state.players.length > 0) {
+            const autoPlayer = state.players.find(p => p.profile_user_id === user?.id || p.email === user?.email);
+            if (autoPlayer) {
+                setMyPlayerId(autoPlayer.id);
+            }
         }
-    }, [isAdmin, myPlayerId, state.players, user]);
+    }, [myPlayerId, state.players, user]);
 
     const stats = useMemo(() => {
         if (!currentPlayer) return null;
@@ -65,23 +66,23 @@ const PlayerDashboard: React.FC = () => {
         else { await signOut(); navigate('/'); }
     };
 
-    // Si el usuario es ADMIN y entra aquí, no bloqueamos con el selector a menos que quiera
+    // Si el usuario llega aquí y no es admin, pero tampoco tiene perfil de jugador creado aún,
+    // mostramos una pantalla de espera informativa en lugar de un dropdown.
     if (!currentPlayer && !isAdmin) {
         return (
-            <div className="p-8 min-h-screen flex flex-col justify-center items-center text-center bg-white">
-                <UserCircle size={64} className="text-slate-300 mb-4"/>
-                <h2 className="text-2xl font-black text-slate-900 mb-2">Identifícate</h2>
-                <p className="text-slate-500 mb-8">Selecciona tu perfil de jugador para ver tus estadísticas.</p>
-                <select 
-                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:border-[#575AF9]"
-                    onChange={(e) => setMyPlayerId(e.target.value)}
-                    value=""
-                >
-                    <option value="" disabled>Seleccionar Jugador...</option>
-                    {state.players.map(p => (
-                        <option key={p.id} value={p.id}>{formatPlayerName(p)}</option>
-                    ))}
-                </select>
+            <div className="p-8 min-h-screen flex flex-col justify-center items-center text-center bg-slate-50">
+                <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-500 mb-6">
+                    <UserCircle size={32}/>
+                </div>
+                <h2 className="text-xl font-black text-slate-900 mb-2">Vinculando Perfil</h2>
+                <p className="text-slate-500 text-sm mb-8 leading-relaxed max-w-xs">
+                    Estamos buscando tu ficha de jugador en el club. Si es tu primera vez, el administrador debe registrarte con tu email: <br/>
+                    <span className="font-bold text-slate-800">{user?.email}</span>
+                </p>
+                <div className="w-full max-w-xs space-y-3">
+                    <button onClick={() => window.location.reload()} className="w-full py-3 bg-white border border-slate-200 rounded-xl font-bold text-xs text-slate-600">REINTENTAR</button>
+                    <button onClick={() => signOut()} className="w-full py-3 text-rose-500 font-bold text-xs">CERRAR SESIÓN</button>
+                </div>
             </div>
         );
     }
@@ -89,44 +90,29 @@ const PlayerDashboard: React.FC = () => {
     return (
         <div className="p-6 space-y-8 relative pb-24">
             
-            {/* Header de Administrador (Botón de pánico/retorno) */}
+            {/* Header de Administrador (Modo Depuración) */}
             {isAdmin && (
-                <div className="bg-indigo-600 -mx-6 -mt-6 p-4 flex items-center justify-between shadow-lg">
-                    <div className="flex items-center gap-2 text-white">
-                        <ShieldAlert size={20}/>
-                        <span className="text-xs font-black uppercase tracking-wider">Modo Vista Jugador</span>
+                <div className="bg-slate-900 -mx-6 -mt-6 p-4 flex items-center justify-between border-b border-white/5">
+                    <div className="flex items-center gap-2 text-indigo-400">
+                        <Terminal size={16}/>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Admin Diagnostic View</span>
                     </div>
                     <button 
                         onClick={() => navigate('/dashboard')}
-                        className="bg-white text-indigo-600 px-4 py-1.5 rounded-lg text-xs font-black flex items-center gap-2 shadow-sm active:scale-95 transition-all"
+                        className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase shadow-lg active:scale-95 transition-all"
                     >
-                        <ArrowLeft size={14}/> VOLVER A GESTIÓN
+                        Volver a Gestión
                     </button>
                 </div>
             )}
 
-            {/* Selector de identidad para admins (Discreto) */}
-            {isAdmin && (
-                <div className="bg-slate-100 p-3 rounded-xl flex items-center justify-between gap-4">
-                    <span className="text-[10px] font-black text-slate-400 uppercase leading-none">Simular como:</span>
-                    <select 
-                        value={myPlayerId} 
-                        onChange={(e) => setMyPlayerId(e.target.value)}
-                        className="bg-transparent border-none font-bold text-slate-700 text-xs outline-none flex-1"
-                    >
-                        <option value="">Seleccionar...</option>
-                        {state.players.map(p => <option key={p.id} value={p.id}>{formatPlayerName(p)}</option>)}
-                    </select>
-                </div>
-            )}
-
-            {/* Si no hay jugador seleccionado pero es admin, mostramos placeholder */}
             {!currentPlayer ? (
                 <div className="py-20 text-center space-y-4">
-                    <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300">
-                        <UserCircle size={40}/>
+                    <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto text-slate-300">
+                        <ShieldAlert size={32}/>
                     </div>
-                    <h3 className="text-slate-400 font-bold">Selecciona un jugador arriba para ver la App</h3>
+                    <h3 className="text-slate-400 font-bold text-sm uppercase tracking-wider">Acceso de Administrador Detectado</h3>
+                    <p className="text-xs text-slate-500 px-10">Como administrador, puedes ver esta sección pero no tienes una ficha de jugador vinculada para mostrar estadísticas personales.</p>
                 </div>
             ) : (
                 <>

@@ -11,6 +11,7 @@ interface AuthContextType {
   loading: boolean;
   role: UserRole;
   authStatus: string;
+  authLogs: string[]; // Nuevo: Cola de logs para depuración visual
   signOut: () => Promise<void>;
   isOfflineMode: boolean;
   checkUserRole: (uid: string, email?: string) => Promise<UserRole>;
@@ -23,6 +24,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   role: null,
   authStatus: 'Iniciando...',
+  authLogs: [],
   signOut: async () => {},
   isOfflineMode: false,
   checkUserRole: async () => 'player',
@@ -35,81 +37,93 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [role, setRole] = useState<UserRole>(null);
   const [loading, setLoading] = useState(true);
   const [authStatus, setAuthStatus] = useState('Esperando conexión...');
+  const [authLogs, setAuthLogs] = useState<string[]>([]);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const timeoutRef = useRef<any>(null);
 
+  const addLog = (msg: string) => {
+      console.log(`[AUTH] ${msg}`);
+      setAuthLogs(prev => [...prev.slice(-10), `> ${msg}`]);
+  };
+
   const checkUserRole = useCallback(async (uid: string, userEmail?: string): Promise<UserRole> => {
-      if (!uid) return null;
-      setAuthStatus(`Buscando permisos para: ${userEmail || 'UID ' + uid.substring(0,5)}...`);
+      if (!uid) {
+          addLog("Error: UID no proporcionado");
+          return null;
+      }
       
+      addLog(`Depurando UID: ${uid}`);
+      addLog(`Email detectado: ${userEmail || 'Desconocido'}`);
+      
+      // Superadmin por Hardcode
       if (userEmail === 'antoniorme@gmail.com') {
-          setAuthStatus("Rol detectado: SUPERADMIN");
+          addLog("Identificado como SuperAdmin (Hardcoded)");
           return 'superadmin';
       }
       
-      // @ts-ignore
-      if (supabase.supabaseUrl.includes('placeholder')) return 'admin';
-
       try {
-          // 1. Prioridad: ¿Es SuperAdmin en la tabla?
-          const { data: saData } = await supabase.from('superadmins').select('id').eq('email', userEmail).maybeSingle();
+          addLog("Consultando tabla 'superadmins'...");
+          const { data: saData, error: saError } = await supabase.from('superadmins').select('id').eq('email', userEmail).maybeSingle();
           if (saData) {
-              setAuthStatus("Rol detectado: SUPERADMIN (Tabla)");
+              addLog("Rol encontrado en DB: SuperAdmin");
               return 'superadmin';
           }
+          if (saError) addLog(`Error SuperAdmin: ${saError.message}`);
 
-          // 2. ¿Es dueño de un Club? (Administrador)
-          // Hacemos una búsqueda limpia por owner_id
+          addLog(`Consultando tabla 'clubs' buscando owner_id = ${uid}...`);
           const { data: clubData, error: clubError } = await supabase
               .from('clubs')
-              .select('id, name')
+              .select('id, name, owner_id')
               .eq('owner_id', uid)
               .maybeSingle();
           
           if (clubData) {
-              setAuthStatus(`Rol detectado: ADMIN de ${clubData.name}`);
+              addLog(`¡ÉXITO! Club encontrado: ${clubData.name}`);
+              addLog(`ID de Club: ${clubData.id}`);
               return 'admin';
           }
 
           if (clubError) {
-              console.error("Error buscando club:", clubError);
-              setAuthStatus(`Error DB: ${clubError.message}`);
+              addLog(`ERROR DB CLUBS: ${clubError.message}`);
+              setAuthStatus("Error de base de datos al buscar club");
+          } else {
+              addLog("RESULTADO: No hay club registrado para este UID");
           }
 
-          // 3. Fallback a Jugador
-          setAuthStatus("No se encontró club. Asignando rol: JUGADOR");
+          // Si llegamos aquí, no es admin. Verificamos si es un jugador con cuenta.
+          addLog("Verificando si es jugador registrado...");
+          const { data: playerData } = await supabase.from('players').select('id').eq('profile_user_id', uid).maybeSingle();
+          if (playerData) {
+              addLog(`Rol detectado: JUGADOR (ID: ${playerData.id})`);
+              return 'player';
+          }
+
+          addLog("No se encontró ningún rol. Asignando 'player' por defecto.");
           return 'player';
       } catch (e: any) {
-          console.error("Excepción en checkUserRole:", e);
-          setAuthStatus(`Error crítico: ${e.message || 'Desconocido'}`);
+          addLog(`EXCEPCIÓN CRÍTICA: ${e.message}`);
           return 'player';
       }
   }, []);
 
   useEffect(() => {
-    // Aumentamos el timeout de seguridad a 12 segundos para dar tiempo a la DB
-    timeoutRef.current = setTimeout(() => {
-        if (loading) {
-            console.warn("Safety timeout reached.");
-            setAuthStatus("La base de datos no responde. Comprueba tu conexión.");
-            setLoading(false);
-        }
-    }, 12000);
-
     const initSession = async () => {
-        setAuthStatus("Verificando sesión...");
+        addLog("Iniciando verificación de sesión Supabase...");
         try {
             const { data: { session: currentSession } } = await supabase.auth.getSession();
             if (currentSession) {
                 setSession(currentSession);
-                setUser(currentSession.user);
-                const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
+                const currentUser = currentSession.user;
+                setUser(currentUser);
+                addLog("Sesión activa recuperada.");
+                const r = await checkUserRole(currentUser.id, currentUser.email);
                 setRole(r);
             } else {
-                setAuthStatus("Sin sesión activa");
+                addLog("No hay sesión activa.");
+                setAuthStatus("Inicia sesión para continuar");
             }
-        } catch (error) {
-            setAuthStatus("Error al recuperar sesión");
+        } catch (error: any) {
+            addLog(`Error recuperando sesión: ${error.message}`);
         } finally {
             setLoading(false);
         }
@@ -118,7 +132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setAuthStatus(`Cambio de estado: ${event}`);
+      addLog(`Evento Auth: ${event}`);
       setSession(session);
       const currentUser = session?.user ?? null;
       setUser(currentUser);
@@ -140,6 +154,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     setLoading(true);
+    addLog("Cerrando sesión...");
     try {
         await supabase.auth.signOut();
     } finally {
@@ -150,6 +165,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginWithDevBypass = (targetRole: 'admin' | 'player' | 'superadmin') => {
+      addLog(`BYPASS LOCAL: Entrando como ${targetRole}`);
       setIsOfflineMode(true);
       const devUser = { id: `dev-${targetRole}`, email: `${targetRole}@local.test` } as User;
       setUser(devUser);
@@ -159,7 +175,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, role, authStatus, signOut, isOfflineMode, checkUserRole, loginWithDevBypass }}>
+    <AuthContext.Provider value={{ session, user, loading, role, authStatus, authLogs, signOut, isOfflineMode, checkUserRole, loginWithDevBypass }}>
       {children}
     </AuthContext.Provider>
   );

@@ -9,7 +9,7 @@ import { TimerProvider } from './store/TimerContext';
 import { NotificationProvider } from './store/NotificationContext';
 import { Layout } from './components/Layout';
 import { PlayerLayout } from './components/PlayerLayout';
-import { ShieldAlert, RefreshCw, Terminal, User, Shield, Crown } from 'lucide-react';
+import { ShieldAlert, RefreshCw, Terminal, User, Shield, Crown, Code } from 'lucide-react';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -61,14 +61,16 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
 };
 
 const AppRoutes = () => {
-  const { user, role, loading, authStatus, loginWithDevBypass } = useAuth();
+  const { user, role, loading, authStatus, authLogs, loginWithDevBypass, signOut } = useAuth();
   const location = useLocation();
-  const [showDevBypass, setShowDevBypass] = useState(false);
+  const [showDiagnostic, setShowDiagnostic] = useState(false);
+
+  const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
   useEffect(() => {
       const timer = setTimeout(() => {
-          if (loading) setShowDevBypass(true);
-      }, 3000); // Mostrar bypass si tarda más de 3s
+          if (loading) setShowDiagnostic(true);
+      }, 2000);
       return () => clearTimeout(timer);
   }, [loading]);
 
@@ -76,53 +78,60 @@ const AppRoutes = () => {
 
   if (loading && !isAuthPage) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400 p-6 text-center font-sans">
-        <div className="relative mb-8">
-            <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
-            <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-8 h-8 bg-indigo-500/10 rounded-full animate-pulse"></div>
-            </div>
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center font-sans overflow-hidden">
+        <div className="relative mb-12">
+            <div className="w-12 h-12 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
         </div>
         
-        <h2 className="text-white font-black text-xl mb-2 tracking-tight uppercase">PadelPro</h2>
-        <p className="text-indigo-400 font-bold text-[10px] uppercase tracking-[0.2em] mb-12 animate-pulse">
-            {authStatus}
+        <h2 className="text-white font-black text-lg mb-1 tracking-widest uppercase italic">Padel Pro <span className="text-indigo-500">OS</span></h2>
+        <p className="text-indigo-400 font-bold text-[9px] uppercase tracking-[0.2em] mb-8">
+            System Initialization
         </p>
 
-        {showDevBypass && (
-            <div className="mt-4 animate-slide-up space-y-6 w-full max-w-xs">
-                <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-4">
-                    <div className="flex items-center gap-2 text-slate-500 font-black text-[10px] uppercase tracking-widest mb-2">
-                        <Terminal size={14}/> Acceso Rápido (Dev)
+        {showDiagnostic && (
+            <div className="w-full max-w-sm animate-fade-in space-y-6">
+                {/* TERMINAL DE DIAGNÓSTICO */}
+                <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4 text-left font-mono text-[10px] leading-relaxed shadow-2xl">
+                    <div className="flex items-center gap-2 text-indigo-400 mb-3 font-bold border-b border-slate-800 pb-2">
+                        <Terminal size={12}/> DIAGNOSTIC_LOG_STREAM
                     </div>
-                    <div className="grid grid-cols-1 gap-2">
-                        <button 
-                            onClick={() => loginWithDevBypass('admin')}
-                            className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-white transition-all text-left border border-white/5"
-                        >
-                            <Shield size={16} className="text-blue-400"/> ENTRAR COMO ADMIN
-                        </button>
-                        <button 
-                            onClick={() => loginWithDevBypass('player')}
-                            className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-white transition-all text-left border border-white/5"
-                        >
-                            <User size={16} className="text-emerald-400"/> ENTRAR COMO JUGADOR
-                        </button>
-                        <button 
-                            onClick={() => loginWithDevBypass('superadmin')}
-                            className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-white transition-all text-left border border-white/5"
-                        >
-                            <Crown size={16} className="text-amber-400"/> ENTRAR COMO SUPERADMIN
-                        </button>
+                    <div className="space-y-1 h-32 overflow-y-auto no-scrollbar">
+                        {authLogs.map((log, i) => (
+                            <div key={i} className={`${log.includes('ERROR') || log.includes('No hay club') ? 'text-rose-400' : log.includes('¡ÉXITO!') ? 'text-emerald-400' : 'text-slate-400'}`}>
+                                {log}
+                            </div>
+                        ))}
+                        <div className="text-indigo-500 animate-pulse">_</div>
                     </div>
                 </div>
 
-                <button 
-                    onClick={() => window.location.reload()}
-                    className="w-full py-4 bg-white text-slate-950 rounded-2xl font-black text-xs flex items-center justify-center gap-2 hover:bg-slate-100 transition-all active:scale-95 shadow-xl"
-                >
-                    <RefreshCw size={14}/> REINTENTAR CONEXIÓN REAL
-                </button>
+                {/* ACCESO RÁPIDO SOLO EN LOCAL */}
+                {IS_LOCAL && (
+                    <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-3">
+                        <div className="flex items-center gap-2 text-amber-500 font-black text-[9px] uppercase tracking-widest mb-1">
+                            <Code size={14}/> Local Development Bypass
+                        </div>
+                        <div className="grid grid-cols-1 gap-2">
+                            <button onClick={() => loginWithDevBypass('admin')} className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-bold text-white transition-all border border-white/5 uppercase"><Shield size={14} className="text-blue-400"/> Admin Bypass</button>
+                            <button onClick={() => loginWithDevBypass('superadmin')} className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-bold text-white transition-all border border-white/5 uppercase"><Crown size={14} className="text-amber-400"/> Superadmin Bypass</button>
+                        </div>
+                    </div>
+                )}
+
+                <div className="flex flex-col gap-2">
+                    <button 
+                        onClick={() => window.location.reload()}
+                        className="w-full py-3 bg-white text-black rounded-xl font-black text-[10px] flex items-center justify-center gap-2 hover:bg-slate-100 transition-all active:scale-95"
+                    >
+                        <RefreshCw size={12}/> FORCE REBOOT
+                    </button>
+                    <button 
+                        onClick={() => signOut()}
+                        className="w-full py-3 bg-rose-500/10 text-rose-500 border border-rose-500/20 rounded-xl font-black text-[10px] flex items-center justify-center gap-2"
+                    >
+                        <ShieldAlert size={12}/> CLEAR SESSION & LOGOUT
+                    </button>
+                </div>
             </div>
         )}
       </div>
