@@ -101,15 +101,18 @@ const AuthPage: React.FC = () => {
       }
 
       try {
-          const { error } = await supabase.auth.updateUser({ 
-              password,
-              // @ts-ignore - Algunos SDKs antiguos no tienen el tipo pero el método lo acepta
-              captchaToken: captchaToken || undefined 
-          });
+          console.log("Intentando actualizar contraseña con token:", captchaToken ? "Presente" : "Ausente");
+          
+          // CORRECCIÓN CRÍTICA: captchaToken va en el segundo objeto (options)
+          const { error } = await supabase.auth.updateUser(
+              { password },
+              { captchaToken: captchaToken || undefined }
+          );
           
           if (error) throw error;
           
           setSuccessMsg("¡Contraseña actualizada con éxito!");
+          console.log("Contraseña actualizada. Redirigiendo...");
           
           // LIMPIEZA AGRESIVA DE URL PARA EVITAR BUCLES
           setTimeout(() => {
@@ -119,6 +122,7 @@ const AuthPage: React.FC = () => {
           }, 1500);
 
       } catch (err: any) {
+          console.error("Error al actualizar contraseña:", err);
           setError(err.message || "Error al actualizar clave.");
           if(captchaRef.current) captchaRef.current.resetCaptcha();
           setCaptchaToken(null);
@@ -141,20 +145,17 @@ const AuthPage: React.FC = () => {
     try {
       let result;
       const redirectTo = `${window.location.origin}/#/auth`;
-      const authOptions = { 
-          email, 
-          password, 
-          options: { 
-              captchaToken: captchaToken || undefined,
-              emailRedirectTo: redirectTo
-          } 
+      const attributes = { email, password };
+      const options = { 
+          captchaToken: captchaToken || undefined,
+          emailRedirectTo: redirectTo
       };
 
       if (view === 'login') {
-        result = await supabase.auth.signInWithPassword(authOptions);
+        result = await supabase.auth.signInWithPassword(attributes);
       } else {
         if (password !== confirmPassword) throw new Error("Las contraseñas no coinciden.");
-        result = await supabase.auth.signUp(authOptions);
+        result = await supabase.auth.signUp({ ...attributes, options });
       }
 
       if (result.error) throw result.error;
