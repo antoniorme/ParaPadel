@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Key, Send, ShieldCheck, Eye, EyeOff, CheckCircle2, ShieldAlert, RefreshCcw } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Key, Send, ShieldCheck, Eye, EyeOff, CheckCircle2, ShieldAlert } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery' | 'update-password';
@@ -47,49 +47,40 @@ const AuthPage: React.FC = () => {
       if (isOfflineMode || isPlaceholder) setShowDevTools(true);
   }, [isOfflineMode]);
 
-  // --- ESCÁNER DE TOKENS ULTRA-AGRESIVO ---
+  // Captura de sesión de Supabase (especialmente para recovery)
   useEffect(() => {
-    const processTokens = async () => {
-        const url = window.location.href;
-        
-        // Buscamos access_token en cualquier parte de la cadena
-        const tokenMatch = url.match(/access_token=([^&]+)/);
-        const refreshMatch = url.match(/refresh_token=([^&]+)/);
-        const isRecovery = url.includes('type=recovery') || searchParams.get('type') === 'recovery';
+    const checkHashAndToken = async () => {
+        // Con BrowserRouter, el hash contiene directamente el fragmento de Supabase
+        const hash = window.location.hash;
+        const isRecovery = searchParams.get('type') === 'recovery' || hash.includes('type=recovery');
 
-        if (tokenMatch) {
+        if (hash.includes('access_token=')) {
             setVerifyingSession(true);
-            try {
-                const accessToken = tokenMatch[1];
-                const refreshToken = refreshMatch ? refreshMatch[1] : '';
-
-                // Sincronizamos manualmente el estado de Supabase con el token rescatado
-                const { error: sessionError } = await supabase.auth.setSession({
-                    access_token: accessToken,
-                    refresh_token: refreshToken,
-                });
-
-                if (sessionError) throw sessionError;
-
-                // Limpiamos la URL de "suciedad" (dobles hashes, etc)
-                window.history.replaceState(null, '', window.location.origin + window.location.pathname + '#/auth');
-                
-                setView('update-password');
-                setSuccessMsg("¡Enlace validado! Cambia tu contraseña ahora.");
-            } catch (err: any) {
-                console.error("Auth Emergency Rescue Failed:", err);
-                setError("El enlace ha caducado o es incorrecto.");
-            } finally {
+            // Pequeña pausa para que el SDK de Supabase procese el hash automáticamente
+            setTimeout(async () => {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session) {
+                    setView('update-password');
+                    setSuccessMsg("Identidad confirmada. Elige tu nueva contraseña.");
+                } else {
+                    // Intento manual por si el SDK falló
+                    const params = new URLSearchParams(hash.replace('#', '?'));
+                    const access_token = params.get('access_token');
+                    const refresh_token = params.get('refresh_token');
+                    if (access_token) {
+                        await supabase.auth.setSession({ access_token, refresh_token: refresh_token || '' });
+                        setView('update-password');
+                    }
+                }
                 setVerifyingSession(false);
-            }
+            }, 500);
         } else if (isRecovery) {
-            // Si no hay token pero es tipo recovery, comprobamos si hay sesión persistente
+            // Si venimos de recovery pero no hay hash, comprobamos si ya hay sesión activa
             const { data: { session } } = await supabase.auth.getSession();
             if (session) setView('update-password');
         }
     };
-
-    processTokens();
+    checkHashAndToken();
   }, [searchParams]);
 
   const switchView = (newView: AuthView) => {
@@ -111,8 +102,8 @@ const AuthPage: React.FC = () => {
           return;
       }
 
-      // IMPORTANTE: Aseguramos que el redirect incluya el hash para que el Router lo entienda al volver
-      const redirectTo = `${window.location.origin}/#/auth?type=recovery`;
+      // IMPORTANTE: URL limpia para BrowserRouter
+      const redirectTo = `${window.location.origin}/auth?type=recovery`;
 
       try {
           const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -120,7 +111,7 @@ const AuthPage: React.FC = () => {
               captchaToken: captchaToken || undefined 
           });
           if (error) throw error;
-          setSuccessMsg("Enlace enviado. Mira en tu correo.");
+          setSuccessMsg("¡Enviado! Revisa tu email.");
       } catch (err: any) {
           setError(err.message || "Error al solicitar recuperación.");
           if(captchaRef.current) captchaRef.current.resetCaptcha();
@@ -145,12 +136,11 @@ const AuthPage: React.FC = () => {
           const { error } = await supabase.auth.updateUser({ password });
           if (error) throw error;
           
-          setSuccessMsg("¡Contraseña cambiada con éxito!");
+          setSuccessMsg("¡Contraseña actualizada!");
           
-          // Redirección forzada tras guardado
+          // Redirección al dashboard tras éxito
           setTimeout(() => {
-              window.location.href = window.location.origin + '/#/dashboard';
-              window.location.reload();
+              navigate('/dashboard');
           }, 1500);
 
       } catch (err: any) {
@@ -173,7 +163,8 @@ const AuthPage: React.FC = () => {
 
     try {
       let result;
-      const redirectTo = `${window.location.origin}/#/auth`;
+      // URL limpia
+      const redirectTo = `${window.location.origin}/auth`;
       const authOptions = { 
           email, 
           password, 
@@ -209,9 +200,9 @@ const AuthPage: React.FC = () => {
   if (verifyingSession) {
       return (
           <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
-              <RefreshCcw className="animate-spin text-[#575AF9] mb-4" size={48}/>
-              <h2 className="text-xl font-black text-slate-800">Verificando Seguridad</h2>
-              <p className="text-sm text-slate-400 mt-2">Estamos validando tu enlace de acceso...</p>
+              <Loader2 className="animate-spin text-[#575AF9] mb-4" size={48}/>
+              <h2 className="text-xl font-black text-slate-800 tracking-tight">Verificando Acceso</h2>
+              <p className="text-sm text-slate-400 mt-2">Un momento, por favor...</p>
           </div>
       );
   }
