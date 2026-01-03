@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Key, Send, ShieldCheck, Eye, EyeOff, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Code2, Key, Send, Eye, EyeOff, CheckCircle2, ShieldAlert } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 type AuthView = 'login' | 'register' | 'recovery' | 'update-password';
@@ -49,38 +49,41 @@ const AuthPage: React.FC = () => {
 
   // Captura de sesión de Supabase (especialmente para recovery)
   useEffect(() => {
-    const checkHashAndToken = async () => {
-        // Con BrowserRouter, el hash contiene directamente el fragmento de Supabase
+    const checkRecoveryFlow = async () => {
+        const url = window.location.href;
         const hash = window.location.hash;
-        const isRecovery = searchParams.get('type') === 'recovery' || hash.includes('type=recovery');
+        
+        // Supabase manda tokens después de #, el navegador los oculta al servidor pero JS los ve
+        const hasToken = hash.includes('access_token=') || url.includes('access_token=');
+        const isRecovery = searchParams.get('type') === 'recovery' || url.includes('type=recovery') || hash.includes('type=recovery');
 
-        if (hash.includes('access_token=')) {
+        if (hasToken && isRecovery) {
             setVerifyingSession(true);
-            // Pequeña pausa para que el SDK de Supabase procese el hash automáticamente
-            setTimeout(async () => {
-                const { data: { session } } = await supabase.auth.getSession();
+            try {
+                // Pequeña pausa para que el SDK procese el fragmento
+                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                
                 if (session) {
                     setView('update-password');
-                    setSuccessMsg("Identidad confirmada. Elige tu nueva contraseña.");
+                    setSuccessMsg("Identidad verificada. Introduce tu nueva clave.");
                 } else {
-                    // Intento manual por si el SDK falló
+                    // Rescate manual si el SDK no lo pilló automáticamente
                     const params = new URLSearchParams(hash.replace('#', '?'));
-                    const access_token = params.get('access_token');
-                    const refresh_token = params.get('refresh_token');
-                    if (access_token) {
-                        await supabase.auth.setSession({ access_token, refresh_token: refresh_token || '' });
+                    const accessToken = params.get('access_token');
+                    const refreshToken = params.get('refresh_token');
+                    if (accessToken) {
+                        await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken || '' });
                         setView('update-password');
                     }
                 }
+            } catch (err) {
+                console.error("Recovery detection failed", err);
+            } finally {
                 setVerifyingSession(false);
-            }, 500);
-        } else if (isRecovery) {
-            // Si venimos de recovery pero no hay hash, comprobamos si ya hay sesión activa
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session) setView('update-password');
+            }
         }
     };
-    checkHashAndToken();
+    checkRecoveryFlow();
   }, [searchParams]);
 
   const switchView = (newView: AuthView) => {
@@ -102,7 +105,7 @@ const AuthPage: React.FC = () => {
           return;
       }
 
-      // IMPORTANTE: URL limpia para BrowserRouter
+      // En BrowserRouter NO usamos el # para redirigir
       const redirectTo = `${window.location.origin}/auth?type=recovery`;
 
       try {
@@ -111,7 +114,7 @@ const AuthPage: React.FC = () => {
               captchaToken: captchaToken || undefined 
           });
           if (error) throw error;
-          setSuccessMsg("¡Enviado! Revisa tu email.");
+          setSuccessMsg("¡Enlace enviado! Revisa tu email.");
       } catch (err: any) {
           setError(err.message || "Error al solicitar recuperación.");
           if(captchaRef.current) captchaRef.current.resetCaptcha();
@@ -136,16 +139,15 @@ const AuthPage: React.FC = () => {
           const { error } = await supabase.auth.updateUser({ password });
           if (error) throw error;
           
-          setSuccessMsg("¡Contraseña actualizada!");
+          setSuccessMsg("¡Contraseña guardada con éxito!");
           
-          // Redirección al dashboard tras éxito
+          // FORZAMOS RECARGA para limpiar el estado de Auth y entrar al Dashboard limpio
           setTimeout(() => {
-              navigate('/dashboard');
+              window.location.href = window.location.origin + '/dashboard';
           }, 1500);
 
       } catch (err: any) {
-          setError(err.message || "Error al actualizar.");
-      } finally {
+          setError(err.message || "Error al actualizar clave.");
           setLoading(false);
       }
   };
@@ -163,7 +165,6 @@ const AuthPage: React.FC = () => {
 
     try {
       let result;
-      // URL limpia
       const redirectTo = `${window.location.origin}/auth`;
       const authOptions = { 
           email, 
@@ -200,9 +201,9 @@ const AuthPage: React.FC = () => {
   if (verifyingSession) {
       return (
           <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
-              <Loader2 className="animate-spin text-[#575AF9] mb-4" size={48}/>
-              <h2 className="text-xl font-black text-slate-800 tracking-tight">Verificando Acceso</h2>
-              <p className="text-sm text-slate-400 mt-2">Un momento, por favor...</p>
+              <Loader2 className="animate-spin text-[#575AF9] mb-4" size={48} />
+              <h2 className="text-xl font-black text-slate-800">Verificando Acceso</h2>
+              <p className="text-sm text-slate-400 mt-2">Estamos validando tu identidad...</p>
           </div>
       );
   }
@@ -231,8 +232,8 @@ const AuthPage: React.FC = () => {
         </div>
 
         {successMsg && (
-            <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-4 rounded-xl text-sm mb-6 text-center font-bold shadow-sm animate-fade-in flex items-center justify-center gap-2">
-                <CheckCircle2 size={18}/> {successMsg}
+            <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-4 rounded-xl text-sm mb-6 text-center font-bold shadow-sm animate-fade-in">
+                {successMsg}
             </div>
         )}
 
@@ -256,7 +257,7 @@ const AuthPage: React.FC = () => {
                     <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Confirmar Nueva Contraseña"/>
                 </div>
                 <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg">
-                    {loading ? <Loader2 className="animate-spin" /> : <>GUARDAR Y ENTRAR <Key size={20}/></>}
+                    {loading ? <Loader2 className="animate-spin" size={20} /> : <>GUARDAR Y ENTRAR <Key size={20}/></>}
                 </button>
             </form>
         ) : view === 'recovery' ? (
@@ -271,7 +272,7 @@ const AuthPage: React.FC = () => {
                     </div>
                 )}
                 <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-bold text-white shadow-xl flex justify-center items-center gap-2">
-                    {loading ? <Loader2 className="animate-spin" /> : <>MANDAR ENLACE <Send size={18}/></>}
+                    {loading ? <Loader2 className="animate-spin" size={18} /> : <>MANDAR ENLACE <Send size={18}/></>}
                 </button>
                 <div className="text-center mt-4">
                     <button type="button" onClick={() => switchView('login')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">Volver al Login</button>
@@ -307,7 +308,7 @@ const AuthPage: React.FC = () => {
                   </div>
               )}
               <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center text-lg">
-                {loading ? <Loader2 className="animate-spin" /> : (view === 'login' ? 'ENTRAR' : 'CREAR CUENTA')}
+                {loading ? <Loader2 className="animate-spin" size={24} /> : (view === 'login' ? 'ENTRAR' : 'CREAR CUENTA')}
               </button>
             </form>
         )}
