@@ -21,7 +21,7 @@ const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hos
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
-  const { session, user } = useAuth();
+  const { session } = useAuth();
   const [searchParams] = useSearchParams();
   
   const [view, setView] = useState<AuthView>('login');
@@ -35,20 +35,16 @@ const AuthPage: React.FC = () => {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
 
-  // Lógica de detección de vista basada en sesión
   useEffect(() => {
     const url = window.location.href;
-    const isRecovery = url.includes('type=recovery') || searchParams.get('type') === 'recovery';
+    const isRecovery = url.includes('type=recovery') || searchParams.get('type') === 'recovery' || url.includes('access_token=');
     
-    // Si tenemos sesión y venimos de un flujo de recovery, vamos directos a cambiar password
     if (session && isRecovery) {
         setView('update-password');
-        setSuccessMsg("Sesión iniciada mediante enlace. Define tu nueva contraseña.");
-    } else if (session) {
-        // Si hay sesión pero no es recovery, vamos al dashboard
+    } else if (session && view !== 'update-password') {
         navigate('/dashboard');
     }
-  }, [session, searchParams, navigate]);
+  }, [session, searchParams, navigate, view]);
 
   const switchView = (newView: AuthView) => {
       setView(newView);
@@ -98,20 +94,35 @@ const AuthPage: React.FC = () => {
           return;
       }
 
+      if (!IS_LOCAL && HCAPTCHA_SITE_TOKEN && !captchaToken) {
+          setError("Por seguridad, completa el captcha.");
+          setLoading(false);
+          return;
+      }
+
       try {
-          const { error } = await supabase.auth.updateUser({ password });
+          const { error } = await supabase.auth.updateUser({ 
+              password,
+              // @ts-ignore - Algunos SDKs antiguos no tienen el tipo pero el método lo acepta
+              captchaToken: captchaToken || undefined 
+          });
+          
           if (error) throw error;
           
-          setSuccessMsg("¡Contraseña actualizada! Redirigiendo...");
+          setSuccessMsg("¡Contraseña actualizada con éxito!");
           
-          // RECARGA LIMPIA para borrar fragmentos de la URL
+          // LIMPIEZA AGRESIVA DE URL PARA EVITAR BUCLES
           setTimeout(() => {
-              window.location.href = window.location.origin + '/#/dashboard';
+              // Eliminamos el hash de la URL (tokens de recuperación)
+              window.history.replaceState(null, '', window.location.origin + '/#/dashboard');
               window.location.reload();
           }, 1500);
 
       } catch (err: any) {
           setError(err.message || "Error al actualizar clave.");
+          if(captchaRef.current) captchaRef.current.resetCaptcha();
+          setCaptchaToken(null);
+      } finally {
           setLoading(false);
       }
   };
@@ -181,7 +192,7 @@ const AuthPage: React.FC = () => {
           <p className="text-slate-400 text-sm">
             {view === 'login' ? 'Introduce tus credenciales' : 
              view === 'recovery' ? 'Escribe tu email registrado' : 
-             view === 'update-password' ? 'Introduce tu nueva contraseña' : 'Crea tu cuenta de club'}
+             view === 'update-password' ? 'Define tu nueva contraseña de acceso' : 'Crea tu cuenta de club'}
           </p>
         </div>
 
@@ -210,8 +221,15 @@ const AuthPage: React.FC = () => {
                     <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
                     <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Confirmar Nueva Contraseña"/>
                 </div>
+
+                {HCAPTCHA_SITE_TOKEN && (
+                    <div className="flex justify-center my-2 scale-90 min-h-[78px]">
+                        <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
+                    </div>
+                )}
+
                 <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg">
-                    {loading ? <Loader2 className="animate-spin" size={20} /> : <>GUARDAR Y ENTRAR <Key size={20}/></>}
+                    {loading ? <Loader2 className="animate-spin" size={20} /> : <>ACTUALIZAR Y ENTRAR <Key size={20}/></>}
                 </button>
             </form>
         ) : view === 'recovery' ? (
