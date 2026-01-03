@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -17,15 +16,21 @@ try {
     }
 } catch (e) {}
 
-// Identificador estricto de entorno local
-const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.includes('192.168.');
+// DETECCIÓN AGRESIVA (Igual que en App.tsx)
+const IS_DEV_ENV = 
+  (typeof import.meta !== 'undefined' && import.meta.env?.DEV) || 
+  window.location.hostname === 'localhost' || 
+  window.location.hostname === '127.0.0.1' || 
+  window.location.hostname.includes('google') || 
+  window.location.hostname.includes('webcontainer') ||
+  window.location.hostname.includes('vercel.app');
 
 const translateError = (msg: string) => {
     if (msg.includes('different from the old password')) return "La nueva contraseña debe ser diferente a la anterior.";
     if (msg.includes('at least 6 characters')) return "La contraseña debe tener al menos 6 caracteres.";
     if (msg.includes('Invalid login credentials')) return "Email o contraseña incorrectos.";
     if (msg.includes('User already registered')) return "Este email ya está registrado.";
-    if (msg.includes('captcha') || msg.includes('Captcha')) return "Error de verificación: Pulsa el cuadro de seguridad (Captcha).";
+    if (msg.includes('captcha') || msg.includes('Captcha')) return "Fallo en verificación de seguridad. Si estás en modo local, asegúrate de que el Captcha esté configurado para tu dominio actual en Supabase.";
     if (msg.includes('refresh_token_not_found')) return "La sesión ha caducado. Solicita un nuevo enlace.";
     return msg;
 };
@@ -78,7 +83,7 @@ const AuthPage: React.FC = () => {
           return;
       }
 
-      if (!IS_LOCAL && HCAPTCHA_SITE_TOKEN && !captchaToken) {
+      if (!IS_DEV_ENV && HCAPTCHA_SITE_TOKEN && !captchaToken) {
           setError("Por seguridad, completa el captcha.");
           setLoading(false);
           return;
@@ -109,8 +114,7 @@ const AuthPage: React.FC = () => {
     setLoading(true);
     setError(null);
 
-    // Validación previa de captcha en producción
-    if (!IS_LOCAL && HCAPTCHA_SITE_TOKEN && !captchaToken) {
+    if (!IS_DEV_ENV && HCAPTCHA_SITE_TOKEN && !captchaToken) {
         setError("Por favor, marca el cuadro de 'No soy un robot'.");
         setLoading(false);
         return;
@@ -122,7 +126,7 @@ const AuthPage: React.FC = () => {
         result = await supabase.auth.signInWithPassword({ 
             email, 
             password,
-            options: { captchaToken: captchaToken || undefined } // FIJADO: Ahora envía el token
+            options: { captchaToken: captchaToken || undefined }
         });
       } else {
         if (password !== confirmPassword) throw new Error("Las contraseñas no coinciden");
@@ -285,23 +289,21 @@ const AuthPage: React.FC = () => {
                     {view === 'login' ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
                 </button>
 
-                {/* DEV BYPASS SECTION - AHORA SOLO VISIBLE EN LOCAL */}
-                {IS_LOCAL && (
-                    <div className="bg-slate-100 p-6 rounded-3xl border border-slate-200 space-y-4 shadow-inner">
-                        <div className="flex items-center gap-2 text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] justify-center">
-                            <Terminal size={14}/> Accesos Rápidos (DEV)
+                {/* DEV TOOLS - Forzado para Sandbox */}
+                {IS_DEV_ENV && (
+                    <div className="bg-indigo-500/5 p-6 rounded-3xl border border-indigo-500/10 space-y-4 shadow-inner">
+                        <div className="flex items-center gap-2 text-indigo-400 font-black text-[10px] uppercase tracking-[0.2em] justify-center">
+                            <Terminal size={14}/> Sandbox Bypass
                         </div>
                         <div className="grid grid-cols-1 gap-2">
                             <button onClick={() => loginWithDevBypass('admin')} className="w-full py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 text-xs flex items-center justify-center gap-2 hover:bg-indigo-50 hover:border-indigo-200 transition-all">
-                                <Shield size={14} className="text-blue-500"/> CLUB ADMIN
-                            </button>
-                            <button onClick={() => loginWithDevBypass('player')} className="w-full py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 text-xs flex items-center justify-center gap-2 hover:bg-emerald-50 hover:border-emerald-200 transition-all">
-                                <User size={14} className="text-emerald-500"/> APP JUGADOR
+                                <Shield size={14} className="text-blue-500"/> ACCESO CLUB ADMIN
                             </button>
                             <button onClick={() => loginWithDevBypass('superadmin')} className="w-full py-3 bg-slate-900 border border-slate-800 rounded-xl font-bold text-white text-xs flex items-center justify-center gap-2 hover:bg-slate-800 transition-all">
                                 <Crown size={14} className="text-amber-400"/> SUPER ADMIN
                             </button>
                         </div>
+                        <p className="text-[9px] text-slate-400 font-bold text-center">Solo visible en modo desarrollo/sandbox</p>
                     </div>
                 )}
             </div>

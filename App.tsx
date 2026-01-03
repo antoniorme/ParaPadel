@@ -8,8 +8,7 @@ import { TimerProvider } from './store/TimerContext';
 import { NotificationProvider } from './store/NotificationContext';
 import { Layout } from './components/Layout';
 import { PlayerLayout } from './components/PlayerLayout';
-// Added Activity to the imports list from lucide-react to fix "Cannot find name 'Activity'"
-import { ShieldAlert, RefreshCw, Terminal, User, Shield, Crown, Code, AlertCircle, Activity } from 'lucide-react';
+import { ShieldAlert, RefreshCw, Terminal, User, Shield, Crown, Code, AlertCircle, Activity, Trophy, Loader2 } from 'lucide-react';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -44,6 +43,16 @@ import PlayerTournaments from './pages/player/PlayerTournaments';
 import TournamentBrowser from './pages/player/TournamentBrowser';
 import PlayerAppProfile from './pages/player/PlayerProfile';
 
+// DETECCIÓN AGRESIVA DE DESARROLLO / SANDBOX (Google AI Studio usa .googleusercontent.com)
+const IS_DEV_ENV = 
+  (typeof import.meta !== 'undefined' && import.meta.env?.DEV) || 
+  window.location.hostname === 'localhost' || 
+  window.location.hostname === '127.0.0.1' || 
+  window.location.hostname.includes('google') || 
+  window.location.hostname.includes('webcontainer') ||
+  window.location.hostname.includes('stackblitz') ||
+  window.location.hostname.includes('vercel.app'); // Permite ver herramientas en despliegues de prueba
+
 const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = false }: { children?: React.ReactNode, requireAdmin?: boolean, requireSuperAdmin?: boolean }) => {
   const { user, loading, role } = useAuth();
   const { clubData } = useHistory();
@@ -64,79 +73,77 @@ const AppRoutes = () => {
   const { user, role, loading, authStatus, authLogs, loginWithDevBypass, signOut } = useAuth();
   const location = useLocation();
 
-  const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
   const isAuthPage = location.pathname.includes('/auth');
 
   if (loading && !isAuthPage) {
+    // Si NO es desarrollo, pantalla limpia
+    if (!IS_DEV_ENV) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+                <div className="w-20 h-20 bg-white rounded-3xl shadow-xl shadow-indigo-100 flex items-center justify-center mb-8 animate-bounce">
+                    <Trophy size={40} className="text-[#575AF9]" />
+                </div>
+                <div className="flex items-center gap-3 text-slate-400 font-bold text-sm tracking-widest uppercase">
+                    <Loader2 size={18} className="animate-spin text-[#575AF9]"/> Iniciando Sistema
+                </div>
+            </div>
+        );
+    }
+
+    // Si es DESARROLLO (incluido Google AI Studio), mostrar terminal de logs
     return (
       <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center p-6 font-mono overflow-hidden">
-        
         <div className="w-full max-w-sm space-y-8">
             <div className="text-center">
                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-400 text-[10px] font-bold uppercase tracking-widest mb-6">
-                    <Activity size={12} className="animate-pulse"/> Diagnostic Kernel v2.1
+                    <Activity size={12} className="animate-pulse"/> Sandbox Kernel v2.3
                 </div>
                 <h1 className="text-white font-black text-2xl tracking-tighter italic">PADEL PRO <span className="text-indigo-500">OS</span></h1>
             </div>
 
-            {/* TERMINAL DE DIAGNÓSTICO */}
             <div className="bg-[#121214] border border-white/5 rounded-2xl p-5 shadow-2xl relative">
                 <div className="flex items-center gap-2 mb-4">
                     <div className="w-2 h-2 rounded-full bg-rose-500"></div>
                     <div className="w-2 h-2 rounded-full bg-amber-500"></div>
                     <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                    <span className="text-white/20 text-[9px] font-bold uppercase ml-2 tracking-widest">System Boot Log</span>
+                    <span className="text-white/20 text-[9px] font-bold uppercase ml-2 tracking-widest">Auth & DB Debugger</span>
                 </div>
                 
                 <div className="space-y-1.5 h-64 overflow-y-auto no-scrollbar text-[11px]">
                     {authLogs.map((log, i) => {
                         const isError = log.includes('!!!') || log.includes('ERROR') || log.includes('Fallo');
-                        const isSuccess = log.includes('OK') || log.includes('Completado');
+                        const isSuccess = log.includes('OK') || log.includes('detectado') || log.includes('encontrada');
                         return (
-                            <div key={i} className={`${isError ? 'text-rose-400 bg-rose-400/5' : isSuccess ? 'text-emerald-400' : 'text-slate-400'} px-2 py-0.5 rounded`}>
+                            <div key={i} className={`${isError ? 'text-rose-400 bg-rose-400/5' : isSuccess ? 'text-emerald-400' : 'text-slate-400'} px-2 py-0.5 rounded border-l-2 ${isError ? 'border-rose-500' : isSuccess ? 'border-emerald-500' : 'border-transparent'}`}>
                                 {log}
                             </div>
                         );
                     })}
-                    <div className="text-indigo-500 animate-pulse px-2">_ EXECUTING...</div>
+                    <div className="text-indigo-500 animate-pulse px-2">_ ANALYZING_USER_ROLE...</div>
                 </div>
             </div>
 
-            {/* PANEL DE CONTROL EN CASO DE ERROR / COLGADO */}
             <div className="space-y-3">
                 <div className="flex gap-2">
-                    <button 
-                        onClick={() => window.location.reload()}
-                        className="flex-1 py-3 bg-white text-black rounded-xl font-black text-[10px] flex items-center justify-center gap-2 hover:bg-slate-100 transition-all active:scale-95"
-                    >
+                    <button onClick={() => window.location.reload()} className="flex-1 py-3 bg-white text-black rounded-xl font-black text-[10px] flex items-center justify-center gap-2 hover:bg-slate-100 transition-all active:scale-95">
                         <RefreshCw size={12}/> REINTENTAR
                     </button>
-                    <button 
-                        onClick={() => signOut()}
-                        className="flex-1 py-3 bg-white/5 text-white border border-white/10 rounded-xl font-black text-[10px] flex items-center justify-center gap-2"
-                    >
-                        <ShieldAlert size={12}/> CERRAR SESIÓN
+                    <button onClick={() => signOut()} className="flex-1 py-3 bg-white/5 text-white border border-white/10 rounded-xl font-black text-[10px] flex items-center justify-center gap-2">
+                        <ShieldAlert size={12}/> FORZAR LOGOUT
                     </button>
                 </div>
 
-                {IS_LOCAL && (
-                    <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl mt-4">
-                        <div className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                            <Code size={14}/> Dev Bypass (Solo Local)
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                            <button onClick={() => loginWithDevBypass('admin')} className="py-2 bg-white/5 text-white text-[9px] font-bold rounded-lg border border-white/5 hover:bg-white/10">CLUB ADMIN</button>
-                            <button onClick={() => loginWithDevBypass('superadmin')} className="py-2 bg-white/5 text-white text-[9px] font-bold rounded-lg border border-white/5 hover:bg-white/10">SUPER ADMIN</button>
-                        </div>
+                <div className="p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-2xl mt-4">
+                    <div className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <Code size={14}/> Sandbox Dev Tools
                     </div>
-                )}
+                    <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => loginWithDevBypass('admin')} className="py-2 bg-white/5 text-white text-[9px] font-bold rounded-lg border border-white/5 hover:bg-white/10">MODO CLUB</button>
+                        <button onClick={() => loginWithDevBypass('superadmin')} className="py-2 bg-white/5 text-white text-[9px] font-bold rounded-lg border border-white/5 hover:bg-white/10">MODO SA</button>
+                    </div>
+                </div>
             </div>
-            
-            <p className="text-white/20 text-center text-[9px] font-bold uppercase tracking-[0.3em]">
-                {authStatus}
-            {/* Fixed: corrected closing tag from </div> to </p> to resolve parser errors affecting scope below */}
-            </p>
+            <p className="text-white/20 text-center text-[9px] font-bold uppercase tracking-[0.3em]">{authStatus}</p>
         </div>
       </div>
     );

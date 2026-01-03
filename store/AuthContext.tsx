@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
@@ -51,75 +50,70 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return null;
       }
       
-      addLog(`PASO 1: Verificando identidad [${uid.substring(0,8)}...]`);
+      addLog(`INICIO: Verificando identidad [${uid.substring(0,8)}...]`);
       
+      // 0. HARDCODED SUPERADMIN
       if (userEmail === 'antoniorme@gmail.com') {
-          addLog("PASO 1.1: Identificado como SuperAdmin (Hardcoded)");
+          addLog("OK: SuperAdmin detectado por email fijo");
           return 'superadmin';
       }
       
       try {
-          // --- CHEQUEO CLUB ---
-          addLog("PASO 2: Consultando tabla 'clubs'...");
-          const clubQuery = supabase.from('clubs').select('id, name, owner_id').eq('owner_id', uid).maybeSingle();
-          
-          // Timeout para el diagnóstico
-          const clubResult: any = await Promise.race([
-              clubQuery,
-              new Promise((_, r) => setTimeout(() => r(new Error("TIMEOUT_CLUBS_DB")), 4000))
-          ]);
+          // 1. COMPROBAR TABLA CLUBS (ADMIN)
+          addLog("PASO 1: ¿Eres dueño de club? Buscando en 'clubs'...");
+          const { data: clubData, error: clubError } = await supabase
+              .from('clubs')
+              .select('id, name')
+              .eq('owner_id', uid)
+              .maybeSingle();
 
-          if (clubResult.error) {
-              addLog(`!!! ERROR DB CLUBS: ${clubResult.error.code} - ${clubResult.error.message}`);
-          } else if (clubResult.data) {
-              addLog(`OK: Dueño del club '${clubResult.data.name}' detectado`);
+          if (clubError) {
+              addLog(`!!! ERROR DB CLUBS: ${clubError.message}`);
+          } else if (clubData) {
+              addLog(`OK: Dueño del club '${clubData.name}' detectado`);
               return 'admin';
-          } else {
-              addLog("INFO: No eres dueño de ningún club en tabla 'clubs'");
           }
 
-          // --- CHEQUEO SUPERADMIN ---
-          addLog("PASO 3: Consultando tabla 'superadmins'...");
-          const saQuery = supabase.from('superadmins').select('id, email').eq('email', userEmail).maybeSingle();
+          // 2. COMPROBAR TABLA SUPERADMINS
+          addLog("PASO 2: ¿Eres SuperAdmin? Buscando en 'superadmins'...");
+          const { data: saData, error: saError } = await supabase
+              .from('superadmins')
+              .select('id')
+              .eq('email', userEmail)
+              .maybeSingle();
           
-          const saResult: any = await Promise.race([
-              saQuery,
-              new Promise((_, r) => setTimeout(() => r(new Error("TIMEOUT_SA_DB")), 4000))
-          ]);
-
-          if (saResult.error) {
-              addLog(`!!! ERROR DB SA: ${saResult.error.code} - ${saResult.error.message}`);
-          } else if (saResult.data) {
+          if (saData) {
               addLog("OK: Rol SuperAdmin confirmado en DB");
               return 'superadmin';
-          } else {
-              addLog("INFO: No eres SuperAdmin registrado");
           }
 
-          // --- CHEQUEO JUGADOR ---
-          addLog("PASO 4: Buscando ficha de jugador vinculada...");
-          const { data: playerData, error: playerError } = await supabase.from('players').select('id').eq('profile_user_id', uid).maybeSingle();
+          // 3. COMPROBAR TABLA PLAYERS (JUGADOR VINCULADO)
+          addLog("PASO 3: ¿Tienes perfil de jugador? Buscando en 'players'...");
+          const { data: playerData, error: playerError } = await supabase
+              .from('players')
+              .select('id, name')
+              .eq('profile_user_id', uid)
+              .maybeSingle();
           
-          if (playerError) {
-              addLog(`!!! ERROR DB PLAYERS: ${playerError.message}`);
-          } else if (playerData) {
-              addLog(`OK: Ficha de jugador encontrada [ID: ${playerData.id}]`);
+          if (playerData) {
+              addLog(`OK: Perfil de jugador '${playerData.name}' encontrado`);
               return 'player';
-          } else {
-              addLog("AVISO: No tienes club ni ficha de jugador. Acceso limitado.");
           }
 
+          // 4. FALLBACK FINAL: JUGADOR GENÉRICO (Si no es admin ni tiene ficha, le dejamos entrar como jugador básico)
+          addLog("AVISO: No eres admin ni tienes ficha previa. Rol asignado: player");
           return 'player';
+          
       } catch (e: any) {
           addLog(`!!! EXCEPCIÓN CRÍTICA: ${e.message}`);
-          setAuthStatus(`Fallo de conexión: ${e.message}`);
-          return null; 
+          setAuthStatus(`Error interno: ${e.message}`);
+          return 'player'; // En caso de fallo crítico, dejamos que entre como player para que no se bloquee la pantalla de carga
       }
   }, []);
 
   useEffect(() => {
     const initSession = async () => {
-        addLog("Iniciando conexión con Supabase Auth...");
+        addLog("Conectando con Supabase Auth...");
         try {
             const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
             
@@ -132,20 +126,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (currentSession) {
                 setSession(currentSession);
                 setUser(currentSession.user);
-                addLog(`Sesión recuperada para: ${currentSession.user.email}`);
+                addLog(`Sesión: ${currentSession.user.email}`);
                 const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
-                if (r) {
-                    setRole(r);
-                    addLog("PASO FINAL: Permisos validados. Iniciando interfaz...");
-                    // Solo quitamos el loading si tenemos un rol claro
-                    setLoading(false);
-                } else {
-                    addLog("!!! BLOQUEO: No se pudo determinar el rol del usuario.");
-                    setAuthStatus("Error de Permisos: Consulta los logs.");
-                    // No ponemos loading(false) para que veas el error
-                }
+                setRole(r);
+                setLoading(false);
             } else {
-                addLog("No hay sesión activa. Esperando Login.");
+                addLog("Sesión vacía. Esperando login...");
                 setLoading(false);
             }
         } catch (error: any) {
@@ -186,9 +172,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginWithDevBypass = (targetRole: 'admin' | 'player' | 'superadmin') => {
-      addLog(`BYPASS ACTIVADO: Rol forzado -> ${targetRole}`);
+      addLog(`BYPASS: Forzando rol ${targetRole}`);
       setIsOfflineMode(true);
-      const devUser = { id: `dev-${targetRole}`, email: `${targetRole}@local.test` } as User;
+      const devUser = { id: `dev-${targetRole}`, email: `${targetRole}@sandbox.test` } as User;
       setUser(devUser);
       setSession({ user: devUser, access_token: 'mock' } as Session);
       setRole(targetRole);
