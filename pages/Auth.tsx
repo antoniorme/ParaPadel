@@ -29,7 +29,7 @@ const translateError = (msg: string) => {
     if (msg.includes('at least 6 characters')) return "La contraseña debe tener al menos 6 caracteres.";
     if (msg.includes('Invalid login credentials')) return "Email o contraseña incorrectos.";
     if (msg.includes('User already registered')) return "Este email ya está registrado.";
-    if (msg.includes('captcha') || msg.includes('Captcha')) return "Error de verificación de seguridad. Por favor, completa el captcha.";
+    if (msg.includes('captcha') || msg.includes('Captcha')) return "Fallo en la verificación de seguridad (Captcha).";
     if (msg.includes('refresh_token_not_found')) return "El enlace es inválido o ha caducado. Solicita uno nuevo.";
     return msg;
 };
@@ -51,7 +51,7 @@ const AuthPage: React.FC = () => {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
 
-  // DETECCIÓN CRÍTICA: Miramos la URL completa para forzar la vista de recuperación
+  // DETECCIÓN CRÍTICA DE RECUPERACIÓN
   useEffect(() => {
     const fullUrl = window.location.href;
     const isRecoveryMode = 
@@ -64,7 +64,6 @@ const AuthPage: React.FC = () => {
             setView('update-password');
         }
     } else if (session && view !== 'update-password') {
-        // Solo redirigir si NO estamos en proceso de recuperación
         navigate('/dashboard');
     }
   }, [session, view, location, navigate]);
@@ -88,17 +87,25 @@ const AuthPage: React.FC = () => {
           return;
       }
 
+      if (!IS_DEV_ENV && HCAPTCHA_SITE_TOKEN && !captchaToken) {
+          setError("Por favor, completa el captcha para confirmar el cambio.");
+          setLoading(false);
+          return;
+      }
+
       try {
           const { error: updateError } = await supabase.auth.updateUser({ 
               password: password 
+          }, { 
+              captchaToken: captchaToken || undefined 
           });
 
           if (updateError) throw updateError;
 
-          setSuccessMsg("¡Contraseña actualizada con éxito!");
+          setSuccessMsg("¡Contraseña actualizada! Accediendo...");
           
-          // Limpiamos la URL y redirigimos
           setTimeout(() => {
+              // Limpieza total y entrada al sistema
               window.location.href = window.location.origin + window.location.pathname + '#/dashboard';
               window.location.reload();
           }, 1500);
@@ -106,6 +113,8 @@ const AuthPage: React.FC = () => {
       } catch (err: any) {
           setError(translateError(err.message));
           setLoading(false);
+          if(captchaRef.current) captchaRef.current.resetCaptcha();
+          setCaptchaToken(null);
       }
   };
 
@@ -153,15 +162,13 @@ const AuthPage: React.FC = () => {
       setError(null);
 
       if (!IS_DEV_ENV && HCAPTCHA_SITE_TOKEN && !captchaToken) {
-          setError("Por favor, completa el captcha para enviar el email.");
+          setError("Por favor, completa el captcha para solicitar el email.");
           setLoading(false);
           return;
       }
 
       try {
-          // El redirect debe incluir el hash de la ruta /auth
           const redirectTo = window.location.origin + window.location.pathname + '#/auth?type=recovery';
-          
           const { error } = await supabase.auth.resetPasswordForEmail(email, { 
               redirectTo, 
               captchaToken: captchaToken || undefined 
@@ -169,11 +176,11 @@ const AuthPage: React.FC = () => {
           
           if (error) throw error;
           
-          setSuccessMsg("¡Enlace enviado! Revisa tu bandeja de entrada.");
+          setSuccessMsg("Enlace enviado. Revisa tu bandeja de entrada.");
           setCaptchaToken(null);
           if(captchaRef.current) captchaRef.current.resetCaptcha();
       } catch (err: any) {
-          setError(translateError(err.message || "Error al solicitar recuperación."));
+          setError(translateError(err.message || "Fallo al solicitar recuperación."));
           setCaptchaToken(null);
           if(captchaRef.current) captchaRef.current.resetCaptcha();
       } finally {
@@ -198,7 +205,7 @@ const AuthPage: React.FC = () => {
              view === 'update-password' ? 'Nueva Clave' : 'Registro'}
           </h1>
           <p className="text-slate-400 text-sm">
-            {view === 'update-password' ? 'Introduce tu nueva contraseña de acceso' : 'Introduce tus datos'}
+            {view === 'update-password' ? 'Establece tu nueva contraseña de acceso' : 'Introduce tus datos'}
           </p>
         </div>
 
@@ -229,8 +236,14 @@ const AuthPage: React.FC = () => {
                         <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Confirmar Nueva Contraseña"/>
                     </div>
 
+                    {HCAPTCHA_SITE_TOKEN && (
+                        <div className="flex justify-center my-2 scale-90 min-h-[78px]">
+                            <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
+                        </div>
+                    )}
+
                     <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg active:scale-95 transition-all">
-                        {loading ? <Loader2 className="animate-spin" size={20} /> : <>CAMBIAR CONTRASEÑA <Key size={20}/></>}
+                        {loading ? <Loader2 className="animate-spin" size={20} /> : <>GUARDAR NUEVA CLAVE <Key size={20}/></>}
                     </button>
                 </form>
             ) : view === 'recovery' ? (
