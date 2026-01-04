@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { ShieldCheck, Lock, Key, Eye, EyeOff, Loader2, CheckCircle2, AlertCircle, Trophy } from 'lucide-react';
+import { ShieldCheck, Lock, Key, Eye, EyeOff, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 let HCAPTCHA_SITE_TOKEN = "";
@@ -15,7 +15,7 @@ try {
 
 const InternalRecovery: React.FC = () => {
     const navigate = useNavigate();
-    const [step, setStep] = useState<'button' | 'form' | 'success'>('button');
+    const [status, setStatus] = useState<'editing' | 'success'>('editing');
     const [password, setPassword] = useState('');
     const [confirm, setConfirm] = useState('');
     const [showPass, setShowPass] = useState(false);
@@ -37,7 +37,7 @@ const InternalRecovery: React.FC = () => {
             const { error: updateError } = await supabase.auth.updateUser({ password });
             if (updateError) throw updateError;
             
-            setStep('success');
+            setStatus('success');
             setTimeout(() => navigate('/'), 2000);
         } catch (err: any) {
             setError(err.message);
@@ -51,31 +51,14 @@ const InternalRecovery: React.FC = () => {
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
             <div className="w-full max-w-sm bg-white rounded-[2.5rem] p-8 shadow-2xl border border-indigo-100 animate-slide-up relative">
                 
-                {step === 'button' && (
-                    <div className="space-y-8 animate-fade-in">
-                        <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center mx-auto text-[#575AF9] shadow-inner">
-                            <ShieldCheck size={40}/>
-                        </div>
-                        <div>
-                            <h2 className="text-2xl font-black text-slate-900 leading-tight">Acceso Verificado</h2>
-                            <p className="text-slate-400 text-xs mt-2 font-bold uppercase tracking-widest leading-relaxed">
-                                Ya estás dentro de la App. <br/> Pulsa para actualizar tu clave.
-                            </p>
-                        </div>
-                        <button 
-                            onClick={() => setStep('form')}
-                            className="w-full bg-[#575AF9] hover:bg-[#484bf0] py-5 rounded-2xl font-black text-white shadow-xl shadow-indigo-200 flex justify-center items-center gap-3 text-lg active:scale-95 transition-all"
-                        >
-                            CAMBIAR CONTRASEÑA <Key size={20}/>
-                        </button>
-                    </div>
-                )}
-
-                {step === 'form' && (
-                    <form onSubmit={handleUpdate} className="space-y-6 animate-slide-up">
+                {status === 'editing' ? (
+                    <form onSubmit={handleUpdate} className="space-y-6 animate-fade-in">
                         <div className="text-center mb-4">
-                            <h2 className="text-xl font-black text-slate-900">Nueva Clave</h2>
-                            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-tighter">Establece tu seguridad para el futuro</p>
+                            <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-[#575AF9]">
+                                <Key size={32}/>
+                            </div>
+                            <h2 className="text-2xl font-black text-slate-900 leading-tight">Nueva Contraseña</h2>
+                            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Tu acceso ha sido verificado</p>
                         </div>
 
                         {error && (
@@ -84,32 +67,34 @@ const InternalRecovery: React.FC = () => {
                             </div>
                         )}
 
-                        <div className="relative">
-                            <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                            <input 
-                                type={showPass ? "text" : "password"} 
-                                required 
-                                value={password} 
-                                onChange={(e) => setPassword(e.target.value)} 
-                                className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none font-bold text-lg shadow-inner" 
-                                placeholder="Nueva Clave" 
-                                autoFocus
-                            />
-                            <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-4 top-4 text-slate-400">
-                                {showPass ? <EyeOff size={20}/> : <Eye size={20}/>}
-                            </button>
-                        </div>
+                        <div className="space-y-4">
+                            <div className="relative">
+                                <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                                <input 
+                                    type={showPass ? "text" : "password"} 
+                                    required 
+                                    value={password} 
+                                    onChange={(e) => setPassword(e.target.value)} 
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none font-bold text-lg shadow-inner" 
+                                    placeholder="Nueva Clave" 
+                                    autoFocus
+                                />
+                                <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-4 top-4 text-slate-400">
+                                    {showPass ? <EyeOff size={20}/> : <Eye size={20}/>}
+                                </button>
+                            </div>
 
-                        <div className="relative">
-                            <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                            <input 
-                                type="password" 
-                                required 
-                                value={confirm} 
-                                onChange={(e) => setConfirm(e.target.value)} 
-                                className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none font-bold text-lg shadow-inner" 
-                                placeholder="Repite Clave"
-                            />
+                            <div className="relative">
+                                <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                                <input 
+                                    type="password" 
+                                    required 
+                                    value={confirm} 
+                                    onChange={(e) => setConfirm(e.target.value)} 
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none font-bold text-lg shadow-inner" 
+                                    placeholder="Repetir Clave"
+                                />
+                            </div>
                         </div>
 
                         {HCAPTCHA_SITE_TOKEN && (
@@ -121,21 +106,19 @@ const InternalRecovery: React.FC = () => {
                         <button 
                             type="submit" 
                             disabled={loading || (HCAPTCHA_SITE_TOKEN && !captchaToken)} 
-                            className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg active:scale-95 transition-all"
+                            className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-5 rounded-2xl font-black text-white shadow-xl shadow-indigo-100 flex justify-center items-center gap-2 text-lg active:scale-95 transition-all"
                         >
                             {loading ? <Loader2 className="animate-spin" size={24} /> : "GUARDAR CAMBIOS"}
                         </button>
                     </form>
-                )}
-
-                {step === 'success' && (
+                ) : (
                     <div className="py-8 space-y-6 animate-fade-in">
                         <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto text-emerald-500 shadow-sm">
                             <CheckCircle2 size={48}/>
                         </div>
                         <div>
-                            <h2 className="text-2xl font-black text-slate-900">¡Hecho!</h2>
-                            <p className="text-emerald-600 font-bold text-sm">Tu contraseña ha sido actualizada.</p>
+                            <h2 className="text-2xl font-black text-slate-900">¡Contraseña Cambiada!</h2>
+                            <p className="text-emerald-600 font-bold text-sm">Tu seguridad ha sido actualizada.</p>
                         </div>
                         <p className="text-slate-400 text-xs animate-pulse font-bold uppercase tracking-widest">Entrando en el Dashboard...</p>
                     </div>

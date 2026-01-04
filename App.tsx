@@ -18,7 +18,6 @@ import ActiveTournament from './pages/ActiveTournament';
 import Results from './pages/Results';
 import Landing from './pages/Landing';
 import AuthPage from './pages/Auth';
-import InternalRecovery from './pages/InternalRecovery';
 import PlayerManager from './pages/PlayerManager';
 import History from './pages/History';
 import ClubProfile from './pages/ClubProfile';
@@ -90,7 +89,7 @@ const AppRoutes = () => {
     <Routes>
         <Route path="/" element={getHomeRoute()} />
         <Route path="/auth" element={<AuthPage />} />
-        <Route path="/recovery-confirm" element={<ProtectedRoute><InternalRecovery /></ProtectedRoute>} />
+        
         <Route path="/pending" element={<ProtectedRoute><PendingVerification /></ProtectedRoute>} />
         <Route path="/join/:clubId" element={<JoinTournament />} />
         <Route path="/onboarding" element={<ProtectedRoute requireAdmin><Onboarding /></ProtectedRoute>} />
