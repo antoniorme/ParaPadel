@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
   <head>
@@ -31,14 +30,17 @@
       @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
     
-    <!-- URL RESCUE SCRIPT: Convierte el hash de Supabase en una ruta procesable por React -->
+    <!-- FIX: HashRouter + Supabase Redirect Conflict -->
     <script>
       (function() {
+        // Supabase a menudo devuelve el token así: /#access_token=...
+        // HashRouter espera: /#/auth?access_token=...
+        // Si detectamos access_token en el hash pero NO el formato de ruta /#/, lo corregimos.
         var h = window.location.hash;
-        // Detectamos si el fragmento contiene tokens de Supabase pero no es una ruta de nuestra app
-        if (h && (h.indexOf('access_token=') > -1 || h.indexOf('type=recovery') > -1) && h.indexOf('#/') !== 0) {
-          var params = h.substring(1); 
-          // Redirigimos internamente a nuestra página de auth con los parámetros limpios
+        if (h && h.includes('access_token=') && h.indexOf('#/') !== 0) {
+          // Extraemos los parámetros (quitando el primer #)
+          var params = h.substring(1);
+          // Redirigimos a una ruta que HashRouter entienda y pasamos los tokens como query params
           window.location.hash = '/auth?' + params;
         }
       })();

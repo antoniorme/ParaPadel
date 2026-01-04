@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
@@ -49,44 +48,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   useEffect(() => {
-    const initSession = async () => {
-        // 1. Verificar si hay tokens en la URL (Magic Link / Recovery)
-        const hash = window.location.hash;
-        const search = window.location.search;
-        const fullParams = new URLSearchParams(hash.includes('?') ? hash.split('?')[1] : (search || ''));
-        
-        const accessToken = fullParams.get('access_token');
-        const refreshToken = fullParams.get('refresh_token');
+    const handleAuthRedirect = async () => {
+      // 1. Extraer tokens del Hash (formato manual para HashRouter)
+      const hash = window.location.hash;
+      const search = window.location.search;
+      
+      // Combinamos ambos para buscar los tokens de Supabase
+      const params = new URLSearchParams(hash.includes('?') ? hash.split('?')[1] : (search || ''));
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
 
-        if (accessToken && refreshToken) {
-            try {
-                const { data, error } = await supabase.auth.setSession({
-                    access_token: accessToken,
-                    refresh_token: refreshToken
-                });
-                
-                if (!error && data.session) {
-                    // Sesión recuperada con éxito. Redirigimos a la home limpia.
-                    window.location.hash = '#/';
-                    return; 
-                }
-            } catch (e) {
-                console.error("Auth Init Error", e);
-            }
-        }
-
-        // 2. Carga normal de sesión persistente
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        if (currentSession) {
-            setSession(currentSession);
-            setUser(currentSession.user);
-            const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
+      if (accessToken && refreshToken) {
+        try {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          });
+          
+          if (!error && data.session) {
+            // Sesión establecida con éxito.
+            setSession(data.session);
+            setUser(data.session.user);
+            const r = await checkUserRole(data.session.user.id, data.session.user.email);
             setRole(r);
+            
+            // Limpiamos la URL para evitar que el router se confunda al recargar
+            window.location.hash = '#/';
+            setLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.error("Error al procesar el enlace mágico:", e);
         }
-        setLoading(false);
+      }
+
+      // 2. Si no hay tokens, cargar sesión normal
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (currentSession) {
+        setSession(currentSession);
+        setUser(currentSession.user);
+        const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
+        setRole(r);
+      }
+      setLoading(false);
     };
 
-    initSession();
+    handleAuthRedirect();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session) {

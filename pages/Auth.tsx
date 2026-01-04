@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -21,7 +20,7 @@ const translateError = (msg: string) => {
     const m = msg.toLowerCase();
     if (m.includes('invalid login credentials')) return "Email o contraseña incorrectos.";
     if (m.includes('user already registered')) return "El email ya está registrado.";
-    if (m.includes('at least 6 characters')) return "La contraseña debe tener 6 caracteres.";
+    if (m.includes('at least 6 characters')) return "Mínimo 6 caracteres.";
     return "Error de acceso. Reintenta.";
 };
 
@@ -40,7 +39,7 @@ const AuthPage: React.FC = () => {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
 
-  // Si ya hay sesión (por ejemplo, tras pulsar el magic link), vamos a la home
+  // Redirección inmediata si se detecta sesión (ej. tras pulsar el enlace del email)
   useEffect(() => {
     if (session && !authLoading) {
       navigate('/');
@@ -82,17 +81,18 @@ const AuthPage: React.FC = () => {
       setError(null);
 
       try {
-          // El Magic Link inicia sesión sin pedir contraseña
+          // Usamos signInWithOtp para enviar el enlace de acceso directo
           const { error } = await supabase.auth.signInWithOtp({
               email,
               options: {
-                  emailRedirectTo: window.location.origin + window.location.pathname + '#/',
+                  // Apuntamos a la raíz, el script en index.html se encargará de rescatar los tokens
+                  emailRedirectTo: window.location.origin + window.location.pathname,
                   captchaToken: captchaToken || undefined
               }
           });
           
           if (error) throw error;
-          setSuccessMsg("¡Enviado! Pulsa el enlace en tu email para entrar.");
+          setSuccessMsg("¡Enlace enviado! Revisa tu bandeja de entrada para entrar.");
       } catch (err: any) {
           setError(translateError(err.message));
       } finally {
@@ -124,7 +124,7 @@ const AuthPage: React.FC = () => {
              view === 'magic-link' ? 'Acceso Directo' : 'Crear Cuenta'}
           </h1>
           <p className="text-slate-400 text-sm">
-            {view === 'magic-link' ? 'Entra a la app sin contraseña' : 'Gestiona tus torneos de padel'}
+            {view === 'magic-link' ? 'Entra a la aplicación sin contraseña' : 'Introduce tus datos para continuar'}
           </p>
         </div>
 
@@ -142,12 +142,12 @@ const AuthPage: React.FC = () => {
                     </div>
                 )}
 
-                {/* VISTA: MAGIC LINK */}
+                {/* VISTA: ENLACE MÁGICO / ACCESO DIRECTO */}
                 {view === 'magic-link' && (
                     <form onSubmit={handleMagicLink} className="space-y-4 animate-slide-up">
                         <div className="relative">
                             <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
-                            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Tu email registrado"/>
+                            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Tu email"/>
                         </div>
                         {HCAPTCHA_SITE_TOKEN && (
                             <div className="flex justify-center my-2 scale-90 min-h-[78px]">
@@ -155,7 +155,7 @@ const AuthPage: React.FC = () => {
                             </div>
                         )}
                         <button type="submit" disabled={loading} className="w-full bg-slate-900 hover:bg-slate-800 disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all">
-                            {loading ? <Loader2 className="animate-spin" size={24} /> : <>ENVIAR ENLACE <Sparkles size={20}/></>}
+                            {loading ? <Loader2 className="animate-spin" size={24} /> : <>RECIBIR ENLACE <Sparkles size={20}/></>}
                         </button>
                         <div className="text-center mt-6">
                             <button type="button" onClick={() => switchView('login')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">Volver al acceso con contraseña</button>
@@ -187,7 +187,7 @@ const AuthPage: React.FC = () => {
 
                         {view === 'login' && (
                             <div className="text-right">
-                                <button type="button" onClick={() => switchView('magic-link')} className="text-xs font-bold text-indigo-500 hover:text-indigo-700">¿Has olvidado la contraseña?</button>
+                                <button type="button" onClick={() => switchView('magic-link')} className="text-xs font-bold text-indigo-500 hover:text-indigo-700">¿Entrar sin contraseña?</button>
                             </div>
                         )}
 
@@ -215,7 +215,7 @@ const AuthPage: React.FC = () => {
             </div>
         )}
         
-        <p className="text-center text-[10px] text-slate-300 font-black uppercase tracking-[0.2em] mt-12">PadelPro Secure Entry v3.0</p>
+        <p className="text-center text-[10px] text-slate-300 font-black uppercase tracking-[0.2em] mt-12">PadelPro Secure Entry v3.1</p>
       </div>
     </div>
   );
