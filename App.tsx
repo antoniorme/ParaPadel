@@ -67,13 +67,15 @@ const AppRoutes = () => {
   const isAuthPage = location.pathname.includes('/auth');
 
   // REDIRECCIÓN INTERNA PARA RECUPERACIÓN
+  // Se ejecuta cada vez que cambia la URL. Si hay tokens o flag de recovery, entramos.
   useEffect(() => {
       const fullUrl = window.location.href;
-      if (fullUrl.includes('access_token=') || fullUrl.includes('type=recovery')) {
-          if (location.pathname !== '/recovery-confirm') {
-              // Navegamos a la ruta interna una vez que el usuario está dentro
-              navigate('/recovery-confirm', { replace: true });
-          }
+      const isRecoveryFlow = fullUrl.includes('type=recovery') || fullUrl.includes('access_token=');
+      
+      if (isRecoveryFlow && location.pathname !== '/recovery-confirm') {
+          console.log("Flujo de recuperación detectado en AppRoutes. Redirigiendo...");
+          // Usamos replace: true para limpiar el historial del navegador de la URL con tokens
+          navigate('/recovery-confirm', { replace: true });
       }
   }, [location.pathname, navigate]);
 

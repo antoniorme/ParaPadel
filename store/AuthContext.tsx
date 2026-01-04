@@ -51,32 +51,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initSession = async () => {
         const fullUrl = window.location.href;
         
-        // Detección manual de tokens para evitar problemas de HashRouter
-        const getParam = (key: string) => {
-            const reg = new RegExp(`[#?&]${key}=([^&]*)`);
-            const match = fullUrl.match(reg);
+        // HELPER: Extraer cualquier parámetro de la URL completa, ignorando los '#'
+        // Esto soluciona el problema del "doble #" (ej: /#/auth#access_token=...)
+        const getRawParam = (key: string) => {
+            const regex = new RegExp(`[#?&]${key}=([^&]*)`);
+            const match = fullUrl.match(regex);
             return match ? match[1] : null;
         };
 
-        const accessToken = getParam('access_token');
-        const refreshToken = getParam('refresh_token');
+        const accessToken = getRawParam('access_token');
+        const refreshToken = getRawParam('refresh_token');
 
+        // Si detectamos tokens, los procesamos ANTES de cualquier otra cosa
         if (accessToken && refreshToken) {
             try {
-                const { data } = await supabase.auth.setSession({
+                console.log("Tokens detectados, iniciando sesión forzada...");
+                const { data, error } = await supabase.auth.setSession({
                     access_token: accessToken,
                     refresh_token: refreshToken
                 });
+                
+                if (error) throw error;
+
                 if (data.session) {
                     setSession(data.session);
                     setUser(data.session.user);
                     const r = await checkUserRole(data.session.user.id, data.session.user.email);
                     setRole(r);
+                    console.log("Sesión recuperada con éxito");
                 }
             } catch (e) {
-                console.error("Error setting session from URL", e);
+                console.error("Error crítico procesando tokens de recuperación:", e);
             }
         } else {
+            // Carga normal si no hay tokens
             try {
                 const { data: { session: currentSession } } = await supabase.auth.getSession();
                 if (currentSession) {
@@ -86,7 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     setRole(r);
                 }
             } catch (error: any) {
-                console.error("Auth Load Error", error);
+                console.error("Error en carga de sesión inicial:", error);
             }
         }
         setLoading(false);
