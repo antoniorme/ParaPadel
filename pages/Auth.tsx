@@ -3,10 +3,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
-import { Trophy, Loader2, ArrowLeft, Mail, Lock, Key, Send, Eye, EyeOff, ShieldAlert, CheckCircle2, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Trophy, Loader2, ArrowLeft, Mail, Lock, Send, Eye, EyeOff, ShieldAlert, CheckCircle2, Sparkles } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
-type AuthView = 'login' | 'register' | 'recovery' | 'update-password';
+type AuthView = 'login' | 'register' | 'magic-link';
 
 let HCAPTCHA_SITE_TOKEN = "";
 try {
@@ -19,16 +19,15 @@ try {
 
 const translateError = (msg: string) => {
     const m = msg.toLowerCase();
-    if (m.includes('different from the old password')) return "Usa una contraseña distinta a la anterior.";
-    if (m.includes('at least 6 characters')) return "Mínimo 6 caracteres.";
-    if (m.includes('invalid login credentials')) return "Email o clave incorrectos.";
-    if (m.includes('user already registered')) return "El email ya existe.";
-    return msg || "Error de seguridad. Reintenta.";
+    if (m.includes('invalid login credentials')) return "Email o contraseña incorrectos.";
+    if (m.includes('user already registered')) return "El email ya está registrado.";
+    if (m.includes('at least 6 characters')) return "La contraseña debe tener 6 caracteres.";
+    return "Error de acceso. Reintenta.";
 };
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
-  const { session } = useAuth();
+  const { session, loading: authLoading } = useAuth();
   
   const [view, setView] = useState<AuthView>('login');
   const [email, setEmail] = useState('');
@@ -40,28 +39,13 @@ const AuthPage: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
-  const [isSessionReady, setIsSessionReady] = useState(false);
 
-  // DETECCIÓN MANUAL DE ESTADO DE RECUPERACIÓN EN LA URL
+  // Si ya hay sesión (por ejemplo, tras pulsar el magic link), vamos a la home
   useEffect(() => {
-      const fullUrl = window.location.href;
-      // Si la URL contiene parámetros de recuperación, forzamos la vista de cambio de contraseña
-      if (fullUrl.includes('access_token=') || fullUrl.includes('type=recovery') || fullUrl.includes('recovery')) {
-          setView('update-password');
-          // Si ya tenemos sesión activa (gracias al AuthContext), marcamos como listo
-          if (session) {
-              setIsSessionReady(true);
-          }
-      }
-  }, [session]);
-
-  const switchView = (newView: AuthView) => {
-      setView(newView);
-      setError(null);
-      setSuccessMsg(null);
-      setCaptchaToken(null);
-      if(captchaRef.current) captchaRef.current.resetCaptcha();
-  };
+    if (session && !authLoading) {
+      navigate('/');
+    }
+  }, [session, authLoading, navigate]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +65,7 @@ const AuthPage: React.FC = () => {
             email, password, 
             options: { captchaToken: captchaToken || undefined } 
         });
+        if (!result.error) setSuccessMsg("¡Registro casi listo! Confirma tu email.");
       }
       if (result.error) throw result.error;
     } catch (err: any) {
@@ -91,53 +76,23 @@ const AuthPage: React.FC = () => {
     }
   };
 
-  const handlePasswordResetRequest = async (e: React.FormEvent) => {
+  const handleMagicLink = async (e: React.FormEvent) => {
       e.preventDefault();
       setLoading(true);
       setError(null);
 
       try {
-          // El redirectTo DEBE coincidir con una de las URLs permitidas en el dashboard de Supabase
-          const redirectTo = `${window.location.origin}${window.location.pathname}#/auth?type=recovery`;
-          const { error } = await supabase.auth.resetPasswordForEmail(email, { 
-              redirectTo, 
-              captchaToken: captchaToken || undefined 
+          // El Magic Link inicia sesión sin pedir contraseña
+          const { error } = await supabase.auth.signInWithOtp({
+              email,
+              options: {
+                  emailRedirectTo: window.location.origin + window.location.pathname + '#/',
+                  captchaToken: captchaToken || undefined
+              }
           });
           
           if (error) throw error;
-          setSuccessMsg("Enlace enviado. Mira tu correo.");
-          setLoading(false);
-      } catch (err: any) {
-          setError(translateError(err.message));
-          setLoading(false);
-      }
-  };
-
-  // PASO 1 RECUPERACIÓN: Validar la sesión si no se hizo automáticamente
-  const handleStartUpdate = async () => {
-      setLoading(true);
-      setError(null);
-      
-      const getUrlParam = (url: string, key: string) => {
-          const reg = new RegExp(`[#?&]${key}=([^&]*)`);
-          const match = url.match(reg);
-          return match ? match[1] : null;
-      };
-
-      const access_token = getUrlParam(window.location.href, 'access_token');
-      const refresh_token = getUrlParam(window.location.href, 'refresh_token');
-
-      if (!access_token || !refresh_token) {
-          setError("El enlace ha caducado o no es válido.");
-          setLoading(false);
-          return;
-      }
-
-      try {
-          const { error: sessionError } = await supabase.auth.setSession({ access_token, refresh_token });
-          if (sessionError) throw sessionError;
-          
-          setIsSessionReady(true);
+          setSuccessMsg("¡Enviado! Pulsa el enlace en tu email para entrar.");
       } catch (err: any) {
           setError(translateError(err.message));
       } finally {
@@ -145,24 +100,12 @@ const AuthPage: React.FC = () => {
       }
   };
 
-  // PASO 2 RECUPERACIÓN: Guardar la nueva clave
-  const handleUpdatePassword = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (password !== confirmPassword) { setError("Las claves no coinciden."); return; }
-      
-      setLoading(true);
+  const switchView = (newView: AuthView) => {
+      setView(newView);
       setError(null);
-
-      try {
-          const { error: updateError } = await supabase.auth.updateUser({ password });
-          if (updateError) throw updateError;
-          
-          setSuccessMsg("¡Contraseña cambiada con éxito!");
-          setTimeout(() => navigate('/'), 2000);
-      } catch (err: any) {
-          setError(translateError(err.message));
-          setLoading(false);
-      }
+      setSuccessMsg(null);
+      setCaptchaToken(null);
+      if(captchaRef.current) captchaRef.current.resetCaptcha();
   };
 
   return (
@@ -178,144 +121,101 @@ const AuthPage: React.FC = () => {
           </div>
           <h1 className="text-3xl font-black text-slate-900 mb-2">
             {view === 'login' ? 'Hola de nuevo' : 
-             view === 'recovery' ? 'Recuperar' : 
-             view === 'update-password' ? 'Seguridad' : 'Registro'}
+             view === 'magic-link' ? 'Acceso Directo' : 'Crear Cuenta'}
           </h1>
           <p className="text-slate-400 text-sm">
-            {view === 'update-password' ? 'Establece tu nueva contraseña' : 'Introduce tus datos para continuar'}
+            {view === 'magic-link' ? 'Entra a la app sin contraseña' : 'Gestiona tus torneos de padel'}
           </p>
         </div>
 
-        {successMsg && (
-            <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-6 rounded-3xl text-sm text-center font-bold flex flex-col items-center gap-3 animate-fade-in shadow-sm">
-                <CheckCircle2 size={40} className="text-emerald-500"/> 
-                {successMsg}
+        {successMsg ? (
+            <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-8 rounded-3xl text-sm text-center font-bold flex flex-col items-center gap-4 animate-fade-in shadow-sm">
+                <CheckCircle2 size={48} className="text-emerald-500"/> 
+                <p className="text-lg leading-tight">{successMsg}</p>
+                <button onClick={() => switchView('login')} className="mt-4 text-xs underline opacity-70">Volver al inicio</button>
             </div>
-        )}
+        ) : (
+            <div className="space-y-6">
+                {error && (
+                    <div className="bg-rose-50 border border-rose-100 text-rose-600 p-4 rounded-xl text-sm text-center font-medium shadow-sm flex items-center gap-2 animate-fade-in">
+                        <ShieldAlert size={18} className="shrink-0"/> {error}
+                    </div>
+                )}
 
-        {!successMsg && error && (
-            <div className="bg-rose-50 border border-rose-100 text-rose-600 p-4 rounded-xl text-sm text-center font-medium shadow-sm flex items-center gap-2 animate-fade-in">
-                <ShieldAlert size={18} className="shrink-0"/> {error}
-            </div>
-        )}
+                {/* VISTA: MAGIC LINK */}
+                {view === 'magic-link' && (
+                    <form onSubmit={handleMagicLink} className="space-y-4 animate-slide-up">
+                        <div className="relative">
+                            <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
+                            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Tu email registrado"/>
+                        </div>
+                        {HCAPTCHA_SITE_TOKEN && (
+                            <div className="flex justify-center my-2 scale-90 min-h-[78px]">
+                                <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
+                            </div>
+                        )}
+                        <button type="submit" disabled={loading} className="w-full bg-slate-900 hover:bg-slate-800 disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all">
+                            {loading ? <Loader2 className="animate-spin" size={24} /> : <>ENVIAR ENLACE <Sparkles size={20}/></>}
+                        </button>
+                        <div className="text-center mt-6">
+                            <button type="button" onClick={() => switchView('login')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">Volver al acceso con contraseña</button>
+                        </div>
+                    </form>
+                )}
 
-        <div className="space-y-4">
-            {/* VISTA: ACTUALIZAR CONTRASEÑA (DESPUÉS DEL MAGIC LINK) */}
-            {view === 'update-password' && !successMsg && (
-                <div className="space-y-6 animate-slide-up">
-                    {!isSessionReady ? (
-                        <div className="bg-indigo-50 border border-indigo-100 rounded-3xl p-8 text-center space-y-6">
-                            <ShieldCheck size={48} className="mx-auto text-[#575AF9]"/>
-                            <h2 className="text-xl font-black text-slate-900 leading-tight">Acceso Validado</h2>
-                            <p className="text-slate-500 text-xs font-medium leading-relaxed">Pulsa el botón para iniciar el cambio seguro de tu contraseña.</p>
+                {/* VISTA: LOGIN / REGISTRO */}
+                {(view === 'login' || view === 'register') && (
+                    <form onSubmit={handleAuth} className="space-y-4">
+                        <div className="relative">
+                            <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
+                            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Email"/>
+                        </div>
+                        <div className="relative">
+                            <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                            <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Contraseña"/>
+                            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400">
+                                {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
+                            </button>
+                        </div>
+
+                        {view === 'register' && (
+                            <div className="relative animate-slide-up">
+                                <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
+                                <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Repetir contraseña"/>
+                            </div>
+                        )}
+
+                        {view === 'login' && (
+                            <div className="text-right">
+                                <button type="button" onClick={() => switchView('magic-link')} className="text-xs font-bold text-indigo-500 hover:text-indigo-700">¿Has olvidado la contraseña?</button>
+                            </div>
+                        )}
+
+                        {HCAPTCHA_SITE_TOKEN && (
+                            <div className="flex justify-center my-2 scale-90 min-h-[78px]">
+                                <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
+                            </div>
+                        )}
+                        
+                        <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center text-lg active:scale-95 transition-all">
+                            {loading ? <Loader2 className="animate-spin" size={24} /> : (view === 'login' ? 'ENTRAR' : 'CREAR CUENTA')}
+                        </button>
+                        
+                        <div className="text-center pt-4">
                             <button 
-                                onClick={handleStartUpdate}
-                                disabled={loading}
-                                className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 active:scale-95 transition-all"
+                                type="button" 
+                                onClick={() => switchView(view === 'login' ? 'register' : 'login')}
+                                className="text-sm font-bold text-slate-500"
                             >
-                                {loading ? <Loader2 className="animate-spin" size={24}/> : "CAMBIAR CONTRASEÑA"}
+                                {view === 'login' ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Entra'}
                             </button>
                         </div>
-                    ) : (
-                        <form onSubmit={handleUpdatePassword} className="space-y-4">
-                            <div className="relative">
-                                <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                                <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none font-bold shadow-sm" placeholder="Nueva Contraseña" autoFocus/>
-                                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400">
-                                    {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
-                                </button>
-                            </div>
-                            <div className="relative">
-                                <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                                <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none font-bold shadow-sm" placeholder="Repetir Contraseña"/>
-                            </div>
-                            
-                            {HCAPTCHA_SITE_TOKEN && (
-                                <div className="flex justify-center my-2 scale-90 min-h-[78px]">
-                                    <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
-                                </div>
-                            )}
-
-                            <button type="submit" disabled={loading || (HCAPTCHA_SITE_TOKEN && !captchaToken)} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg active:scale-95 transition-all">
-                                {loading ? <Loader2 className="animate-spin" size={24} /> : "GUARDAR CAMBIOS"}
-                            </button>
-                        </form>
-                    )}
-                </div>
-            )}
-
-            {/* VISTA: RECUPERAR (PEDIR EMAIL) */}
-            {view === 'recovery' && !successMsg && (
-                <form onSubmit={handlePasswordResetRequest} className="space-y-4 animate-slide-up">
-                    <div className="relative">
-                        <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
-                        <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Tu email"/>
-                    </div>
-                    {HCAPTCHA_SITE_TOKEN && (
-                        <div className="flex justify-center my-2 scale-90 min-h-[78px]">
-                            <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
-                        </div>
-                    )}
-                    <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-bold text-white shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all">
-                        {loading ? <Loader2 className="animate-spin" size={18} /> : <>MANDAR ENLACE <Send size={18}/></>}
-                    </button>
-                    <div className="text-center mt-4">
-                        <button type="button" onClick={() => switchView('login')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">Volver al Login</button>
-                    </div>
-                </form>
-            )}
-
-            {/* VISTA: LOGIN / REGISTRO */}
-            {(view === 'login' || view === 'register') && !successMsg && (
-                <form onSubmit={handleAuth} className="space-y-4">
-                <div className="relative">
-                    <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
-                    <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Email"/>
-                </div>
-                <div className="relative">
-                    <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                    <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Contraseña"/>
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400">
-                        {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
-                    </button>
-                </div>
-
-                {view === 'register' && (
-                    <div className="relative animate-slide-up">
-                        <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                        <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Confirmar contraseña"/>
-                    </div>
+                    </form>
                 )}
-
-                {view === 'login' && (
-                    <div className="text-right">
-                        <button type="button" onClick={() => switchView('recovery')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">¿Olvidaste tu contraseña?</button>
-                    </div>
-                )}
-
-                {HCAPTCHA_SITE_TOKEN && (
-                    <div className="flex justify-center my-2 scale-90 min-h-[78px]">
-                        <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
-                    </div>
-                )}
-                <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center text-lg active:scale-95 transition-all">
-                    {loading ? <Loader2 className="animate-spin" size={24} /> : (view === 'login' ? 'ENTRAR' : 'CREAR CUENTA')}
-                </button>
-                
-                <div className="text-center pt-4">
-                    <button 
-                        type="button" 
-                        onClick={() => switchView(view === 'login' ? 'register' : 'login')}
-                        className="text-sm font-bold text-slate-500"
-                    >
-                        {view === 'login' ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Entra'}
-                    </button>
-                </div>
-                </form>
-            )}
-        </div>
+            </div>
+        )}
         
-        <p className="text-center text-[10px] text-slate-300 font-black uppercase tracking-[0.2em] mt-12">PadelPro App Security v2.7</p>
+        <p className="text-center text-[10px] text-slate-300 font-black uppercase tracking-[0.2em] mt-12">PadelPro Secure Entry v3.0</p>
       </div>
     </div>
   );

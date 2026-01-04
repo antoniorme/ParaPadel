@@ -16,7 +16,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
     <style>
-      /* Light Mode Background */
       body { 
         font-family: 'Inter', sans-serif; 
         background-color: #f8fafc; 
@@ -25,34 +24,21 @@
         overflow-x: hidden; 
         width: 100%;
       }
-      
-      html, body {
-        overscroll-behavior-y: none;
-      }
-
+      html, body { overscroll-behavior-y: none; }
       .animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
       @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-      
-      .animate-slide-left { animation: slideLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-      @keyframes slideLeft { from { transform: translateX(100%); } to { transform: translateX(0); } }
-
       .animate-fade-in { animation: fadeIn 0.2s ease-out; }
       @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-      
-      .no-scrollbar::-webkit-scrollbar { display: none; }
-      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-      .safe-pb { padding-bottom: env(safe-area-inset-bottom); }
     </style>
     
-    <!-- URL RESCUE SCRIPT: Fix HashRouter + Supabase Magic Link Conflict -->
+    <!-- URL RESCUE SCRIPT: Convierte el hash de Supabase en una ruta procesable por React -->
     <script>
       (function() {
         var h = window.location.hash;
-        // Si el hash empieza directamente con access_token, es el redirect de Supabase
-        // que HashRouter no sabe manejar. Lo convertimos en una ruta válida: #/auth?...
-        if (h && (h.indexOf('access_token=') > -1 || h.indexOf('error=') > -1) && h.indexOf('#/') !== 0) {
-          var params = h.substring(1); // quitamos el primer #
+        // Detectamos si el fragmento contiene tokens de Supabase pero no es una ruta de nuestra app
+        if (h && (h.indexOf('access_token=') > -1 || h.indexOf('type=recovery') > -1) && h.indexOf('#/') !== 0) {
+          var params = h.substring(1); 
+          // Redirigimos internamente a nuestra página de auth con los parámetros limpios
           window.location.hash = '/auth?' + params;
         }
       })();

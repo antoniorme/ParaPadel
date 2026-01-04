@@ -50,20 +50,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const initSession = async () => {
-        const fullUrl = window.location.href;
+        // 1. Verificar si hay tokens en la URL (Magic Link / Recovery)
+        const hash = window.location.hash;
+        const search = window.location.search;
+        const fullParams = new URLSearchParams(hash.includes('?') ? hash.split('?')[1] : (search || ''));
         
-        // Extractor de tokens ultra-agresivo para evitar conflictos con HashRouter
-        const getRawParam = (key: string) => {
-            // Buscamos tanto en la query string normal como en el fragmento después del hash
-            const regex = new RegExp(`[#?&]${key}=([^&]*)`);
-            const match = fullUrl.match(regex);
-            return match ? match[1] : null;
-        };
+        const accessToken = fullParams.get('access_token');
+        const refreshToken = fullParams.get('refresh_token');
 
-        const accessToken = getRawParam('access_token');
-        const refreshToken = getRawParam('refresh_token');
-
-        // SI HAY TOKENS (RECUPERACIÓN O LOGIN DIRECTO)
         if (accessToken && refreshToken) {
             try {
                 const { data, error } = await supabase.auth.setSession({
@@ -72,23 +66,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 });
                 
                 if (!error && data.session) {
-                    setSession(data.session);
-                    setUser(data.session.user);
-                    const r = await checkUserRole(data.session.user.id, data.session.user.email);
-                    setRole(r);
-                    
-                    // LIMPIEZA RADICAL DE LA URL PARA EVITAR RE-PROCESAMIENTOS
-                    // Redirigimos a /#/auth pero conservando los parámetros para que AuthPage sepa qué vista mostrar
-                    const cleanPath = fullUrl.includes('type=recovery') ? '/#/auth?type=recovery' : '/#/';
-                    window.location.replace(window.location.origin + window.location.pathname + cleanPath);
+                    // Sesión recuperada con éxito. Redirigimos a la home limpia.
+                    window.location.hash = '#/';
                     return; 
                 }
             } catch (e) {
-                console.error("Link Verification Error", e);
+                console.error("Auth Init Error", e);
             }
         }
 
-        // CARGA NORMAL DE SESIÓN EXISTENTE
+        // 2. Carga normal de sesión persistente
         const { data: { session: currentSession } } = await supabase.auth.getSession();
         if (currentSession) {
             setSession(currentSession);
@@ -112,6 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(null);
           setRole(null);
       }
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
