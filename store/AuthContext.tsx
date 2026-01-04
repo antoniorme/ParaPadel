@@ -13,7 +13,6 @@ interface AuthContextType {
   isOfflineMode: boolean;
   checkUserRole: (uid: string, email?: string) => Promise<UserRole>;
   loginWithDevBypass: (role: 'admin' | 'player' | 'superadmin') => void;
-  isRecovering: boolean; // Nuevo flag para el App.tsx
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -25,7 +24,6 @@ const AuthContext = createContext<AuthContextType>({
   isOfflineMode: false,
   checkUserRole: async () => null,
   loginWithDevBypass: () => {},
-  isRecovering: false,
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -34,7 +32,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [role, setRole] = useState<UserRole>(null);
   const [loading, setLoading] = useState(true);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
-  const [isRecovering, setIsRecovering] = useState(false);
 
   const checkUserRole = useCallback(async (uid: string, userEmail?: string): Promise<UserRole> => {
       if (!uid) return null;
@@ -54,8 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initSession = async () => {
         const fullUrl = window.location.href;
         
-        // Función ultra-robusta para capturar tokens en cualquier parte de la URL
-        // Esto ignora el problema del "doble #" porque busca en el string completo
+        // Extractor de parámetros ultra-robusto (ignora cuántos # haya)
         const getRawParam = (key: string) => {
             const regex = new RegExp(`[#?&]${key}=([^&]*)`);
             const match = fullUrl.match(regex);
@@ -64,12 +60,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const accessToken = getRawParam('access_token');
         const refreshToken = getRawParam('refresh_token');
-        const type = getRawParam('type');
 
         if (accessToken && refreshToken) {
-            setIsRecovering(type === 'recovery');
             try {
-                // Forzamos la sesión manualmente ANTES de que el router haga nada
+                // Bloqueamos la carga normal para procesar la recuperación
                 const { data, error } = await supabase.auth.setSession({
                     access_token: accessToken,
                     refresh_token: refreshToken
@@ -80,12 +74,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     setUser(data.session.user);
                     const r = await checkUserRole(data.session.user.id, data.session.user.email);
                     setRole(r);
+                    
+                    // CRÍTICO: Limpiamos la URL y forzamos la ruta interna de recuperación
+                    // Esto evita que el Router vea el "sucio" y nos mande a la home
+                    window.location.replace('/#/recovery-confirm');
+                    setLoading(false);
+                    return; 
                 }
             } catch (e) {
-                console.error("Auth setSession error", e);
+                console.error("Auth Recovery Error", e);
             }
-        } else {
-            // Carga normal
+        }
+
+        // Carga normal de sesión
+        try {
             const { data: { session: currentSession } } = await supabase.auth.getSession();
             if (currentSession) {
                 setSession(currentSession);
@@ -93,6 +95,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
                 setRole(r);
             }
+        } catch (error: any) {
+            console.error("Auth Load Error", error);
         }
         setLoading(false);
     };
@@ -134,8 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <AuthContext.Provider value={{ 
         session, user, loading, role, signOut, 
-        isOfflineMode, checkUserRole, loginWithDevBypass,
-        isRecovering
+        isOfflineMode, checkUserRole, loginWithDevBypass
     }}>
       {children}
     </AuthContext.Provider>

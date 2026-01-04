@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import React from 'react';
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { TournamentProvider } from './store/TournamentContext';
 import { LeagueProvider } from './store/LeagueContext';
 import { AuthProvider, useAuth } from './store/AuthContext';
@@ -61,22 +61,9 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
 };
 
 const AppRoutes = () => {
-  const { user, role, loading, isRecovering } = useAuth();
+  const { user, role, loading } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
   const isAuthPage = location.pathname.includes('/auth');
-
-  // REDIRECCIÓN INTERNA PARA RECUPERACIÓN (Inmune al Doble Hash)
-  useEffect(() => {
-      const fullUrl = window.location.href;
-      // Si la URL tiene los tokens, forzamos la estancia en la ruta de recuperación
-      if (fullUrl.includes('access_token=') || fullUrl.includes('type=recovery')) {
-          if (location.pathname !== '/recovery-confirm') {
-              console.log("Forzando entrada a recuperación interna...");
-              navigate('/recovery-confirm', { replace: true });
-          }
-      }
-  }, [location.pathname, navigate]);
 
   if (loading && !isAuthPage) {
     return (
@@ -92,12 +79,6 @@ const AppRoutes = () => {
   }
 
   const getHomeRoute = () => {
-      // SI HAY TOKENS, NO MANDAMOS A LANDING, MANDAMOS A RECOVERY
-      const fullUrl = window.location.href;
-      if (fullUrl.includes('access_token=') || fullUrl.includes('type=recovery')) {
-          return <Navigate to="/recovery-confirm" replace />;
-      }
-
       if (!user) return <Landing />;
       if (role === 'superadmin') return <Navigate to="/superadmin" replace />;
       if (role === 'admin') return <Navigate to="/dashboard" replace />;
@@ -109,9 +90,7 @@ const AppRoutes = () => {
     <Routes>
         <Route path="/" element={getHomeRoute()} />
         <Route path="/auth" element={<AuthPage />} />
-        {/* Esta ruta ya está DENTRO de la aplicación, es lo que pedías */}
         <Route path="/recovery-confirm" element={<ProtectedRoute><InternalRecovery /></ProtectedRoute>} />
-        
         <Route path="/pending" element={<ProtectedRoute><PendingVerification /></ProtectedRoute>} />
         <Route path="/join/:clubId" element={<JoinTournament />} />
         <Route path="/onboarding" element={<ProtectedRoute requireAdmin><Onboarding /></ProtectedRoute>} />
