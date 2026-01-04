@@ -51,7 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initSession = async () => {
         const fullUrl = window.location.href;
         
-        // Extractor de parámetros ultra-agresivo que ignora los '#' dobles
+        // Extractor de tokens ultra-agresivo para evitar conflictos con HashRouter
         const getRawParam = (key: string) => {
             const regex = new RegExp(`[#?&]${key}=([^&]*)`);
             const match = fullUrl.match(regex);
@@ -61,10 +61,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const accessToken = getRawParam('access_token');
         const refreshToken = getRawParam('refresh_token');
 
-        // SI DETECTAMOS TOKENS EN EL LINK DE REUPERACIÓN/MAGIC LINK
+        // SI HAY TOKENS (RECUPERACIÓN O LOGIN DIRECTO)
         if (accessToken && refreshToken) {
             try {
-                // Autenticamos inmediatamente
                 const { data, error } = await supabase.auth.setSession({
                     access_token: accessToken,
                     refresh_token: refreshToken
@@ -76,27 +75,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     const r = await checkUserRole(data.session.user.id, data.session.user.email);
                     setRole(r);
                     
-                    // LIMPIEZA ABSOLUTA: Reescribimos la barra de direcciones 
-                    // y entramos al Dashboard sin dejar rastro del link
+                    // LIMPIEZA RADICAL DE LA URL
+                    // Al usar window.location.replace('/#/'), forzamos al navegador a olvidar el link sucio
+                    // y cargamos la app limpia en la Home. Al tener sesión activa, el Router hará el resto.
                     window.location.replace('/#/');
                     return; 
                 }
             } catch (e) {
-                console.error("Error en entrada por link:", e);
+                console.error("Link Verification Error", e);
             }
         }
 
-        // CARGA NORMAL (Si no hay tokens en la URL)
-        try {
-            const { data: { session: currentSession } } = await supabase.auth.getSession();
-            if (currentSession) {
-                setSession(currentSession);
-                setUser(currentSession.user);
-                const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
-                setRole(r);
-            }
-        } catch (error: any) {
-            console.error("Error en carga de sesión:", error);
+        // CARGA NORMAL DE SESIÓN EXISTENTE
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (currentSession) {
+            setSession(currentSession);
+            setUser(currentSession.user);
+            const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
+            setRole(r);
         }
         setLoading(false);
     };
