@@ -9,13 +9,10 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   role: UserRole;
-  authStatus: string;
-  authLogs: string[];
   signOut: () => Promise<void>;
   isOfflineMode: boolean;
   checkUserRole: (uid: string, email?: string) => Promise<UserRole>;
   loginWithDevBypass: (role: 'admin' | 'player' | 'superadmin') => void;
-  addLog: (msg: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -23,13 +20,10 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   role: null,
-  authStatus: 'Iniciando...',
-  authLogs: [],
   signOut: async () => {},
   isOfflineMode: false,
   checkUserRole: async () => null,
   loginWithDevBypass: () => {},
-  addLog: () => {},
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -37,14 +31,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole>(null);
   const [loading, setLoading] = useState(true);
-  const [authStatus, setAuthStatus] = useState('Monitor Activo');
-  const [authLogs, setAuthLogs] = useState<string[]>([]);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
-
-  const addLog = useCallback((msg: string) => {
-      console.log(`[AUTH] ${msg}`);
-      setAuthLogs(prev => [...prev.slice(-20), `${new Date().toLocaleTimeString().split(' ')[0]} > ${msg}`]);
-  }, []);
 
   const checkUserRole = useCallback(async (uid: string, userEmail?: string): Promise<UserRole> => {
       if (!uid) return null;
@@ -71,7 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setRole(r);
             }
         } catch (error: any) {
-            addLog(`Error carga: ${error.message}`);
+            console.error("Auth Load Error", error);
         }
         setLoading(false);
     };
@@ -79,7 +66,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      addLog(`Evento: ${event}`);
       if (session) {
           setSession(session);
           setUser(session.user);
@@ -93,7 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => subscription.unsubscribe();
-  }, [checkUserRole, addLog]);
+  }, [checkUserRole]);
 
   const signOut = async () => {
     setLoading(true);
@@ -113,8 +99,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider value={{ 
-        session, user, loading, role, authStatus, authLogs, signOut, 
-        isOfflineMode, checkUserRole, loginWithDevBypass, addLog
+        session, user, loading, role, signOut, 
+        isOfflineMode, checkUserRole, loginWithDevBypass
     }}>
       {children}
     </AuthContext.Provider>

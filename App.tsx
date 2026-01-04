@@ -1,5 +1,5 @@
-import React from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { TournamentProvider } from './store/TournamentContext';
 import { LeagueProvider } from './store/LeagueContext';
 import { AuthProvider, useAuth } from './store/AuthContext';
@@ -18,6 +18,7 @@ import ActiveTournament from './pages/ActiveTournament';
 import Results from './pages/Results';
 import Landing from './pages/Landing';
 import AuthPage from './pages/Auth';
+import InternalRecovery from './pages/InternalRecovery'; // NUEVA PÁGINA
 import PlayerManager from './pages/PlayerManager';
 import History from './pages/History';
 import ClubProfile from './pages/ClubProfile';
@@ -49,7 +50,12 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
   const location = useLocation();
 
   if (loading) return null; 
-  if (!user) return <Navigate to="/" replace />;
+  if (!user) {
+      // Si estamos en medio de una recuperación, el user debería existir ya que Supabase procesa el hash
+      // pero por si acaso, si hay tokens en la URL no redirigimos todavía al login
+      if (window.location.href.includes('access_token=')) return null;
+      return <Navigate to="/" replace />;
+  }
   
   if (role === 'pending' && location.pathname !== '/pending') return <Navigate to="/pending" replace />;
   if (requireSuperAdmin && role !== 'superadmin') return <Navigate to="/dashboard" replace />;
@@ -62,7 +68,19 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
 const AppRoutes = () => {
   const { user, role, loading } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const isAuthPage = location.pathname.includes('/auth');
+
+  // EFECTO DE REDIRECCIÓN INTERNA PARA RECUPERACIÓN
+  useEffect(() => {
+      if (window.location.href.includes('type=recovery') || window.location.href.includes('access_token=')) {
+          // Si detectamos los tokens, nos movemos a la ruta interna de la app
+          // Esto limpia la URL automáticamente y nos lleva a la página con el botón
+          if (location.pathname !== '/internal-recovery') {
+              navigate('/internal-recovery', { replace: true });
+          }
+      }
+  }, [location.pathname, navigate]);
 
   if (loading && !isAuthPage) {
     return (
@@ -71,7 +89,7 @@ const AppRoutes = () => {
                 <Trophy size={40} className="text-[#575AF9]" />
             </div>
             <div className="flex items-center gap-3 text-slate-400 font-bold text-sm tracking-widest uppercase">
-                <Loader2 size={18} className="animate-spin text-[#575AF9]"/> Cargando...
+                <Loader2 size={18} className="animate-spin text-[#575AF9]"/> Entrando...
             </div>
         </div>
     );
@@ -89,6 +107,7 @@ const AppRoutes = () => {
     <Routes>
         <Route path="/" element={getHomeRoute()} />
         <Route path="/auth" element={<AuthPage />} />
+        <Route path="/internal-recovery" element={<ProtectedRoute><InternalRecovery /></ProtectedRoute>} />
         <Route path="/pending" element={<ProtectedRoute><PendingVerification /></ProtectedRoute>} />
         <Route path="/join/:clubId" element={<JoinTournament />} />
         <Route path="/onboarding" element={<ProtectedRoute requireAdmin><Onboarding /></ProtectedRoute>} />
@@ -153,7 +172,7 @@ const App: React.FC = () => {
                 <LeagueProvider>
                     <TimerProvider>
                         <HashRouter>
-                        <AppRoutes />
+                            <AppRoutes />
                         </HashRouter>
                     </TimerProvider>
                 </LeagueProvider>
