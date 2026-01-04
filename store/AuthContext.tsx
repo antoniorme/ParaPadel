@@ -67,8 +67,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [addLog]);
 
   useEffect(() => {
+    const handleUrlTokens = async () => {
+        const fullUrl = window.location.href;
+        if (fullUrl.includes('access_token=')) {
+            addLog("DETECTADOS TOKENS EN URL. PROCESANDO...");
+            
+            // Extraer tokens manualmente porque HashRouter rompe la detección automática
+            const params = new URLSearchParams(fullUrl.split('#')[1].split('?')[1] || fullUrl.split('?')[1]);
+            const accessToken = params.get('access_token');
+            const refreshToken = params.get('refresh_token');
+
+            if (accessToken && refreshToken) {
+                addLog("FORZANDO SET_SESSION...");
+                const { data, error } = await supabase.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: refreshToken
+                });
+                
+                if (error) {
+                    addLog(`ERROR SET_SESSION: ${error.message}`);
+                } else if (data.session) {
+                    addLog("¡SESIÓN FORZADA CON ÉXITO!");
+                    setRecoveryMode(true);
+                }
+            }
+        }
+    };
+
     const initSession = async () => {
         addLog("Consultando sesión actual...");
+        await handleUrlTokens(); // Intentar capturar tokens primero
+        
         try {
             const { data: { session: currentSession } } = await supabase.auth.getSession();
             if (currentSession) {
@@ -89,9 +118,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       addLog(`EVENTO_AUTH: ${event}`);
       
-      // DETECCIÓN EXPLÍCITA DE RECUPERACIÓN (Protocolo Supabase)
       if (event === 'PASSWORD_RECOVERY') {
-          addLog("MODO RECUPERACIÓN ACTIVADO POR SDK");
+          addLog("MODO RECUPERACIÓN ACTIVADO");
           setRecoveryMode(true);
       }
 
@@ -122,7 +150,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginWithDevBypass = (role: 'admin' | 'player' | 'superadmin') => {
-      // Fix: Changed 'targetRole' to 'role' as 'targetRole' was not defined.
       addLog(`BYPASS: ${role}`);
       setIsOfflineMode(true);
       const devUser = { id: `dev-${role}`, email: `${role}@sandbox.test` } as User;

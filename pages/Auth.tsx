@@ -22,7 +22,7 @@ const translateError = (msg: string) => {
     if (m.includes('at least 6 characters')) return "Mínimo 6 caracteres.";
     if (m.includes('invalid login credentials')) return "Email o clave incorrectos.";
     if (m.includes('user already registered')) return "El email ya existe.";
-    return "Error de seguridad. Reintenta.";
+    return msg || "Error de seguridad. Reintenta.";
 };
 
 const AuthPage: React.FC = () => {
@@ -41,25 +41,26 @@ const AuthPage: React.FC = () => {
   const captchaRef = useRef<HCaptcha>(null);
   const [showMonitor, setShowMonitor] = useState(true);
 
-  // CONTROL DE FLUJO POR EVENTOS (PROTOCOL B)
+  // DETECTOR DE SESIÓN PARA RECUPERACIÓN
   useEffect(() => {
-    const hasTokensInUrl = window.location.href.includes('access_token=');
+    const hasTokens = window.location.href.includes('access_token=');
     
-    // Si el SDK ha activado recoveryMode (vía evento PASSWORD_RECOVERY)
-    // o si detectamos tokens y ya tenemos sesión establecida
-    if (recoveryMode || (hasTokensInUrl && session)) {
-        addLog("SESIÓN DE RECUPERACIÓN LISTA. LIMPIANDO ENTORNO...");
+    // Si tenemos sesión Y hay tokens en la URL -> Forzar vista de actualización
+    if (session && hasTokens) {
+        addLog("SESIÓN DETECTADA CON TOKENS. ACTIVANDO FORMULARIO...");
         
-        // 1. Limpiamos la URL visualmente (sin recargar si es posible)
-        if (hasTokensInUrl) {
-            window.history.replaceState(null, '', window.location.pathname + '#/auth');
-        }
-
-        // 2. Activamos la vista de actualización
+        // Limpiar URL
+        window.history.replaceState(null, '', window.location.pathname + '#/auth');
+        
         setView('update-password');
-        setRecoveryMode(false); // Consumimos el estado
+        setRecoveryMode(false);
     }
-  }, [recoveryMode, session, addLog, setRecoveryMode]);
+    
+    // Fallback por si el SDK sí disparó el evento pero la URL ya estaba limpia
+    if (recoveryMode) {
+        setView('update-password');
+    }
+  }, [session, recoveryMode, addLog, setRecoveryMode]);
 
   const switchView = (newView: AuthView) => {
       setView(newView);
@@ -82,14 +83,13 @@ const AuthPage: React.FC = () => {
       }
 
       try {
-          // El usuario ya está autenticado por el Magic Link
           const { error: updateError } = await supabase.auth.updateUser({ 
               password: password 
           });
 
           if (updateError) throw updateError;
 
-          addLog("¡ÉXITO! REDIRIGIENDO AL PANEL...");
+          addLog("¡ÉXITO! REDIRIGIENDO...");
           setSuccessMsg("¡Contraseña actualizada!");
           
           setTimeout(() => {
@@ -139,7 +139,6 @@ const AuthPage: React.FC = () => {
       setError(null);
 
       try {
-          // redirectTo DEBE coincidir con el dominio permitido en Supabase
           const redirectTo = window.location.origin + window.location.pathname + '#/auth';
           addLog(`Solicitando reset...`);
           
@@ -157,8 +156,8 @@ const AuthPage: React.FC = () => {
       }
   };
 
-  // Pantalla de carga mientras el SDK procesa el token
-  const isVerifying = window.location.href.includes('access_token=') && !session;
+  // Solo mostramos el loader si hay tokens pero el AuthContext aún no ha forzado la sesión
+  const isWaitingForSession = window.location.href.includes('access_token=') && !session;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col p-6 overflow-x-hidden">
@@ -176,16 +175,16 @@ const AuthPage: React.FC = () => {
              view === 'recovery' ? 'Recuperar' : 
              view === 'update-password' ? 'Seguridad' : 'Registro'}
           </h1>
-          <p className="text-slate-400 text-sm italic">
-            {isVerifying ? 'Verificando enlace...' : 'Introduce tus datos'}
+          <p className="text-slate-400 text-sm">
+            {isWaitingForSession ? 'Sincronizando sesión...' : 'Introduce tus datos'}
           </p>
         </div>
 
-        {isVerifying ? (
+        {isWaitingForSession ? (
             <div className="bg-white border border-slate-100 p-10 rounded-[2rem] shadow-xl text-center space-y-4 animate-fade-in">
                 <Loader2 className="animate-spin text-[#575AF9] mx-auto" size={48}/>
-                <p className="text-slate-600 font-bold">Validando sesión...</p>
-                <p className="text-slate-400 text-xs">Esto solo tardará un momento.</p>
+                <p className="text-slate-600 font-bold">Validando acceso...</p>
+                <p className="text-slate-400 text-xs">Entrando en modo seguro.</p>
             </div>
         ) : (
             <>
@@ -207,7 +206,7 @@ const AuthPage: React.FC = () => {
                             <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl mb-4 flex items-center gap-3">
                                 <ShieldCheck className="text-indigo-600" size={24}/>
                                 <div className="text-[10px] font-bold text-indigo-800 leading-tight uppercase">
-                                    Enlace validado.<br/>Escribe tu nueva clave.
+                                    Sesión Validada.<br/>Establece tu nueva clave.
                                 </div>
                             </div>
                             <div className="relative">
@@ -301,14 +300,14 @@ const AuthPage: React.FC = () => {
                 <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]">
                     <Terminal size={14}/> Consola de Identidad
                 </div>
-                <Activity size={14} className={isVerifying || loading ? "animate-pulse" : ""}/>
+                <Activity size={14} className={isWaitingForSession || loading ? "animate-pulse" : ""}/>
             </button>
             
             {showMonitor && (
                 <div className="p-5 font-mono text-[10px] space-y-1.5 h-40 overflow-y-auto custom-scrollbar leading-relaxed">
                     {authLogs.map((log, i) => {
                         const isError = log.includes('!!!') || log.includes('ERROR') || log.includes('FALLO') || log.includes('TIMEOUT');
-                        const isSuccess = log.includes('MODO RECUPERACIÓN') || log.includes('ÉXITO');
+                        const isSuccess = log.includes('¡SESIÓN FORZADA') || log.includes('ÉXITO');
                         return (
                             <div key={i} className={`${isError ? 'text-rose-400' : isSuccess ? 'text-emerald-400' : 'text-slate-500'} flex gap-2`}>
                                 <span className="opacity-30 shrink-0">{i + 1}</span>
