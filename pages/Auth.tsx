@@ -144,13 +144,31 @@ const AuthPage: React.FC = () => {
           return;
       }
 
+      // MONITOR DE SESIÓN PREVIO AL ENVÍO
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (!currentSession) {
+          addLog("ERROR: No se detecta sesión activa antes de actualizar.");
+          setError("La sesión ha expirado. Solicita un nuevo enlace.");
+          setLoading(false);
+          return;
+      }
+      addLog(`SESIÓN DETECTADA PARA: ${currentSession.user.email}`);
+
+      // PROMESAS CON TIMEOUT PARA EVITAR "CUELGUES"
+      const updatePromise = supabase.auth.updateUser({ 
+          password: password 
+      }, { 
+          captchaToken: captchaToken || undefined 
+      });
+
+      const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("TIMEOUT: Supabase no responde.")), 15000)
+      );
+
       try {
           addLog("Llamando a supabase.auth.updateUser...");
-          const { error: updateError } = await supabase.auth.updateUser({ 
-              password: password 
-          }, { 
-              captchaToken: captchaToken || undefined 
-          });
+          const result = await Promise.race([updatePromise, timeoutPromise]) as any;
+          const { error: updateError } = result;
 
           if (updateError) {
               addLog(`RESPUESTA SUPABASE (ERROR): ${updateError.message}`);
@@ -291,7 +309,6 @@ const AuthPage: React.FC = () => {
 
                 <div className="space-y-4">
                     {view === 'update-password' ? (
-                        /* VISTA DE NUEVA CONTRASEÑA */
                         <form onSubmit={handleUpdatePassword} className="space-y-4">
                             <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl mb-4 flex items-center gap-3">
                                 <ShieldCheck className="text-indigo-600" size={24}/>
@@ -402,7 +419,7 @@ const AuthPage: React.FC = () => {
             {showMonitor && (
                 <div className="p-5 font-mono text-[10px] space-y-1.5 h-40 overflow-y-auto custom-scrollbar leading-relaxed">
                     {authLogs.map((log, i) => {
-                        const isError = log.includes('!!!') || log.includes('ERROR') || log.includes('FALLO');
+                        const isError = log.includes('!!!') || log.includes('ERROR') || log.includes('FALLO') || log.includes('TIMEOUT');
                         const isSuccess = log.includes('CONFIRMADA') || log.includes('ÉXITO');
                         return (
                             <div key={i} className={`${isError ? 'text-rose-400' : isSuccess ? 'text-emerald-400' : 'text-slate-500'} flex gap-2`}>
