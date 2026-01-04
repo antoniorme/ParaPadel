@@ -45,7 +45,7 @@ const AuthPage: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [validatingRecovery, setValidatingRecovery] = useState(false); // Estado de carga interno
+  const [validatingRecovery, setValidatingRecovery] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
@@ -56,8 +56,6 @@ const AuthPage: React.FC = () => {
   useEffect(() => {
     const handleUrlSession = async () => {
         const fullUrl = window.location.href;
-        
-        // Extraer tokens manualmente del fragmento (incluso si hay varios #)
         const parts = fullUrl.split('#');
         const lastPart = parts[parts.length - 1] || '';
         const params = new URLSearchParams(lastPart);
@@ -67,29 +65,40 @@ const AuthPage: React.FC = () => {
         const type = params.get('type') || searchParams.get('type');
 
         if (accessToken && (type === 'recovery' || fullUrl.includes('type=recovery'))) {
-            addLog("MODO RECOVERY DETECTADO.");
-            setView('update-password');
+            // Seteamos la vista inmediatamente
+            if (view !== 'update-password') {
+                setView('update-password');
+                addLog("CAMBIANDO A VISTA DE NUEVA CLAVE.");
+            }
             
-            // Si el componente acaba de montar y detecta tokens, mostramos carga interna
+            // LÓGICA DE VALIDACIÓN
             if (!session) {
-                setValidatingRecovery(true);
-                addLog("Validando credenciales de recuperación...");
-                
-                try {
-                    const { error: setSessionError } = await supabase.auth.setSession({
-                        access_token: accessToken,
-                        refresh_token: refreshToken || '',
-                    });
+                if (!validatingRecovery) {
+                    setValidatingRecovery(true);
+                    addLog("Validando credenciales de recuperación...");
                     
-                    if (setSessionError) {
-                        addLog(`ERROR SESIÓN: ${setSessionError.message}`);
-                        setError("El enlace de recuperación no es válido o ha expirado.");
-                    } else {
-                        addLog("SESIÓN INYECTADA CON ÉXITO.");
+                    try {
+                        const { error: setSessionError } = await supabase.auth.setSession({
+                            access_token: accessToken,
+                            refresh_token: refreshToken || '',
+                        });
+                        
+                        if (setSessionError) {
+                            addLog(`ERROR SESIÓN: ${setSessionError.message}`);
+                            setError("El enlace de recuperación no es válido o ha expirado.");
+                            setValidatingRecovery(false);
+                        } else {
+                            addLog("SESIÓN INYECTADA. ESPERANDO CONTEXTO...");
+                        }
+                    } catch (e: any) {
+                        addLog(`FALLO CRÍTICO: ${e.message}`);
+                        setValidatingRecovery(false);
                     }
-                } catch (e: any) {
-                    addLog(`FALLO CRÍTICO: ${e.message}`);
-                } finally {
+                }
+            } else {
+                // SI YA HAY SESIÓN (porque Supabase la detectó o la inyectamos arriba)
+                if (validatingRecovery) {
+                    addLog("SESIÓN CONFIRMADA. LISTO PARA CAMBIAR CLAVE.");
                     setValidatingRecovery(false);
                 }
             }
@@ -97,7 +106,7 @@ const AuthPage: React.FC = () => {
     };
 
     handleUrlSession();
-  }, [session, searchParams, addLog]);
+  }, [session, searchParams, addLog, view, validatingRecovery]);
 
   const switchView = (newView: AuthView) => {
       setView(newView);
@@ -134,7 +143,7 @@ const AuthPage: React.FC = () => {
 
           if (updateError) throw updateError;
 
-          addLog("CONTRASEÑA CAMBIADA.");
+          addLog("CONTRASEÑA CAMBIADA CON ÉXITO.");
           setSuccessMsg("¡Contraseña actualizada! Entrando...");
           
           setTimeout(() => {
@@ -245,11 +254,10 @@ const AuthPage: React.FC = () => {
         </div>
 
         {validatingRecovery ? (
-            /* VISTA DE CARGA INTERNA PARA RECOVERY */
             <div className="bg-white border border-slate-100 p-8 rounded-[2rem] shadow-xl text-center space-y-4 animate-fade-in">
                 <Loader2 className="animate-spin text-[#575AF9] mx-auto" size={40}/>
                 <p className="text-slate-600 font-bold">Verificando enlace...</p>
-                <p className="text-slate-400 text-xs">Esto solo tomará un segundo.</p>
+                <p className="text-slate-400 text-xs">Un momento por favor.</p>
             </div>
         ) : (
             <>
@@ -267,7 +275,6 @@ const AuthPage: React.FC = () => {
 
                 <div className="space-y-4">
                     {view === 'update-password' ? (
-                        /* SOLO SE MUESTRA SI NO ESTÁ VALIDANDO Y NO HAY ERROR CRÍTICO */
                         !error && (
                             <form onSubmit={handleUpdatePassword} className="space-y-4">
                                 <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl mb-4 flex items-center gap-3">
@@ -366,7 +373,6 @@ const AuthPage: React.FC = () => {
             </>
         )}
 
-        {/* MONITOR SIEMPRE VISIBLE PARA CONTROL */}
         <div className="mt-12 bg-[#0A0A0B] rounded-3xl border border-white/5 shadow-2xl overflow-hidden animate-slide-up">
             <button 
                 onClick={() => setShowMonitor(!showMonitor)}
@@ -382,7 +388,7 @@ const AuthPage: React.FC = () => {
                 <div className="p-5 font-mono text-[10px] space-y-1.5 h-40 overflow-y-auto custom-scrollbar leading-relaxed">
                     {authLogs.map((log, i) => {
                         const isError = log.includes('!!!') || log.includes('ERROR');
-                        const isSuccess = log.includes('OK') || log.includes('ÉXITO');
+                        const isSuccess = log.includes('CONFIRMADA') || log.includes('ÉXITO');
                         return (
                             <div key={i} className={`${isError ? 'text-rose-400' : isSuccess ? 'text-emerald-400' : 'text-slate-500'} flex gap-2`}>
                                 <span className="opacity-30 shrink-0">{i + 1}</span>
