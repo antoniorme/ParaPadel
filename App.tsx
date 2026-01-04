@@ -43,7 +43,6 @@ import PlayerTournaments from './pages/player/PlayerTournaments';
 import TournamentBrowser from './pages/player/TournamentBrowser';
 import PlayerAppProfile from './pages/player/PlayerProfile';
 
-// DETECCIÓN REFINADA: Solo es DEV si es localhost o dominios de sandbox conocidos
 const hostname = window.location.hostname;
 const IS_DEV_ENV = 
   hostname === 'localhost' || 
@@ -60,6 +59,12 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
   if (loading) return null; 
   if (!user) return <Navigate to="/" replace />;
   
+  // EXCEPCIÓN DE RECUPERACIÓN: Si estamos en modo recovery, no bloqueamos la ruta /auth
+  const fullUrl = window.location.href;
+  if (fullUrl.includes('type=recovery') || fullUrl.includes('access_token=')) {
+      return <>{children}</>;
+  }
+
   if (role === 'pending' && location.pathname !== '/pending') return <Navigate to="/pending" replace />;
   if (requireSuperAdmin && role !== 'superadmin') return <Navigate to="/dashboard" replace />;
   if (requireAdmin && role !== 'admin' && role !== 'superadmin') return <Navigate to="/p/dashboard" replace />;
@@ -72,10 +77,20 @@ const AppRoutes = () => {
   const { user, role, loading, authStatus, authLogs, loginWithDevBypass, signOut } = useAuth();
   const location = useLocation();
 
+  const fullUrl = window.location.href;
+  const isRecoveryMode = fullUrl.includes('type=recovery') || fullUrl.includes('access_token=');
   const isAuthPage = location.pathname.includes('/auth');
 
+  // Si estamos en modo recuperación, forzamos AuthPage ignorando el estado de carga del AuthContext
+  if (isRecoveryMode) {
+      return (
+          <Routes>
+              <Route path="*" element={<AuthPage />} />
+          </Routes>
+      );
+  }
+
   if (loading && !isAuthPage) {
-    // En producción (no dev), mostramos carga limpia
     if (!IS_DEV_ENV) {
         return (
             <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
@@ -89,7 +104,6 @@ const AppRoutes = () => {
         );
     }
 
-    // En desarrollo/sandbox, monitor detallado
     return (
       <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center p-6 font-mono overflow-hidden">
         <div className="w-full max-w-md space-y-8">

@@ -16,7 +16,6 @@ try {
     }
 } catch (e) {}
 
-// DETECCIÓN REFINADA (Sincronizada con App.tsx)
 const hostname = window.location.hostname;
 const IS_DEV_ENV = 
   hostname === 'localhost' || 
@@ -30,8 +29,8 @@ const translateError = (msg: string) => {
     if (msg.includes('at least 6 characters')) return "La contraseña debe tener al menos 6 caracteres.";
     if (msg.includes('Invalid login credentials')) return "Email o contraseña incorrectos.";
     if (msg.includes('User already registered')) return "Este email ya está registrado.";
-    if (msg.includes('captcha') || msg.includes('Captcha')) return "Fallo en verificación de seguridad.";
-    if (msg.includes('refresh_token_not_found')) return "El enlace ha caducado o ya ha sido usado.";
+    if (msg.includes('captcha') || msg.includes('Captcha')) return "Error de verificación de seguridad. Por favor, completa el captcha.";
+    if (msg.includes('refresh_token_not_found')) return "El enlace es inválido o ha caducado. Solicita uno nuevo.";
     return msg;
 };
 
@@ -52,26 +51,23 @@ const AuthPage: React.FC = () => {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
 
-  // LÓGICA DE DETECCIÓN DE RECUPERACIÓN MEJORADA
+  // DETECCIÓN CRÍTICA: Miramos la URL completa para forzar la vista de recuperación
   useEffect(() => {
     const fullUrl = window.location.href;
-    const hasRecoveryParams = 
+    const isRecoveryMode = 
         fullUrl.includes('type=recovery') || 
-        fullUrl.includes('access_token=') || 
         fullUrl.includes('recovery_verified=true') ||
-        searchParams.get('type') === 'recovery';
+        fullUrl.includes('access_token=');
 
-    if (hasRecoveryParams) {
-        // Si detectamos parámetros de recuperación, FORZAMOS la vista de actualizar contraseña
+    if (isRecoveryMode) {
         if (view !== 'update-password') {
-            console.log("[AUTH] Modo recuperación detectado por URL");
             setView('update-password');
         }
     } else if (session && view !== 'update-password') {
-        // Solo redirigimos al dashboard si NO estamos en modo recuperación
+        // Solo redirigir si NO estamos en proceso de recuperación
         navigate('/dashboard');
     }
-  }, [session, searchParams, navigate, view, location]);
+  }, [session, view, location, navigate]);
 
   const switchView = (newView: AuthView) => {
       setView(newView);
@@ -93,18 +89,18 @@ const AuthPage: React.FC = () => {
       }
 
       try {
-          // Supabase requiere que el usuario esté "mínimamente autenticado" por el token del enlace
           const { error: updateError } = await supabase.auth.updateUser({ 
-              password: password,
+              password: password 
           });
 
           if (updateError) throw updateError;
 
-          setSuccessMsg("¡Contraseña actualizada! Entrando...");
-          setTimeout(() => { 
-              // Limpiamos la URL de los hashes de Supabase para evitar bucles
-              window.location.hash = '#/dashboard';
-              window.location.reload(); 
+          setSuccessMsg("¡Contraseña actualizada con éxito!");
+          
+          // Limpiamos la URL y redirigimos
+          setTimeout(() => {
+              window.location.href = window.location.origin + window.location.pathname + '#/dashboard';
+              window.location.reload();
           }, 1500);
 
       } catch (err: any) {
@@ -155,19 +151,31 @@ const AuthPage: React.FC = () => {
       e.preventDefault();
       setLoading(true);
       setError(null);
+
+      if (!IS_DEV_ENV && HCAPTCHA_SITE_TOKEN && !captchaToken) {
+          setError("Por favor, completa el captcha para enviar el email.");
+          setLoading(false);
+          return;
+      }
+
       try {
-          // Aseguramos que el redirect URL sea el correcto para el HashRouter
-          const redirectTo = `${window.location.origin}/#/auth?type=recovery`;
+          // El redirect debe incluir el hash de la ruta /auth
+          const redirectTo = window.location.origin + window.location.pathname + '#/auth?type=recovery';
+          
           const { error } = await supabase.auth.resetPasswordForEmail(email, { 
               redirectTo, 
               captchaToken: captchaToken || undefined 
           });
+          
           if (error) throw error;
-          setSuccessMsg("¡Enlace enviado! Revisa tu correo.");
+          
+          setSuccessMsg("¡Enlace enviado! Revisa tu bandeja de entrada.");
+          setCaptchaToken(null);
+          if(captchaRef.current) captchaRef.current.resetCaptcha();
       } catch (err: any) {
           setError(translateError(err.message || "Error al solicitar recuperación."));
-          if(captchaRef.current) captchaRef.current.resetCaptcha();
           setCaptchaToken(null);
+          if(captchaRef.current) captchaRef.current.resetCaptcha();
       } finally {
           setLoading(false);
       }
@@ -231,7 +239,7 @@ const AuthPage: React.FC = () => {
                         <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
                         <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Tu email"/>
                     </div>
-                    {HCAPTCHA_SITE_TOKEN && !IS_DEV_ENV && (
+                    {HCAPTCHA_SITE_TOKEN && (
                         <div className="flex justify-center my-2 scale-90 min-h-[78px]">
                             <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
                         </div>
@@ -270,7 +278,7 @@ const AuthPage: React.FC = () => {
                     </div>
                 )}
 
-                {HCAPTCHA_SITE_TOKEN && !IS_DEV_ENV && (
+                {HCAPTCHA_SITE_TOKEN && (
                     <div className="flex justify-center my-2 scale-90 min-h-[78px]">
                         <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
                     </div>
@@ -288,7 +296,6 @@ const AuthPage: React.FC = () => {
                     {view === 'login' ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
                 </button>
 
-                {/* DEV TOOLS - Solo visible en modo desarrollo/google */}
                 {IS_DEV_ENV && (
                     <div className="bg-indigo-500/5 p-6 rounded-3xl border border-indigo-500/10 space-y-4 shadow-inner animate-fade-in">
                         <div className="flex items-center gap-2 text-indigo-400 font-black text-[10px] uppercase tracking-[0.2em] justify-center">
