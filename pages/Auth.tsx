@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
 import { Trophy, Loader2, ArrowLeft, Mail, Lock, Key, Send, Eye, EyeOff, ShieldAlert, CheckCircle2, Terminal, Globe, User, Shield, Crown } from 'lucide-react';
@@ -30,14 +30,15 @@ const translateError = (msg: string) => {
     if (msg.includes('at least 6 characters')) return "La contraseña debe tener al menos 6 caracteres.";
     if (msg.includes('Invalid login credentials')) return "Email o contraseña incorrectos.";
     if (msg.includes('User already registered')) return "Este email ya está registrado.";
-    if (msg.includes('captcha') || msg.includes('Captcha')) return "Fallo en verificación de seguridad. Si estás en modo local, asegúrate de que el Captcha esté configurado para tu dominio actual en Supabase.";
-    if (msg.includes('refresh_token_not_found')) return "La sesión ha caducado. Solicita un nuevo enlace.";
+    if (msg.includes('captcha') || msg.includes('Captcha')) return "Fallo en verificación de seguridad.";
+    if (msg.includes('refresh_token_not_found')) return "El enlace ha caducado o ya ha sido usado.";
     return msg;
 };
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
-  const { session, user: authUser, checkUserRole, loginWithDevBypass } = useAuth();
+  const location = useLocation();
+  const { session, user: authUser, loginWithDevBypass } = useAuth();
   const [searchParams] = useSearchParams();
   
   const [view, setView] = useState<AuthView>('login');
@@ -51,18 +52,26 @@ const AuthPage: React.FC = () => {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
 
+  // LÓGICA DE DETECCIÓN DE RECUPERACIÓN MEJORADA
   useEffect(() => {
-    const url = window.location.href;
-    const isRecovery = url.includes('type=recovery') || url.includes('recovery_verified') || searchParams.get('type') === 'recovery' || url.includes('access_token=');
-    
-    if (session && isRecovery) {
+    const fullUrl = window.location.href;
+    const hasRecoveryParams = 
+        fullUrl.includes('type=recovery') || 
+        fullUrl.includes('access_token=') || 
+        fullUrl.includes('recovery_verified=true') ||
+        searchParams.get('type') === 'recovery';
+
+    if (hasRecoveryParams) {
+        // Si detectamos parámetros de recuperación, FORZAMOS la vista de actualizar contraseña
         if (view !== 'update-password') {
+            console.log("[AUTH] Modo recuperación detectado por URL");
             setView('update-password');
         }
     } else if (session && view !== 'update-password') {
+        // Solo redirigimos al dashboard si NO estamos en modo recuperación
         navigate('/dashboard');
     }
-  }, [session, searchParams, navigate, view]);
+  }, [session, searchParams, navigate, view, location]);
 
   const switchView = (newView: AuthView) => {
       setView(newView);
@@ -83,28 +92,23 @@ const AuthPage: React.FC = () => {
           return;
       }
 
-      if (!IS_DEV_ENV && HCAPTCHA_SITE_TOKEN && !captchaToken) {
-          setError("Por seguridad, completa el captcha.");
-          setLoading(false);
-          return;
-      }
-
       try {
+          // Supabase requiere que el usuario esté "mínimamente autenticado" por el token del enlace
           const { error: updateError } = await supabase.auth.updateUser({ 
               password: password,
-          }, { 
-              captchaToken: captchaToken || undefined 
           });
 
           if (updateError) throw updateError;
 
-          setSuccessMsg("¡Contraseña actualizada con éxito!");
-          setTimeout(() => { navigate('/dashboard'); }, 1500);
+          setSuccessMsg("¡Contraseña actualizada! Entrando...");
+          setTimeout(() => { 
+              // Limpiamos la URL de los hashes de Supabase para evitar bucles
+              window.location.hash = '#/dashboard';
+              window.location.reload(); 
+          }, 1500);
 
       } catch (err: any) {
           setError(translateError(err.message));
-          if(captchaRef.current) captchaRef.current.resetCaptcha();
-          setCaptchaToken(null);
           setLoading(false);
       }
   };
@@ -115,7 +119,7 @@ const AuthPage: React.FC = () => {
     setError(null);
 
     if (!IS_DEV_ENV && HCAPTCHA_SITE_TOKEN && !captchaToken) {
-        setError("Por favor, marca el cuadro de 'No soy un robot'.");
+        setError("Por favor, completa el captcha.");
         setLoading(false);
         return;
     }
@@ -152,6 +156,7 @@ const AuthPage: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
+          // Aseguramos que el redirect URL sea el correcto para el HashRouter
           const redirectTo = `${window.location.origin}/#/auth?type=recovery`;
           const { error } = await supabase.auth.resetPasswordForEmail(email, { 
               redirectTo, 
@@ -185,7 +190,7 @@ const AuthPage: React.FC = () => {
              view === 'update-password' ? 'Nueva Clave' : 'Registro'}
           </h1>
           <p className="text-slate-400 text-sm">
-            {view === 'update-password' ? 'Define tu nueva contraseña de acceso' : 'Introduce tus datos'}
+            {view === 'update-password' ? 'Introduce tu nueva contraseña de acceso' : 'Introduce tus datos'}
           </p>
         </div>
 
@@ -206,7 +211,7 @@ const AuthPage: React.FC = () => {
                 <form onSubmit={handleUpdatePassword} className="space-y-4">
                     <div className="relative">
                         <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                        <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Nueva Contraseña"/>
+                        <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Nueva Contraseña" autoFocus/>
                         <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400">
                             {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
                         </button>
@@ -216,14 +221,8 @@ const AuthPage: React.FC = () => {
                         <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-bold" placeholder="Confirmar Nueva Contraseña"/>
                     </div>
 
-                    {HCAPTCHA_SITE_TOKEN && (
-                        <div className="flex justify-center my-2 scale-90 min-h-[78px]">
-                            <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={(t) => setCaptchaToken(t)} ref={captchaRef}/>
-                        </div>
-                    )}
-
                     <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 text-lg active:scale-95 transition-all">
-                        {loading ? <Loader2 className="animate-spin" size={20} /> : <>ACTUALIZAR Y ENTRAR <Key size={20}/></>}
+                        {loading ? <Loader2 className="animate-spin" size={20} /> : <>CAMBIAR CONTRASEÑA <Key size={20}/></>}
                     </button>
                 </form>
             ) : view === 'recovery' ? (
@@ -232,7 +231,7 @@ const AuthPage: React.FC = () => {
                         <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
                         <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Tu email"/>
                     </div>
-                    {HCAPTCHA_SITE_TOKEN && (
+                    {HCAPTCHA_SITE_TOKEN && !IS_DEV_ENV && (
                         <div className="flex justify-center my-2 scale-90 min-h-[78px]">
                             <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
                         </div>
@@ -271,7 +270,7 @@ const AuthPage: React.FC = () => {
                     </div>
                 )}
 
-                {HCAPTCHA_SITE_TOKEN && (
+                {HCAPTCHA_SITE_TOKEN && !IS_DEV_ENV && (
                     <div className="flex justify-center my-2 scale-90 min-h-[78px]">
                         <HCaptcha sitekey={HCAPTCHA_SITE_TOKEN} onVerify={setCaptchaToken} ref={captchaRef}/>
                     </div>
