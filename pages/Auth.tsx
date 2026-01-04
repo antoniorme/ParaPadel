@@ -63,6 +63,8 @@ const AuthPage: React.FC = () => {
   useEffect(() => {
     const handleUrlSession = async () => {
         const fullUrl = window.location.href;
+        if (!fullUrl.includes('access_token')) return;
+
         const parts = fullUrl.split('#');
         const lastPart = parts[parts.length - 1] || '';
         const params = new URLSearchParams(lastPart);
@@ -74,35 +76,32 @@ const AuthPage: React.FC = () => {
         if (accessToken && (type === 'recovery' || fullUrl.includes('type=recovery'))) {
             if (view !== 'update-password') {
                 setView('update-password');
-                addLog("CAMBIANDO A VISTA DE NUEVA CLAVE.");
+                addLog("DETECTADO: Tokens de recuperación en URL.");
             }
             
-            if (!session) {
-                if (!validatingRecovery) {
-                    setValidatingRecovery(true);
-                    addLog("Validando credenciales de recuperación...");
+            if (!session && !validatingRecovery) {
+                setValidatingRecovery(true);
+                addLog("Validando credenciales de recuperación...");
+                
+                try {
+                    const { error: setSessionError } = await supabase.auth.setSession({
+                        access_token: accessToken,
+                        refresh_token: refreshToken || '',
+                    });
                     
-                    try {
-                        const { error: setSessionError } = await supabase.auth.setSession({
-                            access_token: accessToken,
-                            refresh_token: refreshToken || '',
-                        });
-                        
-                        if (setSessionError) {
-                            addLog(`ERROR SESIÓN: ${setSessionError.message}`);
-                            setError("El enlace de recuperación no es válido o ha expirado.");
-                            setValidatingRecovery(false);
-                        } else {
-                            addLog("SESIÓN INYECTADA. ESPERANDO CONTEXTO...");
-                        }
-                    } catch (e: any) {
-                        addLog(`FALLO CRÍTICO: ${e.message}`);
+                    if (setSessionError) {
+                        addLog(`ERROR SESIÓN: ${setSessionError.message}`);
+                        setError("El enlace ha expirado.");
+                        setValidatingRecovery(false);
+                    } else {
+                        addLog("SESIÓN INYECTADA CON ÉXITO.");
+                        // LIMPIEZA CRÍTICA DE URL PARA EVITAR CONFLICTOS
+                        addLog("Limpiando hash de la URL...");
+                        navigate('/auth', { replace: true });
                         setValidatingRecovery(false);
                     }
-                }
-            } else {
-                if (validatingRecovery) {
-                    addLog("SESIÓN CONFIRMADA. LISTO PARA CAMBIAR CLAVE.");
+                } catch (e: any) {
+                    addLog(`FALLO CRÍTICO: ${e.message}`);
                     setValidatingRecovery(false);
                 }
             }
@@ -110,7 +109,7 @@ const AuthPage: React.FC = () => {
     };
 
     handleUrlSession();
-  }, [session, searchParams, addLog, view, validatingRecovery]);
+  }, [session, searchParams, addLog, view, validatingRecovery, navigate]);
 
   const switchView = (newView: AuthView) => {
       setView(newView);
@@ -138,33 +137,30 @@ const AuthPage: React.FC = () => {
           return;
       }
 
-      if (!IS_DEV_ENV && HCAPTCHA_SITE_TOKEN && !captchaToken) {
-          setError("Por favor, completa el captcha.");
-          setLoading(false);
-          return;
-      }
-
-      // LLAMADA ATÓMICA CON TIMEOUT DE 20 SEGUNDOS
-      const updatePromise = supabase.auth.updateUser({ 
-          password: password 
-      }, { 
-          captchaToken: captchaToken || undefined 
-      });
-
-      const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("TIMEOUT_ERROR")), 20000)
-      );
-
       try {
-          addLog("EJECUTANDO LLAMADA A SUPABASE...");
+          // VERIFICACIÓN DE CANAL: ¿Realmente el SDK puede hablar con el servidor?
+          addLog("Verificando integridad de usuario...");
+          const { data: userData, error: userError } = await supabase.auth.getUser();
+          
+          if (userError || !userData.user) {
+              addLog(`ERROR IDENTIDAD: ${userError?.message || 'No hay usuario'}`);
+              throw new Error("La sesión no es válida. Solicita un nuevo enlace.");
+          }
+          addLog(`USUARIO CONFIRMADO: ${userData.user.email}`);
+
+          // LLAMADA ATÓMICA CON TIMEOUT
+          addLog("Llamando a updateUser...");
+          
+          const updatePromise = supabase.auth.updateUser({ password: password });
+          const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error("TIMEOUT_AUTH")), 15000)
+          );
+
           const result = await Promise.race([updatePromise, timeoutPromise]) as any;
-          
-          if (!result) throw new Error("El servidor devolvió una respuesta vacía.");
-          
           const { error: updateError } = result;
 
           if (updateError) {
-              addLog(`ERROR DESDE SUPABASE: ${updateError.message}`);
+              addLog(`ERROR SUPABASE: ${updateError.message}`);
               throw updateError;
           }
 
@@ -177,11 +173,11 @@ const AuthPage: React.FC = () => {
           }, 1500);
 
       } catch (err: any) {
-          if (err.message === "TIMEOUT_ERROR") {
-              addLog("ERROR: Tiempo de espera agotado (20s).");
-              setError("La conexión con el servidor ha tardado demasiado. Inténtalo de nuevo.");
+          if (err.message === "TIMEOUT_AUTH") {
+              addLog("ERROR: Tiempo de espera agotado.");
+              setError("El servidor de seguridad no responde. Reintenta en unos segundos.");
           } else {
-              addLog(`FALLO EN ACTUALIZACIÓN: ${err.message}`);
+              addLog(`FALLO: ${err.message}`);
               setError(translateError(err.message));
           }
           if(captchaRef.current) captchaRef.current.resetCaptcha();
