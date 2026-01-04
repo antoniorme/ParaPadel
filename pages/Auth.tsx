@@ -124,7 +124,7 @@ const AuthPage: React.FC = () => {
       e.preventDefault();
       setLoading(true);
       setError(null);
-      addLog("Actualizando contraseña...");
+      addLog("INICIANDO PROCESO DE ACTUALIZACIÓN...");
 
       if (password !== confirmPassword) {
           setError("Las contraseñas no coinciden.");
@@ -144,17 +144,7 @@ const AuthPage: React.FC = () => {
           return;
       }
 
-      // MONITOR DE SESIÓN PREVIO AL ENVÍO
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      if (!currentSession) {
-          addLog("ERROR: No se detecta sesión activa antes de actualizar.");
-          setError("La sesión ha expirado. Solicita un nuevo enlace.");
-          setLoading(false);
-          return;
-      }
-      addLog(`SESIÓN DETECTADA PARA: ${currentSession.user.email}`);
-
-      // PROMESAS CON TIMEOUT PARA EVITAR "CUELGUES"
+      // LLAMADA ATÓMICA CON TIMEOUT DE 20 SEGUNDOS
       const updatePromise = supabase.auth.updateUser({ 
           password: password 
       }, { 
@@ -162,20 +152,23 @@ const AuthPage: React.FC = () => {
       });
 
       const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("TIMEOUT: Supabase no responde.")), 15000)
+          setTimeout(() => reject(new Error("TIMEOUT_ERROR")), 20000)
       );
 
       try {
-          addLog("Llamando a supabase.auth.updateUser...");
+          addLog("EJECUTANDO LLAMADA A SUPABASE...");
           const result = await Promise.race([updatePromise, timeoutPromise]) as any;
+          
+          if (!result) throw new Error("El servidor devolvió una respuesta vacía.");
+          
           const { error: updateError } = result;
 
           if (updateError) {
-              addLog(`RESPUESTA SUPABASE (ERROR): ${updateError.message}`);
+              addLog(`ERROR DESDE SUPABASE: ${updateError.message}`);
               throw updateError;
           }
 
-          addLog("CONTRASEÑA CAMBIADA CON ÉXITO.");
+          addLog("¡CONTRASEÑA CAMBIADA CON ÉXITO!");
           setSuccessMsg("¡Contraseña actualizada! Entrando...");
           
           setTimeout(() => {
@@ -184,13 +177,18 @@ const AuthPage: React.FC = () => {
           }, 1500);
 
       } catch (err: any) {
-          addLog(`FALLO EN UPDATE: ${err.message}`);
-          setError(translateError(err.message));
+          if (err.message === "TIMEOUT_ERROR") {
+              addLog("ERROR: Tiempo de espera agotado (20s).");
+              setError("La conexión con el servidor ha tardado demasiado. Inténtalo de nuevo.");
+          } else {
+              addLog(`FALLO EN ACTUALIZACIÓN: ${err.message}`);
+              setError(translateError(err.message));
+          }
           if(captchaRef.current) captchaRef.current.resetCaptcha();
           setCaptchaToken(null);
       } finally {
           setLoading(false);
-          addLog("Operación finalizada.");
+          addLog("PROCESO FINALIZADO.");
       }
   };
 
