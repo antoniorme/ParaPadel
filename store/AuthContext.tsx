@@ -51,7 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initSession = async () => {
         const fullUrl = window.location.href;
         
-        // Extractor de parámetros de URL ultra-robusto
+        // Extractor de parámetros ultra-agresivo que ignora los '#' dobles
         const getRawParam = (key: string) => {
             const regex = new RegExp(`[#?&]${key}=([^&]*)`);
             const match = fullUrl.match(regex);
@@ -61,9 +61,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const accessToken = getRawParam('access_token');
         const refreshToken = getRawParam('refresh_token');
 
-        // SI HAY TOKENS EN EL LINK (RECOVERY O MAGIC LINK)
+        // SI DETECTAMOS TOKENS EN EL LINK DE REUPERACIÓN/MAGIC LINK
         if (accessToken && refreshToken) {
             try {
+                // Autenticamos inmediatamente
                 const { data, error } = await supabase.auth.setSession({
                     access_token: accessToken,
                     refresh_token: refreshToken
@@ -75,22 +76,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     const r = await checkUserRole(data.session.user.id, data.session.user.email);
                     setRole(r);
                     
-                    // REESCRITURA TOTAL: Limpiamos la URL y entramos a la app
+                    // LIMPIEZA ABSOLUTA: Reescribimos la barra de direcciones 
+                    // y entramos al Dashboard sin dejar rastro del link
                     window.location.replace('/#/');
                     return; 
                 }
             } catch (e) {
-                console.error("Auth Link Error", e);
+                console.error("Error en entrada por link:", e);
             }
         }
 
-        // CARGA NORMAL DE SESIÓN
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        if (currentSession) {
-            setSession(currentSession);
-            setUser(currentSession.user);
-            const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
-            setRole(r);
+        // CARGA NORMAL (Si no hay tokens en la URL)
+        try {
+            const { data: { session: currentSession } } = await supabase.auth.getSession();
+            if (currentSession) {
+                setSession(currentSession);
+                setUser(currentSession.user);
+                const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
+                setRole(r);
+            }
+        } catch (error: any) {
+            console.error("Error en carga de sesión:", error);
         }
         setLoading(false);
     };
