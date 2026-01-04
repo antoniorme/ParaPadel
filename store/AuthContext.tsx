@@ -16,6 +16,8 @@ interface AuthContextType {
   checkUserRole: (uid: string, email?: string) => Promise<UserRole>;
   loginWithDevBypass: (role: 'admin' | 'player' | 'superadmin') => void;
   addLog: (msg: string) => void;
+  recoveryMode: boolean;
+  setRecoveryMode: (val: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -30,6 +32,8 @@ const AuthContext = createContext<AuthContextType>({
   checkUserRole: async () => null,
   loginWithDevBypass: () => {},
   addLog: () => {},
+  recoveryMode: false,
+  setRecoveryMode: () => {},
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -40,6 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [authStatus, setAuthStatus] = useState('Monitor Activo');
   const [authLogs, setAuthLogs] = useState<string[]>([]);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [recoveryMode, setRecoveryMode] = useState(false);
 
   const addLog = useCallback((msg: string) => {
       console.log(`[AUTH-SYS] ${msg}`);
@@ -48,55 +53,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkUserRole = useCallback(async (uid: string, userEmail?: string): Promise<UserRole> => {
       if (!uid) return null;
-      
       addLog(`CHECK ROL: ${userEmail}`);
-      
-      if (userEmail === 'antoniorme@gmail.com') {
-          return 'superadmin';
-      }
-
+      if (userEmail === 'antoniorme@gmail.com') return 'superadmin';
       try {
           const { data: saData } = await supabase.from('superadmins').select('id').eq('email', userEmail).maybeSingle();
           if (saData) return 'superadmin';
       } catch (e) {}
-      
       try {
           const { data: clubData } = await supabase.from('clubs').select('id').eq('owner_id', uid).maybeSingle();
           if (clubData) return 'admin';
       } catch (e) {}
-
       return 'player';
   }, [addLog]);
 
   useEffect(() => {
-    // LOG DE URL INICIAL PARA DEBUG
-    const currentHash = window.location.hash;
-    if (currentHash.includes('access_token')) {
-        addLog("DETECTADO: Hash con tokens de acceso en URL");
-    }
-
     const initSession = async () => {
         addLog("Consultando sesión actual...");
         try {
-            const { data: { session: currentSession }, error } = await supabase.auth.getSession();
-            
-            if (error) {
-                addLog(`ERROR SESIÓN: ${error.message}`);
-                setLoading(false);
-                return;
-            }
-
+            const { data: { session: currentSession } } = await supabase.auth.getSession();
             if (currentSession) {
                 setSession(currentSession);
                 setUser(currentSession.user);
-                addLog(`SESIÓN OK: ${currentSession.user.email}`);
                 const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
                 setRole(r);
-            } else {
-                addLog("INFO: Sin sesión activa");
             }
         } catch (error: any) {
-            addLog(`FALLO CRÍTICO: ${error.message}`);
+            addLog(`FALLO INICIAL: ${error.message}`);
         } finally {
             setLoading(false);
         }
@@ -106,6 +88,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       addLog(`EVENTO_AUTH: ${event}`);
+      
+      // DETECCIÓN EXPLÍCITA DE RECUPERACIÓN (Protocolo Supabase)
+      if (event === 'PASSWORD_RECOVERY') {
+          addLog("MODO RECUPERACIÓN ACTIVADO POR SDK");
+          setRecoveryMode(true);
+      }
+
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
           setSession(session);
           if (session?.user) {
@@ -118,6 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setSession(null);
           setUser(null);
           setRole(null);
+          setRecoveryMode(false);
       }
     });
 
@@ -131,18 +121,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.location.reload();
   };
 
-  const loginWithDevBypass = (targetRole: 'admin' | 'player' | 'superadmin') => {
-      addLog(`BYPASS: ${targetRole}`);
+  const loginWithDevBypass = (role: 'admin' | 'player' | 'superadmin') => {
+      // Fix: Changed 'targetRole' to 'role' as 'targetRole' was not defined.
+      addLog(`BYPASS: ${role}`);
       setIsOfflineMode(true);
-      const devUser = { id: `dev-${targetRole}`, email: `${targetRole}@sandbox.test` } as User;
+      const devUser = { id: `dev-${role}`, email: `${role}@sandbox.test` } as User;
       setUser(devUser);
       setSession({ user: devUser, access_token: 'mock' } as Session);
-      setRole(targetRole);
+      setRole(role);
       setLoading(false);
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, role, authStatus, authLogs, signOut, isOfflineMode, checkUserRole, loginWithDevBypass, addLog }}>
+    <AuthContext.Provider value={{ 
+        session, user, loading, role, authStatus, authLogs, signOut, 
+        isOfflineMode, checkUserRole, loginWithDevBypass, addLog,
+        recoveryMode, setRecoveryMode
+    }}>
       {children}
     </AuthContext.Provider>
   );

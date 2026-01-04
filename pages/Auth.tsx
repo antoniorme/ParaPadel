@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
 import { Trophy, Loader2, ArrowLeft, Mail, Lock, Key, Send, Eye, EyeOff, ShieldAlert, CheckCircle2, Terminal, Activity, ShieldCheck } from 'lucide-react';
@@ -16,73 +16,50 @@ try {
     }
 } catch (e) {}
 
-const hostname = window.location.hostname;
-const IS_DEV_ENV = 
-  hostname === 'localhost' || 
-  hostname === '127.0.0.1' || 
-  hostname.includes('googleusercontent') || 
-  hostname.includes('webcontainer') ||
-  hostname.includes('idx.google.com');
-
 const translateError = (msg: string) => {
     const m = msg.toLowerCase();
-    if (m.includes('different from the old password') || m.includes('new password should be different')) 
-        return "La nueva contraseña debe ser diferente a la anterior.";
-    if (m.includes('at least 6 characters')) 
-        return "La contraseña debe tener al menos 6 caracteres.";
-    if (m.includes('invalid login credentials')) 
-        return "Email o contraseña incorrectos.";
-    if (m.includes('user already registered')) 
-        return "Este email ya está registrado.";
-    if (m.includes('captcha')) 
-        return "Error de verificación (Captcha).";
-    return msg;
+    if (m.includes('different from the old password')) return "Usa una contraseña distinta a la anterior.";
+    if (m.includes('at least 6 characters')) return "Mínimo 6 caracteres.";
+    if (m.includes('invalid login credentials')) return "Email o clave incorrectos.";
+    if (m.includes('user already registered')) return "El email ya existe.";
+    return "Error de seguridad. Reintenta.";
 };
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
-  const { session, authLogs, addLog } = useAuth();
+  const { session, authLogs, addLog, recoveryMode, setRecoveryMode } = useAuth();
   
-  const [view, setView] = useState<AuthView>(() => {
-      // Si la URL ya está limpia y tiene el parámetro de vista, mostramos actualización
-      if (window.location.href.includes('view=update-password')) return 'update-password';
-      return 'login';
-  });
-  
+  const [view, setView] = useState<AuthView>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [validatingRecovery, setValidatingRecovery] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
   const [showMonitor, setShowMonitor] = useState(true);
 
-  // EFECTO OBSERVADOR DE RECUPERACIÓN
+  // CONTROL DE FLUJO POR EVENTOS (PROTOCOL B)
   useEffect(() => {
-    const fullUrl = window.location.href;
-    const hasTokens = fullUrl.includes('access_token=');
+    const hasTokensInUrl = window.location.href.includes('access_token=');
     
-    if (hasTokens) {
-        // Estamos en el proceso de entrada por Magic Link
-        setValidatingRecovery(true);
+    // Si el SDK ha activado recoveryMode (vía evento PASSWORD_RECOVERY)
+    // o si detectamos tokens y ya tenemos sesión establecida
+    if (recoveryMode || (hasTokensInUrl && session)) {
+        addLog("SESIÓN DE RECUPERACIÓN LISTA. LIMPIANDO ENTORNO...");
         
-        // Si el AuthContext ya detectó la sesión (porque el SDK auto-logueó al usuario)
-        if (session) {
-            addLog("SESIÓN VALIDADA POR SDK. RECARGANDO PARA LIMPIAR...");
-            
-            // Redirigimos a una URL limpia con flag de vista
-            const cleanUrl = window.location.origin + window.location.pathname + '#/auth?view=update-password';
-            window.location.href = cleanUrl;
-            window.location.reload();
+        // 1. Limpiamos la URL visualmente (sin recargar si es posible)
+        if (hasTokensInUrl) {
+            window.history.replaceState(null, '', window.location.pathname + '#/auth');
         }
-    } else {
-        setValidatingRecovery(false);
+
+        // 2. Activamos la vista de actualización
+        setView('update-password');
+        setRecoveryMode(false); // Consumimos el estado
     }
-  }, [session, addLog]);
+  }, [recoveryMode, session, addLog, setRecoveryMode]);
 
   const switchView = (newView: AuthView) => {
       setView(newView);
@@ -96,7 +73,7 @@ const AuthPage: React.FC = () => {
       e.preventDefault();
       setLoading(true);
       setError(null);
-      addLog("ACTUALIZANDO CONTRASEÑA...");
+      addLog("ACTUALIZANDO CLAVE...");
 
       if (password !== confirmPassword) {
           setError("Las contraseñas no coinciden.");
@@ -105,13 +82,14 @@ const AuthPage: React.FC = () => {
       }
 
       try {
+          // El usuario ya está autenticado por el Magic Link
           const { error: updateError } = await supabase.auth.updateUser({ 
               password: password 
           });
 
           if (updateError) throw updateError;
 
-          addLog("¡ÉXITO! REDIRIGIENDO...");
+          addLog("¡ÉXITO! REDIRIGIENDO AL PANEL...");
           setSuccessMsg("¡Contraseña actualizada!");
           
           setTimeout(() => {
@@ -136,23 +114,19 @@ const AuthPage: React.FC = () => {
       let result;
       if (view === 'login') {
         result = await supabase.auth.signInWithPassword({ 
-            email, 
-            password,
+            email, password,
             options: { captchaToken: captchaToken || undefined }
         });
       } else {
         if (password !== confirmPassword) throw new Error("Las contraseñas no coinciden");
         result = await supabase.auth.signUp({ 
-            email, 
-            password, 
+            email, password, 
             options: { captchaToken: captchaToken || undefined } 
         });
       }
-      
       if (result.error) throw result.error;
-      
     } catch (err: any) {
-      setError(translateError(err.message || 'Error de acceso'));
+      setError(translateError(err.message));
       setLoading(false);
       if(captchaRef.current) captchaRef.current.resetCaptcha();
       setCaptchaToken(null);
@@ -165,8 +139,9 @@ const AuthPage: React.FC = () => {
       setError(null);
 
       try {
+          // redirectTo DEBE coincidir con el dominio permitido en Supabase
           const redirectTo = window.location.origin + window.location.pathname + '#/auth';
-          addLog(`Solicitando recuperación...`);
+          addLog(`Solicitando reset...`);
           
           const { error } = await supabase.auth.resetPasswordForEmail(email, { 
               redirectTo, 
@@ -174,13 +149,16 @@ const AuthPage: React.FC = () => {
           });
           
           if (error) throw error;
-          setSuccessMsg("Enlace enviado. Revisa tu email.");
+          setSuccessMsg("Enlace enviado. Mira tu correo.");
       } catch (err: any) {
-          setError(translateError(err.message || "Error al solicitar."));
+          setError(translateError(err.message));
       } finally {
           setLoading(false);
       }
   };
+
+  // Pantalla de carga mientras el SDK procesa el token
+  const isVerifying = window.location.href.includes('access_token=') && !session;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col p-6 overflow-x-hidden">
@@ -198,16 +176,16 @@ const AuthPage: React.FC = () => {
              view === 'recovery' ? 'Recuperar' : 
              view === 'update-password' ? 'Seguridad' : 'Registro'}
           </h1>
-          <p className="text-slate-400 text-sm">
-            {view === 'update-password' ? 'Establece tu nueva clave' : 'Introduce tus datos'}
+          <p className="text-slate-400 text-sm italic">
+            {isVerifying ? 'Verificando enlace...' : 'Introduce tus datos'}
           </p>
         </div>
 
-        {validatingRecovery ? (
-            <div className="bg-white border border-slate-100 p-8 rounded-[2rem] shadow-xl text-center space-y-4 animate-fade-in">
-                <Loader2 className="animate-spin text-[#575AF9] mx-auto" size={40}/>
-                <p className="text-slate-600 font-bold">Verificando acceso...</p>
-                <p className="text-slate-400 text-xs">Preparando sesión segura.</p>
+        {isVerifying ? (
+            <div className="bg-white border border-slate-100 p-10 rounded-[2rem] shadow-xl text-center space-y-4 animate-fade-in">
+                <Loader2 className="animate-spin text-[#575AF9] mx-auto" size={48}/>
+                <p className="text-slate-600 font-bold">Validando sesión...</p>
+                <p className="text-slate-400 text-xs">Esto solo tardará un momento.</p>
             </div>
         ) : (
             <>
@@ -229,7 +207,7 @@ const AuthPage: React.FC = () => {
                             <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl mb-4 flex items-center gap-3">
                                 <ShieldCheck className="text-indigo-600" size={24}/>
                                 <div className="text-[10px] font-bold text-indigo-800 leading-tight uppercase">
-                                    Sesión Validada.<br/>Escribe tu nueva contraseña.
+                                    Enlace validado.<br/>Escribe tu nueva clave.
                                 </div>
                             </div>
                             <div className="relative">
@@ -323,14 +301,14 @@ const AuthPage: React.FC = () => {
                 <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]">
                     <Terminal size={14}/> Consola de Identidad
                 </div>
-                <Activity size={14} className={validatingRecovery || loading ? "animate-pulse" : ""}/>
+                <Activity size={14} className={isVerifying || loading ? "animate-pulse" : ""}/>
             </button>
             
             {showMonitor && (
                 <div className="p-5 font-mono text-[10px] space-y-1.5 h-40 overflow-y-auto custom-scrollbar leading-relaxed">
                     {authLogs.map((log, i) => {
                         const isError = log.includes('!!!') || log.includes('ERROR') || log.includes('FALLO') || log.includes('TIMEOUT');
-                        const isSuccess = log.includes('SESIÓN VALIDADA') || log.includes('ÉXITO');
+                        const isSuccess = log.includes('MODO RECUPERACIÓN') || log.includes('ÉXITO');
                         return (
                             <div key={i} className={`${isError ? 'text-rose-400' : isSuccess ? 'text-emerald-400' : 'text-slate-500'} flex gap-2`}>
                                 <span className="opacity-30 shrink-0">{i + 1}</span>
