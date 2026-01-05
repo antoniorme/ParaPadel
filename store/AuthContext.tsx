@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
@@ -33,24 +34,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
 
+  // Lógica de detección de roles robusta
   const checkUserRole = useCallback(async (uid: string, userEmail?: string): Promise<UserRole> => {
       if (!uid) return null;
       
-      // 1. Check SuperAdmin (Hardcoded + DB)
+      // 1. SuperAdmin Hardcoded
       if (userEmail === 'antoniorme@gmail.com') return 'superadmin';
+      
       try {
+          // 2. Check SuperAdmin en DB
           const { data: saData } = await supabase.from('superadmins').select('id').eq('email', userEmail).maybeSingle();
           if (saData) return 'superadmin';
-      } catch (e) {}
 
-      // 2. Check Club Owner (Standard - by ID)
-      try {
+          // 3. Check Dueño de Club (Admin) - Prioridad Alta
           const { data: clubData } = await supabase.from('clubs').select('id').eq('owner_id', uid).maybeSingle();
           if (clubData) return 'admin';
-      } catch (e) {}
 
-      // 3. Check Player Profile by ID for 'Admin' category
-      try {
+          // 4. Check Perfil Jugador con categoría Admin
           const { data: playerData } = await supabase
             .from('players')
             .select('categories')
@@ -60,11 +60,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (playerData?.categories && Array.isArray(playerData.categories)) {
               if (playerData.categories.includes('Admin')) return 'admin';
           }
-      } catch (e) {}
 
-      // 4. Emergency Fallback & Self-Healing (Check by EMAIL)
-      if (userEmail) {
-          try {
+          // 5. Fallback de Emergencia & Auto-Reparación (Por Email)
+          // Esto arregla cuentas recuperadas donde el UUID de Auth cambió pero los datos no.
+          if (userEmail) {
               const { data: players } = await supabase
                   .from('players')
                   .select('id, user_id, categories')
@@ -73,11 +72,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const adminPlayer = players?.find(p => p.categories && Array.isArray(p.categories) && p.categories.includes('Admin'));
 
               if (adminPlayer) {
+                  // Si encontramos un perfil Admin por email, pero el ID no coincide, migramos los datos.
                   if (adminPlayer.user_id !== uid) {
-                      console.log("AuthContext: Detectado cambio de ID (Recovery). Ejecutando auto-reparación...", adminPlayer.user_id, "->", uid);
+                      console.log("AuthContext: Auto-reparando identidad Admin...", adminPlayer.user_id, "->", uid);
                       const oldId = adminPlayer.user_id;
                       
-                      // Ejecutar actualizaciones en paralelo para velocidad
                       await Promise.all([
                           supabase.from('players').update({ user_id: uid }).eq('id', adminPlayer.id),
                           oldId ? supabase.from('clubs').update({ owner_id: uid }).eq('owner_id', oldId) : Promise.resolve(),
@@ -87,18 +86,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   }
                   return 'admin';
               }
-          } catch (e) {
-              console.error("AuthContext: Error en fallback por email", e);
           }
+      } catch (e) {
+          console.error("Error verificando rol:", e);
       }
 
+      // Default
       return 'player';
   }, []);
 
   useEffect(() => {
     let mounted = true;
 
-    const initializeAuth = async () => {
+    // Función orquestadora de inicio
+    const initAuth = async () => {
         try {
             // 1. Obtener sesión inicial
             const { data: { session: initialSession } } = await supabase.auth.getSession();
@@ -107,48 +108,64 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (initialSession) {
                     setSession(initialSession);
                     setUser(initialSession.user);
-                    const r = await checkUserRole(initialSession.user.id, initialSession.user.email);
-                    if (mounted) setRole(r);
+                    // IMPORTANTE: Esperamos al rol ANTES de quitar loading
+                    const detectedRole = await checkUserRole(initialSession.user.id, initialSession.user.email);
+                    if (mounted) setRole(detectedRole);
+                } else {
+                    setSession(null);
+                    setUser(null);
+                    setRole(null);
                 }
             }
         } catch (error) {
-            console.error("Error initializing auth:", error);
+            console.error("Auth init error:", error);
         } finally {
             if (mounted) setLoading(false);
         }
     };
 
-    initializeAuth();
+    // Ejecutamos inicio
+    initAuth();
 
-    // 2. Suscribirse a cambios (Login/Logout dinámico)
+    // 2. Suscripción a cambios en tiempo real
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
         if (!mounted) return;
+
+        // Solo reaccionamos a cambios reales de sesión para evitar loops
+        // SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED (si cambia el user)
         
-        // Solo actualizamos si el estado es diferente al que ya tenemos (para evitar parpadeos si getSession ya resolvió)
-        if (currentSession?.user?.id !== session?.user?.id || event === 'SIGNED_OUT') {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+             setSession(currentSession);
+             setUser(currentSession?.user ?? null);
              if (currentSession) {
-                setSession(currentSession);
-                setUser(currentSession.user);
-                // Si es un cambio de usuario, volvemos a mostrar loading brevemente si queremos, 
-                // o simplemente resolvemos el rol en segundo plano.
-                // Aquí optamos por resolver rol antes de dar por terminado el cambio.
-                const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
-                if (mounted) setRole(r);
-            } else {
-                setSession(null);
-                setUser(null);
-                setRole(null);
-            }
-            // Aseguramos loading false por si acaso onAuthStateChange dispara antes que initializeAuth (raro pero posible)
-            if (mounted) setLoading(false);
+                 // Si nos logueamos, recalculamos rol
+                 const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
+                 if (mounted) setRole(r);
+             }
+             if (mounted) setLoading(false);
+        } 
+        else if (event === 'SIGNED_OUT') {
+             setSession(null);
+             setUser(null);
+             setRole(null);
+             setLoading(false);
         }
     });
 
+    // Fallback de seguridad: Si por alguna razón todo falla y se queda cargando 5s, forzamos la UI
+    const safetyTimeout = setTimeout(() => {
+        if (loading && mounted) {
+            console.warn("Auth timeout reached, forcing loading false");
+            setLoading(false);
+        }
+    }, 5000);
+
     return () => {
         mounted = false;
+        clearTimeout(safetyTimeout);
         subscription.unsubscribe();
     };
-  }, [checkUserRole]); // Eliminamos 'session' de dependencias para evitar bucles
+  }, [checkUserRole]);
 
   const signOut = async () => {
     setLoading(true);
@@ -176,3 +193,4 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 };
 
 export const useAuth = () => useContext(AuthContext);
+    
