@@ -49,7 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (clubData) return 'admin';
       } catch (e) {}
 
-      // 3. Fallback: Check Player Profile by ID for 'Admin' category
+      // 3. Check Player Profile by ID for 'Admin' category
       try {
           const { data: playerData } = await supabase
             .from('players')
@@ -57,26 +57,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .eq('user_id', uid)
             .maybeSingle();
             
-          if (playerData && playerData.categories && Array.isArray(playerData.categories)) {
+          if (playerData?.categories && Array.isArray(playerData.categories)) {
               if (playerData.categories.includes('Admin')) return 'admin';
           }
       } catch (e) {}
 
-      // 4. Emergency Fallback: Check Player Profile by EMAIL for 'Admin' category
-      // Esto soluciona casos donde la cuenta de Auth se ha recreado (nuevo UUID)
-      // pero el registro en la tabla de 'players' sigue existiendo con el email correcto.
+      // 4. Emergency Fallback & Self-Healing (Check by EMAIL)
+      // Soluciona el caso de "Cuenta Recuperada/Recreada" donde el UUID de Auth ha cambiado
+      // pero los registros de negocio (Club/Jugador) siguen apuntando al UUID antiguo.
       if (userEmail) {
           try {
-              const { data: playerByEmail } = await supabase
+              // Buscamos TODOS los jugadores con ese email para evitar error de 'multiple rows'
+              const { data: players } = await supabase
                   .from('players')
-                  .select('categories')
-                  .eq('email', userEmail)
-                  .maybeSingle();
+                  .select('id, user_id, categories')
+                  .eq('email', userEmail);
               
-              if (playerByEmail && playerByEmail.categories && Array.isArray(playerByEmail.categories)) {
-                  if (playerByEmail.categories.includes('Admin')) return 'admin';
+              // Filtramos si alguno es Admin
+              const adminPlayer = players?.find(p => p.categories && Array.isArray(p.categories) && p.categories.includes('Admin'));
+
+              if (adminPlayer) {
+                  // ¡Encontrado perfil Admin por email!
+                  
+                  // Si el ID no coincide, ejecutamos MIGRACIÓN (Self-Healing)
+                  // Esto actualiza las tablas para que apunten al nuevo usuario de Auth
+                  if (adminPlayer.user_id !== uid) {
+                      console.log("AuthContext: Detectado cambio de ID (Recovery). Ejecutando auto-reparación...", adminPlayer.user_id, "->", uid);
+                      const oldId = adminPlayer.user_id;
+                      
+                      // 1. Actualizar ficha del Jugador Admin
+                      await supabase.from('players').update({ user_id: uid }).eq('id', adminPlayer.id);
+                      
+                      // 2. Actualizar Club y otros datos si el oldId existía
+                      if (oldId) {
+                          await supabase.from('clubs').update({ owner_id: uid }).eq('owner_id', oldId);
+                          await supabase.from('tournaments').update({ user_id: uid }).eq('user_id', oldId);
+                          // Opcional: Ligas, etc.
+                          await supabase.from('leagues').update({ club_id: uid }).eq('club_id', oldId);
+                      }
+                  }
+                  
+                  return 'admin';
               }
-          } catch (e) {}
+          } catch (e) {
+              console.error("AuthContext: Error en fallback por email", e);
+          }
       }
 
       // Default to player
@@ -89,7 +114,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (session) {
           setSession(session);
           setUser(session.user);
-          // Forzamos un pequeño delay para asegurar que triggers de DB (si los hay) hayan corrido
           const r = await checkUserRole(session.user.id, session.user.email);
           setRole(r);
       } else {
@@ -117,7 +141,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async () => {
     setLoading(true);
     await supabase.auth.signOut();
-    // Usamos reload para limpiar completamente el estado de la memoria
     window.location.reload();
   };
 
