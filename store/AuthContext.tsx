@@ -9,7 +9,6 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   role: UserRole;
-  recoveryMode: boolean;
   signOut: () => Promise<void>;
   isOfflineMode: boolean;
   checkUserRole: (uid: string, email?: string) => Promise<UserRole>;
@@ -21,7 +20,6 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   role: null,
-  recoveryMode: false,
   signOut: async () => {},
   isOfflineMode: false,
   checkUserRole: async () => null,
@@ -33,7 +31,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole>(null);
   const [loading, setLoading] = useState(true);
-  const [recoveryMode, setRecoveryMode] = useState(false);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
 
   const checkUserRole = useCallback(async (uid: string, userEmail?: string): Promise<UserRole> => {
@@ -53,14 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Escuchar cambios de estado de autenticación
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // SOLO activar modo recuperación si es explícitamente PASSWORD_RECOVERY
-      if (event === 'PASSWORD_RECOVERY') {
-          setRecoveryMode(true);
-      } else if (event === 'SIGNED_OUT') {
-          setRecoveryMode(false);
-      }
-      // NOTA: Para Magic Links (event === 'SIGNED_IN'), recoveryMode se mantiene en false
-      
+      // Ya no interceptamos PASSWORD_RECOVERY. Dejamos que entre directo.
       if (session) {
           setSession(session);
           setUser(session.user);
@@ -70,7 +60,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setSession(null);
           setUser(null);
           setRole(null);
-          setRecoveryMode(false);
       }
       setLoading(false);
     });
@@ -82,13 +71,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(session.user);
             checkUserRole(session.user.id, session.user.email).then(r => setRole(r));
         }
-        
-        // Verificación estricta del hash para recuperación
-        const hash = window.location.hash;
-        if (hash && hash.includes('type=recovery')) {
-            setRecoveryMode(true);
-        }
-        
         setLoading(false);
     });
 
@@ -113,7 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider value={{ 
-        session, user, loading, role, recoveryMode, signOut, 
+        session, user, loading, role, signOut, 
         isOfflineMode, checkUserRole, loginWithDevBypass
     }}>
       {children}
