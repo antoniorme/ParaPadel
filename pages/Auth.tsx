@@ -21,7 +21,7 @@ const translateError = (msg: string) => {
     if (m.includes('invalid login credentials')) return "Email o contraseña incorrectos.";
     if (m.includes('user already registered')) return "El email ya está registrado.";
     if (m.includes('at least 6 characters')) return "Mínimo 6 caracteres.";
-    return "Error de seguridad. Reintenta.";
+    return "Error de seguridad o enlace caducado. Reintenta.";
 };
 
 const AuthPage: React.FC = () => {
@@ -39,11 +39,15 @@ const AuthPage: React.FC = () => {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
 
+  // Efecto para forzar la vista de actualización si estamos en modo recovery
   useEffect(() => {
-    if (recoveryMode) setView('update-password');
+    if (recoveryMode) {
+        setView('update-password');
+    }
   }, [recoveryMode]);
 
   useEffect(() => {
+    // Redirigir al inicio si ya hay sesión y no estamos actualizando contraseña
     if (session && !authLoading && view !== 'update-password') {
       navigate('/');
     }
@@ -78,8 +82,8 @@ const AuthPage: React.FC = () => {
               password: password
           });
           if (error) throw error;
-          setSuccessMsg("¡Contraseña actualizada! Ya puedes entrar.");
-          setTimeout(() => navigate('/'), 2000);
+          setSuccessMsg("¡Contraseña actualizada con éxito! Entrando...");
+          setTimeout(() => navigate('/'), 1500);
           return;
       }
       
@@ -98,11 +102,11 @@ const AuthPage: React.FC = () => {
       setError(null);
       try {
           const { error } = await supabase.auth.resetPasswordForEmail(email, {
-              redirectTo: window.location.href, // Mantenemos la URL actual para que el basename sea correcto
+              redirectTo: window.location.origin + window.location.pathname,
               captchaToken: captchaToken || undefined
           });
           if (error) throw error;
-          setSuccessMsg("Enlace enviado. Revisa tu email.");
+          setSuccessMsg("Enlace enviado. Revisa tu bandeja de entrada.");
       } catch (err: any) {
           setError(translateError(err.message));
       } finally {
@@ -156,7 +160,7 @@ const AuthPage: React.FC = () => {
                     <form onSubmit={handleResetRequest} className="space-y-4 animate-slide-up">
                         <div className="relative">
                             <Mail className="absolute left-4 top-4 text-slate-400" size={20} />
-                            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Email"/>
+                            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Tu email registrado"/>
                         </div>
                         {HCAPTCHA_SITE_TOKEN && (
                             <div className="flex justify-center my-2 scale-90 min-h-[78px]">
@@ -164,14 +168,18 @@ const AuthPage: React.FC = () => {
                             </div>
                         )}
                         <button type="submit" disabled={loading} className="w-full bg-slate-900 hover:bg-slate-800 disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex items-center justify-center gap-3 transition-all">
-                            {loading ? <Loader2 className="animate-spin" size={24} /> : 'RECUPERAR'}
+                            {loading ? <Loader2 className="animate-spin" size={24} /> : 'ENVIAR ENLACE'}
                         </button>
                         <div className="text-center mt-6">
-                            <button type="button" onClick={() => switchView('login')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">Volver</button>
+                            <button type="button" onClick={() => switchView('login')} className="text-xs font-bold text-slate-400 hover:text-[#575AF9]">Cancelar y Volver</button>
                         </div>
                     </form>
                 ) : view === 'update-password' ? (
                     <form onSubmit={handleAuth} className="space-y-4 animate-slide-up">
+                        <div className="bg-blue-50 p-4 rounded-2xl text-blue-700 text-xs font-bold mb-4 flex items-start gap-2 border border-blue-100">
+                            <Key size={16} className="shrink-0 mt-0.5" />
+                            <span>Has accedido mediante un enlace de recuperación. Define tu nueva contraseña para terminar el proceso.</span>
+                        </div>
                          <div className="relative">
                             <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
                             <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-12 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Nueva contraseña"/>
@@ -181,10 +189,10 @@ const AuthPage: React.FC = () => {
                         </div>
                         <div className="relative">
                             <Lock className="absolute left-4 top-4 text-slate-400" size={20} />
-                            <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Repite contraseña"/>
+                            <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-900 focus:border-[#575AF9] outline-none shadow-sm font-medium" placeholder="Confirma la contraseña"/>
                         </div>
                         <button type="submit" disabled={loading} className="w-full bg-[#575AF9] text-white py-4 rounded-2xl font-black shadow-xl active:scale-95 transition-all">
-                            {loading ? <Loader2 className="animate-spin mx-auto" size={24} /> : 'GUARDAR Y ENTRAR'}
+                            {loading ? <Loader2 className="animate-spin mx-auto" size={24} /> : 'ACTUALIZAR Y ENTRAR'}
                         </button>
                     </form>
                 ) : (
@@ -210,7 +218,7 @@ const AuthPage: React.FC = () => {
 
                         {view === 'login' && (
                             <div className="text-right">
-                                <button type="button" onClick={() => switchView('forgot-password')} className="text-xs font-bold text-indigo-500 hover:text-indigo-700">¿Olvidaste la contraseña?</button>
+                                <button type="button" onClick={() => switchView('forgot-password')} className="text-xs font-bold text-indigo-500 hover:text-indigo-700">¿Olvidaste tu contraseña?</button>
                             </div>
                         )}
 
@@ -221,7 +229,7 @@ const AuthPage: React.FC = () => {
                         )}
                         
                         <button type="submit" disabled={loading} className="w-full bg-[#575AF9] hover:bg-[#484bf0] disabled:opacity-50 py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center text-lg active:scale-95 transition-all">
-                            {loading ? <Loader2 className="animate-spin" size={24} /> : (view === 'login' ? 'ENTRAR' : 'CREAR CUENTA')}
+                            {loading ? <Loader2 className="animate-spin" size={24} /> : (view === 'login' ? 'ENTRAR' : 'REGISTRARME')}
                         </button>
                         
                         <div className="text-center pt-4">

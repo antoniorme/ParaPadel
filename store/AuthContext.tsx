@@ -54,9 +54,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initializeAuth = async () => {
         // 1. Detectar tokens en la URL (Magic Links / Recovery)
         const hash = window.location.hash;
-        if (hash && (hash.includes('access_token=') || hash.includes('type=recovery'))) {
-            // Dejamos que Supabase procese el hash automáticamente al arrancar
-            // Pero si el router lo limpia muy rápido, lo capturamos aquí por si acaso
+        if (hash.includes('type=recovery') || hash.includes('access_token=')) {
+            if (hash.includes('type=recovery')) {
+                setRecoveryMode(true);
+            }
         }
 
         const { data: { session: currentSession } } = await supabase.auth.getSession();
@@ -72,7 +73,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
+      if (event === 'PASSWORD_RECOVERY') {
+          setRecoveryMode(true);
+      }
       
       if (session) {
           setSession(session);
@@ -94,7 +97,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async () => {
     setLoading(true);
     await supabase.auth.signOut();
-    // Limpieza total y recarga a la base
     const base = window.location.pathname.split('/proxy/')[0] || '';
     window.location.href = window.location.origin + base + '/';
   };
