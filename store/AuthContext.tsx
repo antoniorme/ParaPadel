@@ -51,31 +51,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   useEffect(() => {
-    const initializeAuth = async () => {
-        // 1. Detectar tokens en la URL (Magic Links / Recovery)
-        const hash = window.location.hash;
-        if (hash.includes('type=recovery') || hash.includes('access_token=')) {
-            if (hash.includes('type=recovery')) {
-                setRecoveryMode(true);
-            }
-        }
-
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        if (currentSession) {
-            setSession(currentSession);
-            setUser(currentSession.user);
-            const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
-            setRole(r);
-        }
-        setLoading(false);
-    };
-
-    initializeAuth();
-
+    // Escuchar cambios de estado de autenticación
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // SOLO activar modo recuperación si es explícitamente PASSWORD_RECOVERY
       if (event === 'PASSWORD_RECOVERY') {
           setRecoveryMode(true);
+      } else if (event === 'SIGNED_OUT') {
+          setRecoveryMode(false);
       }
+      // NOTA: Para Magic Links (event === 'SIGNED_IN'), recoveryMode se mantiene en false
       
       if (session) {
           setSession(session);
@@ -89,6 +73,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setRecoveryMode(false);
       }
       setLoading(false);
+    });
+
+    // Check inicial
+    supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+            setSession(session);
+            setUser(session.user);
+            checkUserRole(session.user.id, session.user.email).then(r => setRole(r));
+        }
+        
+        // Verificación estricta del hash para recuperación
+        const hash = window.location.hash;
+        if (hash && hash.includes('type=recovery')) {
+            setRecoveryMode(true);
+        }
+        
+        setLoading(false);
     });
 
     return () => subscription.unsubscribe();
