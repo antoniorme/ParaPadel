@@ -63,40 +63,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (e) {}
 
       // 4. Emergency Fallback & Self-Healing (Check by EMAIL)
-      // Soluciona el caso de "Cuenta Recuperada/Recreada" donde el UUID de Auth ha cambiado
-      // pero los registros de negocio (Club/Jugador) siguen apuntando al UUID antiguo.
       if (userEmail) {
           try {
-              // Buscamos TODOS los jugadores con ese email para evitar error de 'multiple rows'
               const { data: players } = await supabase
                   .from('players')
                   .select('id, user_id, categories')
                   .eq('email', userEmail);
               
-              // Filtramos si alguno es Admin
               const adminPlayer = players?.find(p => p.categories && Array.isArray(p.categories) && p.categories.includes('Admin'));
 
               if (adminPlayer) {
-                  // ¡Encontrado perfil Admin por email!
-                  
-                  // Si el ID no coincide, ejecutamos MIGRACIÓN (Self-Healing)
-                  // Esto actualiza las tablas para que apunten al nuevo usuario de Auth
                   if (adminPlayer.user_id !== uid) {
                       console.log("AuthContext: Detectado cambio de ID (Recovery). Ejecutando auto-reparación...", adminPlayer.user_id, "->", uid);
                       const oldId = adminPlayer.user_id;
                       
-                      // 1. Actualizar ficha del Jugador Admin
-                      await supabase.from('players').update({ user_id: uid }).eq('id', adminPlayer.id);
-                      
-                      // 2. Actualizar Club y otros datos si el oldId existía
-                      if (oldId) {
-                          await supabase.from('clubs').update({ owner_id: uid }).eq('owner_id', oldId);
-                          await supabase.from('tournaments').update({ user_id: uid }).eq('user_id', oldId);
-                          // Opcional: Ligas, etc.
-                          await supabase.from('leagues').update({ club_id: uid }).eq('club_id', oldId);
-                      }
+                      // Ejecutar actualizaciones en paralelo para velocidad
+                      await Promise.all([
+                          supabase.from('players').update({ user_id: uid }).eq('id', adminPlayer.id),
+                          oldId ? supabase.from('clubs').update({ owner_id: uid }).eq('owner_id', oldId) : Promise.resolve(),
+                          oldId ? supabase.from('tournaments').update({ user_id: uid }).eq('user_id', oldId) : Promise.resolve(),
+                          oldId ? supabase.from('leagues').update({ club_id: uid }).eq('club_id', oldId) : Promise.resolve()
+                      ]);
                   }
-                  
                   return 'admin';
               }
           } catch (e) {
@@ -104,39 +92,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
       }
 
-      // Default to player
       return 'player';
   }, []);
 
   useEffect(() => {
-    // Escuchar cambios de estado de autenticación
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session) {
-          setSession(session);
-          setUser(session.user);
-          const r = await checkUserRole(session.user.id, session.user.email);
-          setRole(r);
-      } else {
-          setSession(null);
-          setUser(null);
-          setRole(null);
-      }
-      setLoading(false);
-    });
+    let mounted = true;
 
-    // Check inicial
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-        if (session) {
-            setSession(session);
-            setUser(session.user);
-            const r = await checkUserRole(session.user.id, session.user.email);
-            setRole(r);
+    const initializeAuth = async () => {
+        try {
+            // 1. Obtener sesión inicial
+            const { data: { session: initialSession } } = await supabase.auth.getSession();
+            
+            if (mounted) {
+                if (initialSession) {
+                    setSession(initialSession);
+                    setUser(initialSession.user);
+                    const r = await checkUserRole(initialSession.user.id, initialSession.user.email);
+                    if (mounted) setRole(r);
+                }
+            }
+        } catch (error) {
+            console.error("Error initializing auth:", error);
+        } finally {
+            if (mounted) setLoading(false);
         }
-        setLoading(false);
+    };
+
+    initializeAuth();
+
+    // 2. Suscribirse a cambios (Login/Logout dinámico)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+        if (!mounted) return;
+        
+        // Solo actualizamos si el estado es diferente al que ya tenemos (para evitar parpadeos si getSession ya resolvió)
+        if (currentSession?.user?.id !== session?.user?.id || event === 'SIGNED_OUT') {
+             if (currentSession) {
+                setSession(currentSession);
+                setUser(currentSession.user);
+                // Si es un cambio de usuario, volvemos a mostrar loading brevemente si queremos, 
+                // o simplemente resolvemos el rol en segundo plano.
+                // Aquí optamos por resolver rol antes de dar por terminado el cambio.
+                const r = await checkUserRole(currentSession.user.id, currentSession.user.email);
+                if (mounted) setRole(r);
+            } else {
+                setSession(null);
+                setUser(null);
+                setRole(null);
+            }
+            // Aseguramos loading false por si acaso onAuthStateChange dispara antes que initializeAuth (raro pero posible)
+            if (mounted) setLoading(false);
+        }
     });
 
-    return () => subscription.unsubscribe();
-  }, [checkUserRole]);
+    return () => {
+        mounted = false;
+        subscription.unsubscribe();
+    };
+  }, [checkUserRole]); // Eliminamos 'session' de dependencias para evitar bucles
 
   const signOut = async () => {
     setLoading(true);
