@@ -35,15 +35,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkUserRole = useCallback(async (uid: string, userEmail?: string): Promise<UserRole> => {
       if (!uid) return null;
+      
+      // 1. Check SuperAdmin (Hardcoded + DB)
       if (userEmail === 'antoniorme@gmail.com') return 'superadmin';
       try {
           const { data: saData } = await supabase.from('superadmins').select('id').eq('email', userEmail).maybeSingle();
           if (saData) return 'superadmin';
       } catch (e) {}
+
+      // 2. Check Club Owner (Standard)
       try {
           const { data: clubData } = await supabase.from('clubs').select('id').eq('owner_id', uid).maybeSingle();
           if (clubData) return 'admin';
       } catch (e) {}
+
+      // 3. Fallback: Check Player Profile for 'Admin' category
+      // Esto soluciona casos donde la recuperación de cuenta o invitaciones rápidas
+      // asignan permisos vía la tabla de players en lugar de la tabla clubs directamente.
+      try {
+          const { data: playerData } = await supabase
+            .from('players')
+            .select('categories')
+            .eq('user_id', uid)
+            .maybeSingle();
+            
+          if (playerData && playerData.categories && Array.isArray(playerData.categories)) {
+              // Si tiene la categoría especial 'Admin', le damos rol de admin
+              if (playerData.categories.includes('Admin')) return 'admin';
+          }
+      } catch (e) {}
+
+      // Default to player
       return 'player';
   }, []);
 
@@ -53,6 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (session) {
           setSession(session);
           setUser(session.user);
+          // Forzamos un pequeño delay para asegurar que triggers de DB (si los hay) hayan corrido
           const r = await checkUserRole(session.user.id, session.user.email);
           setRole(r);
       } else {
@@ -64,11 +87,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     // Check inicial
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
         if (session) {
             setSession(session);
             setUser(session.user);
-            checkUserRole(session.user.id, session.user.email).then(r => setRole(r));
+            const r = await checkUserRole(session.user.id, session.user.email);
+            setRole(r);
         }
         setLoading(false);
     });
@@ -79,6 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async () => {
     setLoading(true);
     await supabase.auth.signOut();
+    // Usamos reload para limpiar completamente el estado de la memoria
     window.location.reload();
   };
 
