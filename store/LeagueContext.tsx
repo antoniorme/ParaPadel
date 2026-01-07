@@ -11,11 +11,11 @@ interface LeagueContextType {
     fetchLeagues: () => Promise<void>;
     selectLeague: (id: string) => Promise<void>;
     updateLeagueScore: (matchId: string, setsA: number, setsB: number, scoreText: string) => Promise<void>;
-    // Updated signature: createLeague now receives prizes directly, simplified
     createLeague: (data: Partial<LeagueState> & { prizeWinner?: string, prizeRunnerUp?: string }) => Promise<string | null>;
     generateLeagueGroups: (categoryId: string, groupsCount: number, method: 'elo-balanced' | 'elo-mixed', doubleRound: boolean) => Promise<void>;
     advanceToPlayoffs: (categoryId: string) => Promise<void>;
     addPairToLeague: (pair: Partial<Pair>) => Promise<void>;
+    deletePairFromLeague: (pairId: string) => Promise<void>; // NEW
     isLeagueModuleEnabled: boolean;
 }
 
@@ -25,7 +25,7 @@ const initialLeagueState: LeagueState = {
     startDate: '2024-01-12',
     endDate: '2024-04-15',
     playoffDate: '2024-04-17',
-    categories: [], // Will contain exactly 1 category in new logic
+    categories: [], 
     groups: [],
     matches: [],
     pairs: [],
@@ -241,6 +241,23 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }]);
         
         if (league.id) selectLeague(league.id);
+    };
+
+    const deletePairFromLeague = async (pairId: string) => {
+        if (isOfflineMode) {
+            const updatedPairs = league.pairs.filter(p => p.id !== pairId);
+            const updatedLeague = { ...league, pairs: updatedPairs };
+            setLeague(updatedLeague);
+            localStorage.setItem(`league_data_${league.id}`, JSON.stringify(updatedLeague));
+            return;
+        }
+
+        try {
+            await supabase.from('league_pairs').delete().eq('id', pairId);
+            if (league.id) selectLeague(league.id);
+        } catch (e) {
+            console.error("Error deleting pair:", e);
+        }
     };
 
     // --- GENERATION ALGORITHM (BERGER TABLES) ---
@@ -469,7 +486,8 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return (
         <LeagueContext.Provider value={{
             league, leaguesList, fetchLeagues, selectLeague, updateLeagueScore, createLeague,
-            generateLeagueGroups, advanceToPlayoffs, addPairToLeague, isLeagueModuleEnabled
+            generateLeagueGroups, advanceToPlayoffs, addPairToLeague, deletePairFromLeague,
+            isLeagueModuleEnabled
         }}>
             {children}
         </LeagueContext.Provider>

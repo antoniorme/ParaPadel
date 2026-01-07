@@ -6,7 +6,7 @@ import {
     Edit3, X, Image as ImageIcon,
     ChevronDown, ChevronUp, Clock, Info, GitMerge,
     Users, ArrowRight, Settings, PlusCircle, CheckCircle,
-    Calendar as CalendarIcon, Trash2, LayoutGrid, TrendingUp, Shuffle, Repeat, Plus, ChevronRight
+    Calendar as CalendarIcon, Trash2, LayoutGrid, TrendingUp, Shuffle, Repeat, Plus, ChevronRight, Edit2
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PosterGenerator } from '../components/PosterGenerator';
@@ -25,8 +25,8 @@ interface Standing {
 }
 
 const LeagueActive: React.FC = () => {
-    const { league, updateLeagueScore, advanceToPlayoffs, addPairToLeague, generateLeagueGroups } = useLeague();
-    const { state, formatPlayerName, addPlayerToDB } = useTournament();
+    const { league, updateLeagueScore, advanceToPlayoffs, addPairToLeague, deletePairFromLeague, generateLeagueGroups } = useLeague();
+    const { state, formatPlayerName, addPlayerToDB, getPairElo } = useTournament();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
 
@@ -140,6 +140,12 @@ const LeagueActive: React.FC = () => {
         setIsAddingPair(false);
     };
 
+    const handleDeletePair = async (pairId: string) => {
+        if (confirm("¿Estás seguro de eliminar esta pareja de la liga?")) {
+            await deletePairFromLeague(pairId);
+        }
+    };
+
     const handleGenerate = async (method: 'elo-balanced' | 'elo-mixed') => {
         if (!mainCatId) return;
         const pairsInCategory = league.pairs.filter(p => p.category_id === mainCatId);
@@ -152,6 +158,14 @@ const LeagueActive: React.FC = () => {
             setTab('calendar');
         }
     };
+
+    // Filter available players: exclude those already in a league pair
+    const availablePlayers = useMemo(() => {
+        return state.players.filter(p => {
+            const isAssigned = league.pairs.some(lp => lp.player1Id === p.id || lp.player2Id === p.id);
+            return !isAssigned;
+        });
+    }, [state.players, league.pairs]);
 
     // Component for a Match Row
     const MatchRow = ({ match }: { match: any }) => (
@@ -277,19 +291,37 @@ const LeagueActive: React.FC = () => {
                     </div>
 
                     <div className="space-y-3">
+                        <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 px-2">Parejas Inscritas</h3>
                         {league.pairs.filter(p => p.category_id === mainCatId).map((pair, idx) => {
                             const player1 = state.players.find(p => p.id === pair.player1Id);
                             const player2 = state.players.find(p => p.id === pair.player2Id);
+                            const pairElo = getPairElo(pair, state.players);
+
                             return (
-                                <div key={pair.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center font-black text-xs">{idx + 1}</div>
-                                        <div>
-                                            <div className="font-bold text-slate-800 text-sm">{formatPlayerName(player1)}</div>
-                                            <div className="font-bold text-slate-800 text-sm">& {formatPlayerName(player2)}</div>
+                                <div key={pair.id} className="bg-white p-4 rounded-xl flex items-center justify-between border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                                    <div className="flex items-center gap-4 overflow-hidden w-full">
+                                        <span className="bg-slate-100 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 text-slate-500 border border-slate-200">{idx + 1}</span>
+                                        <div className="flex flex-col w-full">
+                                            <div className="text-base font-bold text-slate-800 truncate">{formatPlayerName(player1)}</div>
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                                <span style={{ color: THEME.cta }} className="text-xs font-black">&</span>
+                                                <div className="text-base font-bold text-slate-800 truncate">{formatPlayerName(player2)}</div>
+                                            </div>
                                         </div>
                                     </div>
-                                    <button className="p-2 text-slate-300 hover:text-rose-500 transition-colors"><Trash2 size={16}/></button>
+                                    
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex flex-col items-center justify-center bg-slate-50 px-2 py-1 rounded border border-slate-100 min-w-[50px]">
+                                            <span className="text-[10px] text-slate-400 uppercase font-bold flex items-center gap-1"><TrendingUp size={8}/> ELO</span>
+                                            <span className="text-xs font-black text-slate-700">{pairElo}</span>
+                                        </div>
+
+                                        <div className="flex items-center gap-1">
+                                            {/* Not implemented editing for now to keep it simple, or reuse modal */}
+                                            {/* <button className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-lg border border-slate-100 hover:border-blue-200 transition-colors"><Edit2 size={18}/></button> */}
+                                            <button onClick={() => handleDeletePair(pair.id)} className="p-2 text-slate-400 hover:text-red-600 bg-slate-50 rounded-lg border border-slate-100 hover:border-red-200 transition-colors"><Trash2 size={18}/></button>
+                                        </div>
+                                    </div>
                                 </div>
                             );
                         })}
@@ -421,7 +453,7 @@ const LeagueActive: React.FC = () => {
                                 selectedId={p1} 
                                 onSelect={setP1} 
                                 otherSelectedId={p2}
-                                players={state.players}
+                                players={availablePlayers.concat(p1 ? [state.players.find(p=>p.id===p1)!].filter(Boolean) : [])}
                                 onAddPlayer={addPlayerToDB}
                                 formatName={formatPlayerName}
                             />
@@ -431,7 +463,7 @@ const LeagueActive: React.FC = () => {
                                 selectedId={p2} 
                                 onSelect={setP2} 
                                 otherSelectedId={p1}
-                                players={state.players}
+                                players={availablePlayers.concat(p2 ? [state.players.find(p=>p.id===p2)!].filter(Boolean) : [])}
                                 onAddPlayer={addPlayerToDB}
                                 formatName={formatPlayerName}
                             />
