@@ -65,6 +65,7 @@ export interface LeagueMatch {
     category_id: string;
     group_id?: string; 
     phase: 'group' | 'playoff';
+    round?: number; // NEW: Jornada Number
     pairAId: string;
     pairBId: string;
     setsA: number | null;
@@ -83,12 +84,16 @@ export interface LeagueState {
     startDate: string;
     endDate: string;
     playoffDate: string;
-    categories: LeagueCategory[];
+    categories: LeagueCategory[]; // Kept for DB compatibility, but UI will use [0]
+    mainCategoryId?: string; // NEW: Shortcut to the single active category
     groups: LeagueGroup[];
     matches: LeagueMatch[];
     pairs: Pair[];
     loading: boolean;
     is_module_active?: boolean;
+    config?: {
+        double_round: boolean; // Ida y Vuelta
+    };
 }
 
 // REST OF TYPES...

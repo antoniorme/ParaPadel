@@ -7,7 +7,7 @@ import { PlayerSelector } from '../components/PlayerSelector';
 import { 
     Users, Plus, ArrowLeft, Save, 
     Trash2, TrendingUp, Shuffle, ListOrdered,
-    LayoutGrid, ChevronRight, CheckCircle, X
+    LayoutGrid, ChevronRight, CheckCircle, X, Repeat
 } from 'lucide-react';
 
 const LeagueGroups: React.FC = () => {
@@ -22,6 +22,9 @@ const LeagueGroups: React.FC = () => {
     const [isAddingPair, setIsAddingPair] = useState(false);
     const [p1, setP1] = useState('');
     const [p2, setP2] = useState('');
+    
+    // Configuration State
+    const [doubleRound, setDoubleRound] = useState(false);
 
     const pairsInCategory = league.pairs.filter(p => p.category_id === categoryId);
 
@@ -42,8 +45,10 @@ const LeagueGroups: React.FC = () => {
         if (pairsInCategory.length < 4) return alert("Mínimo 4 parejas para generar grupos");
         const groupsCount = pairsInCategory.length >= 12 ? 2 : 1;
         
-        if (confirm(`Se van a generar ${groupsCount} grupos y el calendario de partidos. ¿Continuar?`)) {
-            await generateLeagueGroups(categoryId!, groupsCount, method);
+        const typeText = doubleRound ? "Ida y Vuelta" : "Una Vuelta";
+        
+        if (confirm(`Se van a generar ${groupsCount} grupos con formato ${typeText}. ¿Continuar?`)) {
+            await generateLeagueGroups(categoryId!, groupsCount, method, doubleRound);
             navigate('/league/active');
         }
     };
@@ -51,7 +56,7 @@ const LeagueGroups: React.FC = () => {
     return (
         <div className="space-y-8 pb-32 animate-fade-in">
             <div className="flex items-center gap-4">
-                <button onClick={() => navigate('/league')} className="p-2 bg-white/20 text-white rounded-full hover:bg-white/30 transition-colors">
+                <button onClick={() => navigate('/league/active')} className="p-2 bg-white/20 text-white rounded-full hover:bg-white/30 transition-colors">
                     <ArrowLeft size={20} />
                 </button>
                 <div>
@@ -109,14 +114,25 @@ const LeagueGroups: React.FC = () => {
 
             {/* Motor de Sorteo */}
             {pairsInCategory.length >= 4 && (
-                <div className="bg-white rounded-[2.5rem] p-8 shadow-xl border border-indigo-200">
+                <div className="bg-white rounded-[2.5rem] p-8 shadow-xl border border-indigo-200 animate-slide-up">
                     <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
-                        <LayoutGrid className="text-indigo-500" size={24}/> Generar Grupos
+                        <LayoutGrid className="text-indigo-500" size={24}/> Generar Calendario
                     </h3>
-                    <p className="text-sm text-slate-500 mb-8 leading-relaxed">
-                        El sistema dividirá las <strong>{pairsInCategory.length} parejas</strong> en grupos y generará el calendario de la fase regular.
-                    </p>
                     
+                    {/* Format Toggle */}
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-6 flex items-center justify-between">
+                        <div>
+                            <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Formato de Liga</div>
+                            <div className="font-bold text-indigo-900">{doubleRound ? 'Ida y Vuelta (Doble)' : 'Una sola Vuelta (Ida)'}</div>
+                        </div>
+                        <button 
+                            onClick={() => setDoubleRound(!doubleRound)}
+                            className={`p-3 rounded-xl transition-all ${doubleRound ? 'bg-indigo-500 text-white shadow-lg' : 'bg-white text-slate-400 border border-slate-200'}`}
+                        >
+                            <Repeat size={20}/>
+                        </button>
+                    </div>
+
                     <div className="space-y-3">
                         <button 
                             onClick={() => handleGenerate('elo-balanced')}

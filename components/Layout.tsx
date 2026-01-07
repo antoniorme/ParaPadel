@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Trophy, Users, ClipboardList, Activity, List, Menu, LogOut, UserCog, History, Settings, HelpCircle, X, Bell, Shield, LayoutGrid, Home, CalendarRange } from 'lucide-react';
+import { Trophy, Users, ClipboardList, Activity, List, Menu, LogOut, UserCog, History, Settings, HelpCircle, X, Bell, Shield, LayoutGrid, Home, CalendarRange, GitMerge, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../store/AuthContext';
 import { useHistory } from '../store/HistoryContext';
 import { useTournament } from '../store/TournamentContext';
@@ -19,6 +19,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const isTournamentActive = !!state.id && state.status !== 'finished';
+  // Detectar si estamos DENTRO de una liga activa (jugando/gestionando)
+  const isLeagueActiveView = location.pathname.includes('/league/active');
   const isLeaguePath = location.pathname.startsWith('/league');
   
   // THEME LOGIC:
@@ -43,7 +45,22 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     { path: '/results', label: 'Clasi', icon: List },
   ];
 
-  const currentNavItems = isTournamentActive ? tournamentNavItems : clubNavItems;
+  // NEW: Menú específico para la Liga Activa (Estructura Espejo de Minis)
+  const leagueNavItems = [
+    { path: '/league/active?tab=management', label: 'Gestión', icon: Settings },
+    { path: '/league/active?tab=registration', label: 'Registro', icon: Users },
+    { path: '/league/active?tab=standings', label: 'Clasi', icon: Trophy },
+    { path: '/league/active?tab=calendar', label: 'Jornadas', icon: CalendarRange },
+    { path: '/league/active?tab=playoffs', label: 'Playoff', icon: GitMerge },
+  ];
+
+  // Prioridad: Torneo Activo > Liga Activa > Menú Club
+  let currentNavItems = clubNavItems;
+  if (isTournamentActive) {
+      currentNavItems = tournamentNavItems;
+  } else if (isLeagueActiveView) {
+      currentNavItems = leagueNavItems;
+  }
 
   const menuItems = [
       { path: '/dashboard', label: 'Mis Torneos Mini', icon: LayoutGrid },
@@ -81,8 +98,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   };
 
   // Logic for Logo/Title Display
-  // If user has a custom logo, show it.
-  // If not, show "ParaPádel" if it's the generic club name, otherwise the club name.
   const showDefaultBranding = clubData.name === 'Mi Club de Padel' || clubData.name === 'ParaPadel';
 
   return (
@@ -94,6 +109,12 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 {isTournamentActive && (
                     <button onClick={handleBackToHub} className="p-1.5 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors shrink-0" title="Volver a Mis Torneos">
                         <Home size={18} className="text-slate-600"/>
+                    </button>
+                )}
+                {/* Botón de volver específico para Liga (si estamos dentro de una) */}
+                {!isTournamentActive && isLeagueActiveView && (
+                    <button onClick={() => navigate('/league')} className="p-1.5 bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shrink-0 border border-indigo-400" title="Salir de la Liga">
+                        <ArrowLeft size={18} className="text-white"/>
                     </button>
                 )}
 
@@ -123,6 +144,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                     
                     {isTournamentActive ? (
                         <span className="text-[9px] text-[#575AF9] font-black uppercase tracking-widest truncate">Torneo Activo</span>
+                    ) : isLeagueActiveView ? (
+                        <span className="text-[9px] text-indigo-100 font-black uppercase tracking-widest truncate opacity-90">Liga en Juego</span>
                     ) : isLeaguePath ? (
                         <span className="text-[9px] text-indigo-100 font-black uppercase tracking-widest truncate opacity-90">Módulo de Liga</span>
                     ) : (
@@ -204,11 +227,16 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             <nav className={`max-w-3xl mx-auto backdrop-blur-md border rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.2)] flex justify-around items-center px-2 py-1 pointer-events-auto transition-all duration-500 ${isLeaguePath ? 'bg-indigo-500/95 border-indigo-300' : isDarkMode ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200'}`}>
               {currentNavItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = location.pathname === item.path;
+                // Check if active. For leagues with query params, check base path + query if present
+                const isActive = isLeagueActiveView 
+                    ? location.pathname + location.search === item.path
+                    : location.pathname === item.path;
+
                 return (
                   <Link
                     key={item.path}
                     to={item.path}
+                    replace={isLeagueActiveView} // Use replace for tabs to avoid bloating history
                     className={`flex flex-col items-center justify-center py-3 px-2 w-full transition-all rounded-xl ${
                       isActive
                         ? (isDarkMode || isLeaguePath ? 'text-white' : 'text-[#575AF9]')

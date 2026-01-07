@@ -1,9 +1,10 @@
+
 import React, { useEffect } from 'react';
 import { useLeague } from '../store/LeagueContext';
 import { useTournament } from '../store/TournamentContext';
 import { useAuth } from '../store/AuthContext';
 import { THEME } from '../utils/theme';
-import { Plus, ChevronRight, Calendar, Users, Trophy, Activity, Info } from 'lucide-react';
+import { Plus, ChevronRight, Calendar, Users, Trophy, Activity, Info, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import LeaguePromo from './LeaguePromo';
 
@@ -27,19 +28,25 @@ const LeagueDashboard: React.FC = () => {
 
     return (
         <div className="space-y-8 pb-20 animate-fade-in">
-            <div className="flex justify-between items-center px-1">
-                <div className="flex flex-col">
-                    <h2 className="text-2xl font-black text-white drop-shadow-sm">Gestión de Liga</h2>
-                    {role === 'superadmin' && !isLeagueModuleEnabled && (
-                        <span className="text-[10px] font-bold text-amber-300 uppercase tracking-tighter">Acceso SuperAdmin (Módulo desactivado para este club)</span>
-                    )}
-                </div>
-                <button 
-                    onClick={() => navigate('/league/setup')} 
-                    className="flex items-center gap-2 px-5 py-2.5 bg-white text-indigo-500 rounded-xl font-bold text-sm shadow-xl shadow-indigo-600/20 active:scale-95 transition-transform hover:bg-indigo-50"
-                >
-                    <Plus size={20}/> NUEVA LIGA
+            {/* BACK BUTTON & HEADER */}
+            <div>
+                <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-indigo-100 font-bold text-sm hover:text-white transition-colors mb-4 px-1">
+                    <ArrowLeft size={18}/> Volver al Club
                 </button>
+                <div className="flex justify-between items-center px-1">
+                    <div className="flex flex-col">
+                        <h2 className="text-2xl font-black text-white drop-shadow-sm">Mis Ligas</h2>
+                        {role === 'superadmin' && !isLeagueModuleEnabled && (
+                            <span className="text-[10px] font-bold text-amber-300 uppercase tracking-tighter">Acceso SuperAdmin (Módulo desactivado)</span>
+                        )}
+                    </div>
+                    <button 
+                        onClick={() => navigate('/league/setup')} 
+                        className="flex items-center gap-2 px-5 py-2.5 bg-white text-indigo-500 rounded-xl font-bold text-sm shadow-xl shadow-indigo-600/20 active:scale-95 transition-transform hover:bg-indigo-50"
+                    >
+                        <Plus size={20}/> NUEVA LIGA
+                    </button>
+                </div>
             </div>
 
             {leaguesList.length === 0 ? (
@@ -61,23 +68,31 @@ const LeagueDashboard: React.FC = () => {
                     {leaguesList.map(l => (
                         <div 
                             key={l.id}
-                            onClick={() => { selectLeague(l.id); navigate('/league/active'); }}
+                            onClick={() => { selectLeague(l.id); navigate('/league/active?tab=management'); }} // Default to management view
                             className="bg-white rounded-[2rem] border border-transparent shadow-xl overflow-hidden cursor-pointer hover:translate-y-[-4px] transition-all group relative"
                         >
                             <div className="p-6">
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <div className="flex items-center gap-2 mb-2">
-                                            <span className={`w-2.5 h-2.5 rounded-full ${l.status === 'finished' ? 'bg-slate-300' : 'bg-emerald-500 animate-pulse'}`}></span>
+                                            {l.status === 'registration' && (
+                                                <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse"></span>
+                                            )}
+                                            {l.status === 'groups' && (
+                                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                            )}
+                                            {l.status === 'finished' && (
+                                                <span className="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+                                            )}
                                             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                                                {l.status === 'finished' ? 'Finalizada' : 'En Juego'}
+                                                {l.status === 'registration' ? 'Fase Inscripción' : l.status === 'groups' ? 'Fase Grupos' : l.status === 'playoffs' ? 'Playoffs' : 'Finalizada'}
                                             </span>
                                         </div>
                                         <h3 className="font-black text-slate-900 text-2xl leading-tight group-hover:text-indigo-500 transition-colors">{l.title}</h3>
                                         <div className="flex items-center gap-4 mt-3">
                                             <div className="flex items-center gap-1.5 text-slate-400 text-xs font-bold uppercase">
                                                 <Calendar size={14} className="text-indigo-400"/>
-                                                Ene - Abr 2024
+                                                {new Date(l.start_date).toLocaleDateString()}
                                             </div>
                                             <div className="flex items-center gap-1.5 text-slate-400 text-xs font-bold uppercase">
                                                 <Users size={14} className="text-indigo-400"/>
@@ -92,12 +107,13 @@ const LeagueDashboard: React.FC = () => {
                                 
                                 <div className="mt-6 pt-4 border-t border-slate-50 flex items-center justify-between">
                                     <div className="flex -space-x-2 overflow-hidden">
+                                        {/* Fake Avatars */}
                                         <div className="inline-block h-6 w-6 rounded-full bg-slate-100 ring-2 ring-white border border-slate-200"></div>
                                         <div className="inline-block h-6 w-6 rounded-full bg-slate-100 ring-2 ring-white border border-slate-200"></div>
                                         <div className="inline-block h-6 w-6 rounded-full bg-slate-100 ring-2 ring-white border border-slate-200"></div>
                                     </div>
                                     <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1">
-                                        VER CLASIFICACIÓN <ChevronRight size={12}/>
+                                        GESTIONAR LIGA <ChevronRight size={12}/>
                                     </span>
                                 </div>
                             </div>

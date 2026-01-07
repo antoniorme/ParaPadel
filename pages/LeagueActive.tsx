@@ -1,13 +1,17 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useLeague } from '../store/LeagueContext';
 import { useTournament } from '../store/TournamentContext';
 import { 
-    Trophy, List, ChevronRight, Share2, Edit3, X, Save,
-    ArrowLeft, GitMerge, Star, Hash, Image as ImageIcon
+    Edit3, X, Image as ImageIcon,
+    ChevronDown, ChevronUp, Clock, Info, GitMerge,
+    Users, ArrowRight, Settings, PlusCircle, CheckCircle,
+    Calendar as CalendarIcon, Trash2, LayoutGrid, TrendingUp, Shuffle, Repeat, Plus, ChevronRight
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PosterGenerator } from '../components/PosterGenerator';
+import { THEME } from '../utils/theme';
+import { PlayerSelector } from '../components/PlayerSelector';
 
 interface Standing {
     pairId: string;
@@ -21,20 +25,41 @@ interface Standing {
 }
 
 const LeagueActive: React.FC = () => {
-    const { league, updateLeagueScore, advanceToPlayoffs } = useLeague();
-    const { state, formatPlayerName } = useTournament();
+    const { league, updateLeagueScore, advanceToPlayoffs, addPairToLeague, generateLeagueGroups } = useLeague();
+    const { state, formatPlayerName, addPlayerToDB } = useTournament();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
 
-    const [activeTab, setActiveTab] = useState<'standings' | 'matches' | 'playoffs'>('standings');
-    const [selectedCatId, setSelectedCatId] = useState(league.categories[0]?.id);
+    // TAB CONTROL VIA URL (Default: management)
+    const activeTab = (searchParams.get('tab') as 'management' | 'registration' | 'standings' | 'calendar' | 'playoffs') || 'management';
+
+    // UI States
+    // Use MAIN Category ID always
+    const mainCatId = league.mainCategoryId;
+    
     const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
     const [scoreText, setScoreText] = useState('');
     const [setsA, setSetsA] = useState(0);
     const [setsB, setSetsB] = useState(0);
+    const [expandedRound, setExpandedRound] = useState<number | null>(null);
+    
+    // Pair Details Modal State
+    const [selectedPairId, setSelectedPairId] = useState<string | null>(null);
+
+    // Registration / Group Generation States
+    const [isAddingPair, setIsAddingPair] = useState(false);
+    const [p1, setP1] = useState('');
+    const [p2, setP2] = useState('');
+    const [doubleRound, setDoubleRound] = useState(false);
 
     // Poster Logic
     const [showPoster, setShowPoster] = useState(false);
     const [posterData, setPosterData] = useState<any>(null);
+
+    // Helper: Change tab
+    const setTab = (tab: string) => {
+        setSearchParams({ tab });
+    };
 
     const getPairName = (id: string) => {
         if (id === 'TBD') return 'Por determinar...';
@@ -46,14 +71,16 @@ const LeagueActive: React.FC = () => {
     };
 
     const calculateStandings = useMemo(() => {
+        if (!mainCatId) return [];
         const standings: Record<string, Standing> = {};
-        league.pairs.filter(p => p.category_id === selectedCatId).forEach(p => {
+        league.pairs.filter(p => p.category_id === mainCatId).forEach(p => {
             standings[p.id] = { pairId: p.id, pairName: getPairName(p.id), played: 0, won: 0, lost: 0, setsF: 0, setsC: 0, points: 0 };
         });
-        league.matches.filter(m => m.category_id === selectedCatId && m.phase === 'group' && m.isFinished).forEach(m => {
+        league.matches.filter(m => m.category_id === mainCatId && m.phase === 'group' && m.isFinished).forEach(m => {
             if (standings[m.pairAId]) {
                 standings[m.pairAId].played++;
                 standings[m.pairAId].setsF += m.setsA || 0; standings[m.pairAId].setsC += m.setsB || 0;
+                // 3 Pts Win, 1 Pt Loss
                 if (m.setsA! > m.setsB!) { standings[m.pairAId].won++; standings[m.pairAId].points += 3; }
                 else { standings[m.pairAId].lost++; standings[m.pairAId].points += 1; }
             }
@@ -65,7 +92,7 @@ const LeagueActive: React.FC = () => {
             }
         });
         return Object.values(standings).sort((a, b) => b.points !== a.points ? b.points - a.points : (b.setsF - b.setsC) - (a.setsF - a.setsC));
-    }, [league.matches, league.pairs, selectedCatId]);
+    }, [league.matches, league.pairs, mainCatId]);
 
     const handleGenerateWinnerPoster = () => {
         const topPair = calculateStandings[0];
@@ -73,7 +100,7 @@ const LeagueActive: React.FC = () => {
         setPosterData({
             title: league.title,
             winnerNames: topPair.pairName,
-            category: league.categories.find(c => c.id === selectedCatId)?.name,
+            category: 'Campeones',
             type: 'champions'
         });
         setShowPoster(true);
@@ -85,56 +112,225 @@ const LeagueActive: React.FC = () => {
         setEditingMatchId(null);
     };
 
-    const PlayoffMatch: React.FC<{ match: any }> = ({ match }) => (
-        <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-            <div className="px-4 py-2 bg-white border-b border-slate-100 flex justify-between items-center">
-                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                    {match.id.includes('qf') ? 'Cuartos' : match.id.includes('sf') ? 'Semi' : 'Final'}
-                </span>
-                <button onClick={() => { setEditingMatchId(match.id); setSetsA(match.setsA || 0); setSetsB(match.setsB || 0); setScoreText(match.score_text || ''); }} className="p-1 text-indigo-400 hover:bg-indigo-50 rounded">
-                    <Edit3 size={14}/>
-                </button>
-            </div>
-            <div className="p-3 space-y-2">
-                <div className={`flex justify-between items-center ${match.winnerId === match.pairAId ? 'text-indigo-600' : 'text-slate-700'}`}>
-                    <span className="text-xs font-bold truncate w-4/5">{getPairName(match.pairAId)}</span>
-                    <span className="font-black">{match.setsA ?? '-'}</span>
+    const matchesByRound = useMemo(() => {
+        if (!mainCatId) return {};
+        const matches = league.matches.filter(m => m.category_id === mainCatId && m.phase === 'group');
+        const rounds: Record<number, any[]> = {};
+        matches.forEach(m => {
+            const r = m.round || 1;
+            if (!rounds[r]) rounds[r] = [];
+            rounds[r].push(m);
+        });
+        return rounds;
+    }, [league.matches, mainCatId]);
+
+    const roundNumbers = Object.keys(matchesByRound).map(Number).sort((a,b) => a - b);
+
+    // REGISTRATION LOGIC
+    const handleAddPair = async () => {
+        if (!p1 || !p2 || !mainCatId) return;
+        await addPairToLeague({
+            player1Id: p1,
+            player2Id: p2,
+            category_id: mainCatId,
+            name: 'Pareja Liga'
+        });
+        setP1('');
+        setP2('');
+        setIsAddingPair(false);
+    };
+
+    const handleGenerate = async (method: 'elo-balanced' | 'elo-mixed') => {
+        if (!mainCatId) return;
+        const pairsInCategory = league.pairs.filter(p => p.category_id === mainCatId);
+        if (pairsInCategory.length < 4) return alert("Mínimo 4 parejas para generar grupos");
+        const groupsCount = pairsInCategory.length >= 12 ? 2 : 1;
+        const typeText = doubleRound ? "Ida y Vuelta" : "Una Vuelta";
+        
+        if (confirm(`Se van a generar ${groupsCount} grupos con formato ${typeText}. ¿Continuar?`)) {
+            await generateLeagueGroups(mainCatId, groupsCount, method, doubleRound);
+            setTab('calendar');
+        }
+    };
+
+    // Component for a Match Row
+    const MatchRow = ({ match }: { match: any }) => (
+        <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between group">
+            <div className="flex-1 min-w-0 pr-4">
+                <div className={`flex justify-between items-center mb-1 ${match.winnerId === match.pairAId ? 'text-indigo-600 font-black' : 'text-slate-700 font-medium'}`}>
+                    <span className="text-sm truncate">{getPairName(match.pairAId)}</span>
+                    <span className="text-lg ml-2">{match.setsA ?? '-'}</span>
                 </div>
-                <div className={`flex justify-between items-center ${match.winnerId === match.pairBId ? 'text-indigo-600' : 'text-slate-700'}`}>
-                    <span className="text-xs font-bold truncate w-4/5">{getPairName(match.pairBId)}</span>
-                    <span className="font-black">{match.setsB ?? '-'}</span>
+                <div className={`flex justify-between items-center ${match.winnerId === match.pairBId ? 'text-indigo-600 font-black' : 'text-slate-700 font-medium'}`}>
+                    <span className="text-sm truncate">{getPairName(match.pairBId)}</span>
+                    <span className="text-lg ml-2">{match.setsB ?? '-'}</span>
                 </div>
+                {match.score_text && <div className="text-[10px] text-slate-400 mt-1">{match.score_text}</div>}
             </div>
+            <button 
+                onClick={(e) => { e.stopPropagation(); setEditingMatchId(match.id); setSetsA(match.setsA || 0); setSetsB(match.setsB || 0); setScoreText(match.score_text || ''); }} 
+                className="p-2 bg-slate-50 text-slate-300 hover:text-indigo-500 rounded-lg hover:bg-indigo-50 transition-colors"
+            >
+                <Edit3 size={18}/>
+            </button>
         </div>
     );
 
+    if (!mainCatId) return <div className="p-10 text-center animate-pulse">Cargando datos de la liga...</div>;
+
     return (
         <div className="space-y-6 pb-32 animate-fade-in">
+            {/* Header (General for all tabs) */}
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <button onClick={() => navigate('/league')} className="p-2 bg-white/20 text-white rounded-full hover:bg-white/30 transition-colors"><ArrowLeft size={20} /></button>
+                <div>
                     <h2 className="text-2xl font-black text-white">{league.title}</h2>
+                    {/* Simplified Header - No Categories */}
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={handleGenerateWinnerPoster} className="p-2.5 bg-amber-500 text-white rounded-xl shadow-lg hover:scale-105 transition-transform"><ImageIcon size={20}/></button>
-                    <button className="p-2.5 bg-emerald-500 text-white rounded-xl shadow-lg hover:scale-105 transition-transform"><Share2 size={20}/></button>
+                    {activeTab === 'standings' && (
+                        <button onClick={handleGenerateWinnerPoster} className="p-2.5 bg-amber-500 text-white rounded-xl shadow-lg hover:scale-105 transition-transform"><ImageIcon size={20}/></button>
+                    )}
                 </div>
             </div>
 
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
-                {league.categories.map(cat => (
-                    <button key={cat.id} onClick={() => setSelectedCatId(cat.id)} className={`px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all whitespace-nowrap ${selectedCatId === cat.id ? 'bg-white text-indigo-500 shadow-lg' : 'bg-indigo-500 text-indigo-100'}`}>{cat.name}</button>
-                ))}
-            </div>
+            {/* TAB: MANAGEMENT (GESTIÓN) */}
+            {activeTab === 'management' && (
+                <div className="space-y-6 animate-slide-up">
+                    <div className="bg-white rounded-[2rem] p-6 shadow-xl border border-indigo-100">
+                        <div className="flex justify-between items-start mb-6">
+                            <div>
+                                <h3 className="text-lg font-black text-slate-900">Estado de la Liga</h3>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <span className={`w-2.5 h-2.5 rounded-full ${league.status === 'registration' ? 'bg-orange-500' : 'bg-emerald-500'}`}></span>
+                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{league.status === 'registration' ? 'Inscripción' : league.status === 'groups' ? 'Fase Regular' : 'Playoffs'}</span>
+                                </div>
+                            </div>
+                            <div className="bg-indigo-50 p-3 rounded-2xl text-indigo-600">
+                                <Settings size={24}/>
+                            </div>
+                        </div>
 
-            <div className="flex bg-indigo-500 p-1 rounded-2xl">
-                <button onClick={() => setActiveTab('standings')} className={`flex-1 py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 transition-all ${activeTab === 'standings' ? 'bg-white text-indigo-500' : 'text-indigo-100'}`}><Trophy size={16}/> Clasificación</button>
-                <button onClick={() => setActiveTab('matches')} className={`flex-1 py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 transition-all ${activeTab === 'matches' ? 'bg-white text-indigo-500' : 'text-indigo-100'}`}><List size={16}/> Partidos</button>
-                <button onClick={() => setActiveTab('playoffs')} className={`flex-1 py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 transition-all ${activeTab === 'playoffs' ? 'bg-white text-indigo-500' : 'text-indigo-100'}`}><GitMerge size={16}/> Playoff</button>
-            </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-slate-50 p-4 rounded-xl">
+                                <div className="text-slate-400 text-[10px] font-bold uppercase mb-1">Inicio</div>
+                                <div className="text-slate-900 font-bold">{new Date(league.startDate).toLocaleDateString()}</div>
+                            </div>
+                            <div className="bg-slate-50 p-4 rounded-xl">
+                                <div className="text-slate-400 text-[10px] font-bold uppercase mb-1">Fin</div>
+                                <div className="text-slate-900 font-bold">{new Date(league.endDate).toLocaleDateString()}</div>
+                            </div>
+                        </div>
+                    </div>
 
+                    <div className="space-y-3">
+                        <h4 className="text-xs font-bold text-white uppercase tracking-widest px-2">Accesos Directos</h4>
+                        {league.status === 'registration' && (
+                            <button onClick={() => setTab('registration')} className="w-full flex items-center justify-between p-4 bg-white/10 hover:bg-white/20 rounded-2xl border border-white/10 transition-all text-left text-white">
+                                <div className="flex items-center gap-3">
+                                    <Users size={20}/> 
+                                    <div>
+                                        <div className="font-bold">Gestionar Inscripciones</div>
+                                        <div className="text-[10px] opacity-70">Añadir parejas y cerrar grupos</div>
+                                    </div>
+                                </div>
+                                <ChevronRight size={20} className="opacity-50"/>
+                            </button>
+                        )}
+                        {league.status === 'groups' && (
+                            <button onClick={() => setTab('standings')} className="w-full flex items-center justify-between p-4 bg-white/10 hover:bg-white/20 rounded-2xl border border-white/10 transition-all text-left text-white">
+                                <div className="flex items-center gap-3">
+                                    <GitMerge size={20}/> 
+                                    <div>
+                                        <div className="font-bold">Generar Playoffs</div>
+                                        <div className="text-[10px] opacity-70">Avanzar de fase (disponible en 'Clasi')</div>
+                                    </div>
+                                </div>
+                                <ChevronRight size={20} className="opacity-50"/>
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* TAB: REGISTRATION (REGISTRO) */}
+            {activeTab === 'registration' && (
+                <div className="space-y-6 animate-slide-up">
+                    {/* Status Banner */}
+                    {league.status !== 'registration' && (
+                        <div className="bg-amber-100 border border-amber-200 p-4 rounded-xl text-amber-800 text-xs font-bold flex gap-2 items-center">
+                            <Info size={16}/> La liga ya ha comenzado. Añadir parejas ahora las dejará en reserva o requerirá regenerar el calendario.
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-white rounded-[2rem] p-6 shadow-lg border border-indigo-100 text-center">
+                            <div className="text-3xl font-black text-indigo-500">{league.pairs.filter(p => p.category_id === mainCatId).length}</div>
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Inscritos</div>
+                        </div>
+                        <button 
+                            onClick={() => setIsAddingPair(true)}
+                            className="bg-indigo-500 rounded-[2rem] p-6 shadow-lg border border-indigo-400 text-center text-white active:scale-95 transition-transform group"
+                        >
+                            <div className="flex justify-center mb-1 group-hover:scale-110 transition-transform"><Plus size={32} strokeWidth={3}/></div>
+                            <div className="text-[10px] font-black uppercase tracking-widest">Añadir Pareja</div>
+                        </button>
+                    </div>
+
+                    <div className="space-y-3">
+                        {league.pairs.filter(p => p.category_id === mainCatId).map((pair, idx) => {
+                            const player1 = state.players.find(p => p.id === pair.player1Id);
+                            const player2 = state.players.find(p => p.id === pair.player2Id);
+                            return (
+                                <div key={pair.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center font-black text-xs">{idx + 1}</div>
+                                        <div>
+                                            <div className="font-bold text-slate-800 text-sm">{formatPlayerName(player1)}</div>
+                                            <div className="font-bold text-slate-800 text-sm">& {formatPlayerName(player2)}</div>
+                                        </div>
+                                    </div>
+                                    <button className="p-2 text-slate-300 hover:text-rose-500 transition-colors"><Trash2 size={16}/></button>
+                                </div>
+                            );
+                        })}
+                        {league.pairs.filter(p => p.category_id === mainCatId).length === 0 && (
+                            <div className="text-center py-10 text-slate-400 text-sm italic bg-white/5 rounded-2xl border border-white/10">No hay parejas inscritas.</div>
+                        )}
+                    </div>
+
+                    {/* Generator Engine (Only if in registration) */}
+                    {league.status === 'registration' && league.pairs.filter(p => p.category_id === mainCatId).length >= 4 && (
+                        <div className="bg-white rounded-[2rem] p-6 shadow-xl border border-indigo-200 mt-8">
+                            <h3 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
+                                <LayoutGrid className="text-indigo-500" size={20}/> Generar Calendario
+                            </h3>
+                            
+                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 mb-4 flex items-center justify-between">
+                                <div>
+                                    <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Formato</div>
+                                    <div className="font-bold text-indigo-900 text-sm">{doubleRound ? 'Ida y Vuelta' : 'Solo Ida'}</div>
+                                </div>
+                                <button onClick={() => setDoubleRound(!doubleRound)} className={`p-2 rounded-lg transition-all ${doubleRound ? 'bg-indigo-500 text-white' : 'bg-white text-slate-400 border border-slate-200'}`}>
+                                    <Repeat size={16}/>
+                                </button>
+                            </div>
+
+                            <div className="space-y-2">
+                                <button onClick={() => handleGenerate('elo-balanced')} className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-indigo-50 rounded-xl border-2 border-transparent hover:border-indigo-200 transition-all text-left">
+                                    <div className="flex items-center gap-3"><TrendingUp size={18} className="text-indigo-500"/><span className="font-bold text-slate-800 text-sm">Por Nivel (Equilibrado)</span></div>
+                                </button>
+                                <button onClick={() => handleGenerate('elo-mixed')} className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-indigo-50 rounded-xl border-2 border-transparent hover:border-indigo-200 transition-all text-left">
+                                    <div className="flex items-center gap-3"><Shuffle size={18} className="text-indigo-500"/><span className="font-bold text-slate-800 text-sm">Sorteo Mix</span></div>
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* TAB: STANDINGS (CLASI) */}
             {activeTab === 'standings' && (
-                <div className="space-y-4">
+                <div className="space-y-4 animate-slide-up">
                     <div className="bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-indigo-100">
                         <table className="w-full text-left">
                             <thead className="bg-slate-50 border-b">
@@ -142,7 +338,7 @@ const LeagueActive: React.FC = () => {
                             </thead>
                             <tbody className="divide-y divide-slate-50">
                                 {calculateStandings.map((s, idx) => (
-                                    <tr key={s.pairId} className="hover:bg-slate-50/50">
+                                    <tr key={s.pairId} onClick={() => setSelectedPairId(s.pairId)} className="hover:bg-slate-50/80 cursor-pointer transition-colors">
                                         <td className="px-6 py-5"><span className={`w-7 h-7 rounded-full flex items-center justify-center font-black text-xs ${idx < 3 ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400'}`}>{idx + 1}</span></td>
                                         <td className="px-6 py-5"><div className="font-bold text-slate-800 text-sm">{s.pairName}</div></td>
                                         <td className="px-4 py-5 text-center font-bold text-emerald-500">{s.won}</td>
@@ -152,60 +348,109 @@ const LeagueActive: React.FC = () => {
                             </tbody>
                         </table>
                     </div>
-                    {league.status === 'groups' && <button onClick={() => advanceToPlayoffs(selectedCatId!)} className="w-full py-4 bg-white text-indigo-500 border-2 border-dashed border-indigo-200 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-50 transition-colors">GENERAR CUADRO ELIMINATORIO</button>}
+                    {league.status === 'groups' && <button onClick={() => advanceToPlayoffs(mainCatId!)} className="w-full py-4 bg-white text-indigo-500 border-2 border-dashed border-indigo-200 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-50 transition-colors">GENERAR CUADRO ELIMINATORIO</button>}
                 </div>
             )}
 
-            {activeTab === 'matches' && (
-                <div className="space-y-4">
-                    {league.matches.filter(m => m.category_id === selectedCatId && m.phase === 'group').map(m => (
-                        <div key={m.id} className="bg-white rounded-[2rem] p-6 shadow-xl border border-indigo-50 group">
-                            <div className="flex justify-between items-center mb-4">
-                                <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg ${m.isFinished ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>{m.isFinished ? 'Finalizado' : 'Fase Regular'}</span>
-                                <button onClick={() => { setEditingMatchId(m.id); setSetsA(m.setsA || 0); setSetsB(m.setsB || 0); setScoreText(m.score_text || ''); }} className="p-2 text-slate-300 hover:text-indigo-500 transition-all"><Edit3 size={18}/></button>
+            {/* TAB: CALENDAR (JORNADAS) */}
+            {activeTab === 'calendar' && (
+                <div className="space-y-4 animate-slide-up">
+                    {roundNumbers.map(round => {
+                        const isExpanded = expandedRound === round;
+                        const roundMatches = matchesByRound[round];
+                        const finishedCount = roundMatches.filter(m => m.isFinished).length;
+                        const totalCount = roundMatches.length;
+                        
+                        return (
+                            <div key={round} className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden shadow-sm">
+                                <button 
+                                    onClick={() => setExpandedRound(isExpanded ? null : round)}
+                                    className={`w-full p-5 flex justify-between items-center transition-colors ${isExpanded ? 'bg-slate-50' : 'bg-white hover:bg-slate-50'}`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm ${isExpanded ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-500'}`}>J{round}</div>
+                                        <div className="text-left">
+                                            <div className="font-bold text-slate-900">Jornada {round}</div>
+                                            <div className="text-[10px] font-bold uppercase text-slate-400">{finishedCount}/{totalCount} Partidos</div>
+                                        </div>
+                                    </div>
+                                    {isExpanded ? <ChevronUp className="text-slate-400"/> : <ChevronDown className="text-slate-400"/>}
+                                </button>
+                                
+                                {isExpanded && (
+                                    <div className="p-4 bg-slate-50 border-t border-slate-100 space-y-3">
+                                        {roundMatches.map(m => <MatchRow key={m.id} match={m} />)}
+                                    </div>
+                                )}
                             </div>
-                            <div className="grid grid-cols-1 gap-2">
-                                <div className="flex justify-between items-center"><span className="font-black text-slate-800 text-sm truncate w-4/5">{getPairName(m.pairAId)}</span><span className="text-xl font-black text-indigo-500">{m.setsA ?? '-'}</span></div>
-                                <div className="flex justify-between items-center"><span className="font-black text-slate-800 text-sm truncate w-4/5">{getPairName(m.pairBId)}</span><span className="text-xl font-black text-indigo-500">{m.setsB ?? '-'}</span></div>
-                            </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 
+            {/* TAB: PLAYOFFS */}
             {activeTab === 'playoffs' && (
-                <div className="space-y-8 animate-fade-in">
+                <div className="space-y-8 animate-slide-up">
                     {league.status !== 'playoffs' ? (
                         <div className="text-center py-20 bg-white/10 rounded-[2.5rem] border-2 border-dashed border-white/20">
                             <GitMerge size={48} className="mx-auto text-white/50 mb-4"/><p className="text-white/70 font-bold px-10">Termina la fase de grupos para generar el cuadro final.</p>
                         </div>
                     ) : (
-                        <div className="space-y-12">
-                            <div className="bg-white rounded-[2.5rem] p-6 shadow-xl space-y-8">
-                                <div className="space-y-4">
-                                    <h4 className="text-[10px] font-black text-indigo-500 uppercase tracking-widest flex items-center gap-2"><Star size={12}/> Cuartos de Final</h4>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        {league.matches.filter(m => m.category_id === selectedCatId && m.id.startsWith('qf-')).map(m => <PlayoffMatch key={m.id} match={m} />)}
-                                    </div>
-                                </div>
-                                <div className="space-y-4 border-t border-slate-50 pt-6">
-                                    <h4 className="text-[10px] font-black text-indigo-500 uppercase tracking-widest flex items-center gap-2"><GitMerge size={12}/> Semifinales</h4>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        {league.matches.filter(m => m.category_id === selectedCatId && m.id.startsWith('sf-')).map(m => <PlayoffMatch key={m.id} match={m} />)}
-                                    </div>
-                                </div>
-                                <div className="space-y-4 border-t border-indigo-100 pt-6">
-                                    <h4 className="text-xs font-black text-amber-500 uppercase tracking-widest flex items-center gap-2"><Trophy size={16}/> Gran Final</h4>
-                                    <div className="max-w-md mx-auto">
-                                        {league.matches.filter(m => m.category_id === selectedCatId && m.id.startsWith('final-')).map(m => <PlayoffMatch key={m.id} match={m} />)}
-                                    </div>
-                                </div>
-                            </div>
+                        <div className="space-y-4">
+                            {/* Render playoff matches simply for now */}
+                            {league.matches.filter(m => m.category_id === mainCatId && m.phase === 'playoff').map(m => (
+                                <MatchRow key={m.id} match={m} />
+                            ))}
                         </div>
                     )}
                 </div>
             )}
 
+            {/* PAIR ADDING MODAL */}
+            {isAddingPair && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center sm:p-4">
+                    <div className="bg-white w-full h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-[2.5rem] sm:max-w-md shadow-2xl animate-slide-up flex flex-col">
+                        <div className="flex justify-between items-center px-8 py-6 border-b border-slate-100">
+                             <h3 className="text-xl font-black text-slate-900">Inscribir Pareja</h3>
+                             <button onClick={() => setIsAddingPair(false)} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"><X size={20}/></button>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                            <PlayerSelector 
+                                label="CAPITÁN (Jugador 1)" 
+                                selectedId={p1} 
+                                onSelect={setP1} 
+                                otherSelectedId={p2}
+                                players={state.players}
+                                onAddPlayer={addPlayerToDB}
+                                formatName={formatPlayerName}
+                            />
+                            <div className="flex justify-center -my-3 relative z-10"><span className="bg-white text-indigo-400 text-xs px-2 py-1 rounded-full font-black border border-indigo-100">&</span></div>
+                            <PlayerSelector 
+                                label="JUGADOR 2" 
+                                selectedId={p2} 
+                                onSelect={setP2} 
+                                otherSelectedId={p1}
+                                players={state.players}
+                                onAddPlayer={addPlayerToDB}
+                                formatName={formatPlayerName}
+                            />
+                            
+                            <div className="mt-8">
+                                <button 
+                                    onClick={handleAddPair}
+                                    disabled={!p1 || !p2}
+                                    className="w-full py-5 bg-indigo-500 text-white rounded-[1.5rem] font-black text-lg shadow-xl shadow-indigo-100 disabled:opacity-50 disabled:grayscale transition-all active:scale-95"
+                                >
+                                    CONFIRMAR INSCRIPCIÓN
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* SCORE EDITOR MODAL */}
             {editingMatchId && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
                     <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-scale-in relative">
@@ -223,11 +468,37 @@ const LeagueActive: React.FC = () => {
                 </div>
             )}
 
-            <PosterGenerator 
-                isOpen={showPoster} 
-                onClose={() => setShowPoster(false)} 
-                data={posterData} 
-            />
+            {/* PAIR DETAILS MODAL (SCHEDULE) */}
+            {selectedPairId && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-end sm:items-center justify-center sm:p-4">
+                    <div className="bg-white w-full h-[85vh] sm:h-auto sm:max-h-[85vh] sm:rounded-[2.5rem] sm:max-w-md shadow-2xl animate-slide-up flex flex-col overflow-hidden">
+                        <div className="bg-slate-900 p-6 text-white shrink-0">
+                            <div className="flex justify-between items-start mb-4">
+                                <h3 className="text-xl font-black leading-tight w-3/4">{getPairName(selectedPairId)}</h3>
+                                <button onClick={() => setSelectedPairId(null)} className="p-2 bg-white/10 rounded-full hover:bg-white/20"><X size={20}/></button>
+                            </div>
+                            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><Clock size={12}/> Calendario Completo</div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-50 space-y-3">
+                            {league.matches
+                                .filter(m => (m.pairAId === selectedPairId || m.pairBId === selectedPairId) && m.category_id === mainCatId)
+                                .sort((a,b) => (a.round || 0) - (b.round || 0))
+                                .map(m => (
+                                    <div key={m.id} className="relative">
+                                        <div className="absolute -left-2 top-4 w-4 h-px bg-slate-300"></div>
+                                        <div className="pl-4">
+                                            <div className="text-[10px] font-black text-slate-400 uppercase mb-1">Jornada {m.round}</div>
+                                            <MatchRow match={m} />
+                                        </div>
+                                    </div>
+                                ))
+                            }
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <PosterGenerator isOpen={showPoster} onClose={() => setShowPoster(false)} data={posterData} />
         </div>
     );
 };
