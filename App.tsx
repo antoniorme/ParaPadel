@@ -46,10 +46,13 @@ import PlayerAppProfile from './pages/player/PlayerProfile';
 // Protected Route Wrapper
 const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = false }: { children?: React.ReactNode, requireAdmin?: boolean, requireSuperAdmin?: boolean }) => {
   const { user, loading, role } = useAuth();
-  const { clubData } = useHistory();
+  const { clubData, loadingClub } = useHistory(); // Consume loadingClub
   const location = useLocation();
 
-  if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400 font-bold">Cargando...</div>;
+  // Unified Loading State: Wait for Auth AND Club Data (if admin required)
+  if (loading || (requireAdmin && loadingClub)) {
+      return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400 font-bold animate-pulse">Cargando...</div>;
+  }
   
   if (!user) return <Navigate to="/" replace />;
   
@@ -65,6 +68,7 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
       return <Navigate to="/p/dashboard" replace />;
   }
 
+  // Ahora es seguro chequear el nombre del club porque loadingClub es false
   if (requireAdmin && clubData.name === 'Mi Club de Padel' && location.pathname !== '/onboarding' && role !== 'superadmin') {
       return <Navigate to="/onboarding" replace />;
   }

@@ -11,6 +11,7 @@ const LOCAL_HISTORY_KEY = 'padelpro_local_history';
 
 interface HistoryContextType {
     clubData: ClubData;
+    loadingClub: boolean; // NEW
     updateClubData: (data: ClubData) => void;
     pastTournaments: PastTournament[];
     archiveTournament: (finalState: TournamentState) => void;
@@ -29,6 +30,7 @@ const defaultClubData: ClubData = {
 
 const HistoryContext = createContext<HistoryContextType>({
     clubData: defaultClubData,
+    loadingClub: true, // Default true
     updateClubData: () => {},
     pastTournaments: [],
     archiveTournament: () => {},
@@ -39,10 +41,11 @@ const HistoryContext = createContext<HistoryContextType>({
 
 export const HistoryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [clubData, setClubData] = useState<ClubData>(defaultClubData);
+    const [loadingClub, setLoadingClub] = useState(true); // NEW STATE
     const [pastTournaments, setPastTournaments] = useState<PastTournament[]>([]);
     const [favoriteClubIds, setFavoriteClubIds] = useState<string[]>([]);
     const [globalTournaments, setGlobalTournaments] = useState<PublicTournament[]>([]);
-    const { user, isOfflineMode } = useAuth();
+    const { user, isOfflineMode, loading: authLoading } = useAuth();
 
     const loadHistory = async () => {
         if (isOfflineMode) {
@@ -60,33 +63,41 @@ export const HistoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const fetchClubData = useCallback(async () => {
-        if (isOfflineMode) {
-            const saved = localStorage.getItem(CLUB_KEY);
-            if (saved) setClubData(JSON.parse(saved));
-            return;
-        }
-        if (user) {
-            const { data } = await supabase.from('clubs').select('*').eq('owner_id', user.id).maybeSingle();
-            if (data) {
-                const mapped: ClubData = { 
-                    id: data.id, 
-                    name: data.name, 
-                    courtCount: data.court_count || 6, 
-                    address: data.address, 
-                    phone: data.phone, 
-                    logoUrl: data.logo_url, 
-                    league_enabled: data.league_enabled || false 
-                };
-                setClubData(mapped);
-                localStorage.setItem(CLUB_KEY, JSON.stringify(mapped));
+        // Wait for auth to be ready if online
+        if (!isOfflineMode && authLoading) return;
+
+        setLoadingClub(true);
+        try {
+            if (isOfflineMode) {
+                const saved = localStorage.getItem(CLUB_KEY);
+                if (saved) setClubData(JSON.parse(saved));
+            } else if (user) {
+                const { data } = await supabase.from('clubs').select('*').eq('owner_id', user.id).maybeSingle();
+                if (data) {
+                    const mapped: ClubData = { 
+                        id: data.id, 
+                        name: data.name, 
+                        courtCount: data.court_count || 6, 
+                        address: data.address, 
+                        phone: data.phone, 
+                        logoUrl: data.logo_url, 
+                        league_enabled: data.league_enabled || false 
+                    };
+                    setClubData(mapped);
+                    localStorage.setItem(CLUB_KEY, JSON.stringify(mapped));
+                }
             }
+        } catch (e) {
+            console.error("Error loading club data", e);
+        } finally {
+            setLoadingClub(false);
         }
-    }, [user, isOfflineMode]);
+    }, [user, isOfflineMode, authLoading]);
 
     useEffect(() => {
         fetchClubData();
         loadHistory();
-    }, [user, isOfflineMode, fetchClubData]);
+    }, [fetchClubData]); // Removed user/isOfflineMode dependencies to rely on useCallback
 
     const updateClubData = (data: ClubData) => {
         setClubData(data);
@@ -103,7 +114,7 @@ export const HistoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     return (
-        <HistoryContext.Provider value={{ clubData, updateClubData, pastTournaments, archiveTournament: () => {}, globalTournaments, favoriteClubIds, toggleFavoriteClub }}>
+        <HistoryContext.Provider value={{ clubData, loadingClub, updateClubData, pastTournaments, archiveTournament: () => {}, globalTournaments, favoriteClubIds, toggleFavoriteClub }}>
             {children}
         </HistoryContext.Provider>
     );

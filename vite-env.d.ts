@@ -3,8 +3,8 @@
 declare module '*.svg' {
   import * as React from 'react';
   export const ReactComponent: React.FunctionComponent<React.SVGProps<SVGSVGElement> & { title?: string }>;
-  const content: string;
-  export default content;
+  const src: string;
+  export default src;
 }
 
 // Interface merging to add custom env vars without conflicting with existing Vite types
