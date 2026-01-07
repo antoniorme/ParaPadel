@@ -46,11 +46,12 @@ import PlayerAppProfile from './pages/player/PlayerProfile';
 // Protected Route Wrapper
 const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = false }: { children?: React.ReactNode, requireAdmin?: boolean, requireSuperAdmin?: boolean }) => {
   const { user, loading, role } = useAuth();
-  const { clubData, loadingClub } = useHistory(); // Consume loadingClub
+  const { clubData, loadingClub } = useHistory(); 
   const location = useLocation();
 
   // Unified Loading State: Wait for Auth AND Club Data (if admin required)
-  if (loading || (requireAdmin && loadingClub)) {
+  // We only wait for loadingClub if we are actually logged in as admin, to prevent blocking other routes
+  if (loading || (requireAdmin && user && role === 'admin' && loadingClub)) {
       return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400 font-bold animate-pulse">Cargando...</div>;
   }
   
@@ -68,8 +69,11 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
       return <Navigate to="/p/dashboard" replace />;
   }
 
-  // Ahora es seguro chequear el nombre del club porque loadingClub es false
-  if (requireAdmin && clubData.name === 'Mi Club de Padel' && location.pathname !== '/onboarding' && role !== 'superadmin') {
+  // ROBUST ONBOARDING CHECK:
+  // If we are admin, NOT loading, and have NO club ID (meaning data fetch didn't return a record),
+  // we redirect to onboarding to set it up.
+  // We exclude superadmin from this check.
+  if (requireAdmin && !loadingClub && !clubData.id && location.pathname !== '/onboarding' && role !== 'superadmin') {
       return <Navigate to="/onboarding" replace />;
   }
 
