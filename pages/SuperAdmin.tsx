@@ -4,10 +4,10 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
 import { 
     Shield, Building, Plus, Search, Check, AlertTriangle, 
-    LayoutDashboard, Smartphone, Lock, Unlock, RefreshCw, 
+    LayoutDashboard, Smartphone, Lock, RefreshCw, 
     Mail, Key, Trash2, X, Copy, Edit2, Send, Save, 
-    ShieldCheck, Users, Trophy, Activity, Eye, Calendar,
-    UserCheck, TrendingUp, BarChart3, CalendarRange
+    ShieldCheck, Users, Trophy, Activity, Eye, 
+    BarChart3, CalendarRange, Power, Clock, CheckCircle, FilePlus
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { createClient } from '@supabase/supabase-js';
@@ -26,6 +26,7 @@ try {
 interface ClubWithStats extends Club {
     playerCount: number;
     activeTourneys: number;
+    activeLeagues: number; // NEW
     finishedTourneys: number;
     ownerEmail?: string;
 }
@@ -36,7 +37,7 @@ interface Club {
     name: string;
     email?: string;
     is_active: boolean;
-    league_enabled?: boolean; // NEW: League Module Flag
+    league_enabled?: boolean; 
     created_at: string;
 }
 
@@ -44,6 +45,23 @@ interface UserResult {
     id: string; 
     name: string;
     email: string;
+}
+
+// Stats Interface for Modal
+interface InspectionStats {
+    players: number;
+    minis: {
+        total: number;
+        setup: number;
+        active: number;
+        finished: number;
+    };
+    leagues: {
+        total: number;
+        setup: number; // Registration
+        active: number; // Groups/Playoffs
+        finished: number;
+    };
 }
 
 const SuperAdmin: React.FC = () => {
@@ -62,12 +80,9 @@ const SuperAdmin: React.FC = () => {
     const [fetchError, setFetchError] = useState<string | null>(null);
     
     // UI Controls
-    const [showCreateModal, setShowCreateModal] = useState(false); // NEW: Create Club Modal
+    const [showCreateModal, setShowCreateModal] = useState(false);
     const [inspectedClub, setInspectedClub] = useState<ClubWithStats | null>(null);
-    const [clubDetailData, setClubDetailData] = useState<{
-        players: any[],
-        tournaments: any[]
-    } | null>(null);
+    const [inspectionStats, setInspectionStats] = useState<InspectionStats | null>(null);
     const [loadingDetails, setLoadingDetails] = useState(false);
 
     // Existing Logic States
@@ -95,7 +110,7 @@ const SuperAdmin: React.FC = () => {
         if (isOfflineMode) {
             setClubs([{ 
                 id: 'local-c1', owner_id: 'local-o1', name: 'Club Local Test', is_active: true, created_at: new Date().toISOString(),
-                playerCount: 16, activeTourneys: 1, finishedTourneys: 5, ownerEmail: 'admin@local.test', email: 'admin@local.test', league_enabled: false
+                playerCount: 16, activeTourneys: 1, activeLeagues: 1, finishedTourneys: 5, ownerEmail: 'admin@local.test', email: 'admin@local.test', league_enabled: false
             }]);
             setGlobalStats({ totalClubs: 1, totalPlayers: 16, activeTourneys: 1, finishedTourneys: 5 });
             setLoading(false);
@@ -103,23 +118,25 @@ const SuperAdmin: React.FC = () => {
         }
 
         try {
-            // 1. Fetch Clubs (Including league_enabled)
             const { data: clubsData, error: clubsError } = await supabase.from('clubs').select('*').order('created_at', { ascending: false });
             if (clubsError) throw clubsError;
 
-            // 2. Fetch Aggregated Stats & Emails (fallback)
+            // Fetch Aggregated Stats
             const { data: allPlayers } = await supabase.from('players').select('user_id, email');
             const { data: allTourneys } = await supabase.from('tournaments').select('user_id, status');
+            const { data: allLeagues } = await supabase.from('leagues').select('club_id, status');
 
             const mappedClubs: ClubWithStats[] = (clubsData || []).map(club => {
                 const clubPlayers = allPlayers?.filter(p => p.user_id === club.owner_id).length || 0;
                 const clubTourneys = allTourneys?.filter(t => t.user_id === club.owner_id) || [];
+                const clubLeagues = allLeagues?.filter(l => l.club_id === club.owner_id) || [];
                 const ownerRecord = allPlayers?.find(p => p.user_id === club.owner_id);
                 
                 return {
                     ...club,
                     playerCount: clubPlayers,
-                    activeTourneys: clubTourneys.filter(t => t.status !== 'finished').length,
+                    activeTourneys: clubTourneys.filter(t => t.status === 'active').length,
+                    activeLeagues: clubLeagues.filter(l => l.status === 'groups' || l.status === 'playoffs').length,
                     finishedTourneys: clubTourneys.filter(t => t.status === 'finished').length,
                     ownerEmail: club.email || ownerRecord?.email
                 };
@@ -129,7 +146,7 @@ const SuperAdmin: React.FC = () => {
             setGlobalStats({
                 totalClubs: mappedClubs.length,
                 totalPlayers: allPlayers?.length || 0,
-                activeTourneys: allTourneys?.filter(t => t.status !== 'finished').length || 0,
+                activeTourneys: allTourneys?.filter(t => t.status === 'active').length || 0,
                 finishedTourneys: allTourneys?.filter(t => t.status === 'finished').length || 0
             });
 
@@ -147,24 +164,49 @@ const SuperAdmin: React.FC = () => {
     const fetchClubDetails = async (club: ClubWithStats) => {
         setLoadingDetails(true);
         setInspectedClub(club);
+        setInspectionStats(null);
         
         if (isOfflineMode) {
-            setClubDetailData({
-                players: [{ name: 'Jugador Local' }],
-                tournaments: [{ title: 'Torneo Local Test', status: 'active', date: new Date().toISOString() }]
+            setInspectionStats({
+                players: 150,
+                minis: { total: 10, setup: 1, active: 1, finished: 8 },
+                leagues: { total: 3, setup: 1, active: 1, finished: 1 }
             });
             setLoadingDetails(false);
             return;
         }
 
-        const { data: players } = await supabase.from('players').select('name, categories, global_rating').eq('user_id', club.owner_id).order('name');
-        const { data: tourneys } = await supabase.from('tournaments').select('title, status, date').eq('user_id', club.owner_id).order('date', { ascending: false });
+        // Fetch Counts Breakdown Only
+        try {
+            const [playersRes, tourneysRes, leaguesRes] = await Promise.all([
+                supabase.from('players').select('id', { count: 'exact', head: true }).eq('user_id', club.owner_id),
+                supabase.from('tournaments').select('status').eq('user_id', club.owner_id),
+                supabase.from('leagues').select('status').eq('club_id', club.owner_id)
+            ]);
 
-        setClubDetailData({
-            players: players || [],
-            tournaments: tourneys || []
-        });
-        setLoadingDetails(false);
+            const tourneys = tourneysRes.data || [];
+            const leagues = leaguesRes.data || [];
+
+            setInspectionStats({
+                players: playersRes.count || 0,
+                minis: {
+                    total: tourneys.length,
+                    setup: tourneys.filter(t => t.status === 'setup').length,
+                    active: tourneys.filter(t => t.status === 'active').length,
+                    finished: tourneys.filter(t => t.status === 'finished').length
+                },
+                leagues: {
+                    total: leagues.length,
+                    setup: leagues.filter(l => l.status === 'registration').length,
+                    active: leagues.filter(l => l.status === 'groups' || l.status === 'playoffs').length,
+                    finished: leagues.filter(l => l.status === 'finished').length
+                }
+            });
+        } catch(e) {
+            console.error("Error fetching detailed stats", e);
+        } finally {
+            setLoadingDetails(false);
+        }
     };
 
     // --- LOGIC HANDLERS ---
@@ -193,10 +235,12 @@ const SuperAdmin: React.FC = () => {
     const handleQuickInvite = async () => {
         if (!quickEmail || !quickClubName) return;
         setCreateError(null);
-        const randomDigits = Math.floor(1000 + Math.random() * 9000);
-        const tempPass = `PadelPro${randomDigits}!`;
         if (!isOfflineMode && HCAPTCHA_SITE_TOKEN && !captchaToken) { setCreateError("Completa el Captcha."); return; }
+        
         try {
+            const randomDigits = Math.floor(1000 + Math.random() * 9000);
+            const tempPass = `PadelPro${randomDigits}!`;
+            
             const tempClient = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
             const { data: authData, error: authError } = await tempClient.auth.signUp({ email: quickEmail, password: tempPass, options: { captchaToken: captchaToken || undefined } });
             if (authError) throw authError;
@@ -225,7 +269,6 @@ const SuperAdmin: React.FC = () => {
             const { error } = await supabase.from('clubs').update({ league_enabled: newState }).eq('id', club.id);
             if (error) throw error;
             
-            // Update local state
             setClubs(prev => prev.map(c => c.id === club.id ? { ...c, league_enabled: newState } : c));
             if (inspectedClub && inspectedClub.id === club.id) {
                 setInspectedClub({ ...inspectedClub, league_enabled: newState });
@@ -300,15 +343,12 @@ const SuperAdmin: React.FC = () => {
                         </div>
                     </div>
                     
-                    {/* QUICK ACTIONS ROW */}
                     <div className="mb-8 flex gap-4">
                         <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-6 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black shadow-lg transition-all active:scale-95">
                             <Plus size={20}/> ALTA NUEVO CLUB
                         </button>
-                        {/* Future Actions Here */}
                     </div>
 
-                    {/* GLOBAL STATS GRID */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
                             <div className="flex items-center gap-2 text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1">
@@ -318,13 +358,13 @@ const SuperAdmin: React.FC = () => {
                         </div>
                         <div className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
                             <div className="flex items-center gap-2 text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1">
-                                <Activity size={12} className="text-rose-400"/> En Juego
+                                <Activity size={12} className="text-rose-400"/> Minis En Juego
                             </div>
                             <div className="text-3xl font-black text-rose-400">{globalStats.activeTourneys}</div>
                         </div>
                         <div className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
                             <div className="flex items-center gap-2 text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1">
-                                <Trophy size={12} className="text-amber-400"/> Finalizados
+                                <Trophy size={12} className="text-amber-400"/> Minis Finalizados
                             </div>
                             <div className="text-3xl font-black">{globalStats.finishedTourneys}</div>
                         </div>
@@ -338,7 +378,6 @@ const SuperAdmin: React.FC = () => {
                 </div>
             </div>
 
-            {/* ERROR/SUCCESS */}
             {(createError || successMessage) && (
                 <div className={`p-4 rounded-2xl text-sm font-bold flex items-center gap-2 shadow-sm animate-fade-in ${createError ? 'bg-rose-50 border-l-4 border-rose-500 text-rose-700' : 'bg-emerald-50 border-l-4 border-emerald-500 text-emerald-700'}`}>
                     {createError ? <AlertTriangle size={20}/> : <Check size={20}/>}
@@ -347,7 +386,7 @@ const SuperAdmin: React.FC = () => {
             )}
 
             {/* MAIN CONTENT: CLUB LIST */}
-            <div className="space-y-4">
+            <div className="space-y-6">
                 <div className="flex items-center justify-between px-2">
                     <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
                         <Building size={20} className="text-slate-400"/> Listado de Clubs
@@ -357,60 +396,115 @@ const SuperAdmin: React.FC = () => {
                     </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
                     {loading ? (
-                        Array.from({length: 6}).map((_, i) => <div key={i} className="h-40 bg-slate-100 animate-pulse rounded-2xl"></div>)
+                        Array.from({length: 4}).map((_, i) => <div key={i} className="h-60 bg-slate-100 animate-pulse rounded-3xl"></div>)
                     ) : clubs.map(club => (
-                        <div key={club.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-emerald-200 hover:shadow-md transition-all flex flex-col justify-between h-full">
-                            <div className="mb-4">
-                                <div className="flex items-center justify-between gap-2 mb-2">
-                                    <h4 className="font-black text-slate-800 text-lg leading-tight truncate w-full" title={club.name}>{club.name}</h4>
-                                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0 ${club.is_active ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
-                                        {club.is_active ? 'ACTIVO' : 'BLOQUEADO'}
-                                    </span>
-                                </div>
-                                
-                                <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium mb-3 truncate" title={club.ownerEmail}>
-                                    <Mail size={12} className="text-slate-300"/>
-                                    {club.ownerEmail || 'Sin email asociado'}
-                                </div>
+                        <div 
+                            key={club.id} 
+                            className={`bg-white rounded-3xl shadow-sm border-2 overflow-hidden transition-all relative ${club.is_active ? 'border-slate-100' : 'border-rose-100 opacity-80'}`}
+                        >
+                            <div className={`h-2 w-full ${club.is_active ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
 
-                                {/* TAGS ROW */}
-                                <div className="flex gap-2 mb-3">
-                                    {club.league_enabled && (
-                                        <div className="bg-indigo-50 border border-indigo-100 text-indigo-600 px-2 py-1 rounded-md text-[10px] font-black uppercase flex items-center gap-1">
-                                            <CalendarRange size={10}/> Liga Pro
+                            <div className="p-6">
+                                {/* HEADER SECTION */}
+                                <div className="flex justify-between items-start mb-6">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            {club.is_active ? (
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 flex items-center gap-1">
+                                                    <Check size={10} strokeWidth={4}/> Activo
+                                                </span>
+                                            ) : (
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100 flex items-center gap-1">
+                                                    <Lock size={10} strokeWidth={4}/> Bloqueado
+                                                </span>
+                                            )}
+                                            <span className="text-[10px] text-slate-400 font-mono">ID: {club.id.substring(0,6)}...</span>
                                         </div>
-                                    )}
+                                        <h2 className="text-xl font-black text-slate-900 leading-tight">{club.name}</h2>
+                                        <div className="flex items-center gap-1 text-xs text-slate-500 mt-1 font-medium truncate">
+                                            <Mail size={12}/> {club.ownerEmail || 'Sin email'}
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => fetchClubDetails(club)}
+                                        className="p-3 bg-slate-50 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
+                                        title="Ver Detalles Completos"
+                                    >
+                                        <Eye size={20}/>
+                                    </button>
                                 </div>
 
-                                <div className="flex gap-4 border-t border-slate-50 pt-3">
-                                    <div className="text-center flex-1">
-                                        <div className="text-lg font-black text-slate-700">{club.playerCount}</div>
-                                        <div className="text-[9px] text-slate-400 font-bold uppercase">Jugadores</div>
+                                {/* CARD DASHBOARD (Summary Stats) */}
+                                <div className="grid grid-cols-3 gap-2 mb-6">
+                                    <div className="flex flex-col items-center justify-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                        <div className="text-slate-400 mb-1"><Users size={16}/></div>
+                                        <div className="text-lg font-black text-slate-800">{club.playerCount}</div>
+                                        <div className="text-[9px] font-bold text-slate-400 uppercase">Jugadores</div>
                                     </div>
-                                    <div className="text-center flex-1">
-                                        <div className="text-lg font-black text-rose-500">{club.activeTourneys}</div>
-                                        <div className="text-[9px] text-slate-400 font-bold uppercase">Activos</div>
+                                    <div className="flex flex-col items-center justify-center p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                                        <div className="text-emerald-500 mb-1"><Trophy size={16}/></div>
+                                        <div className="text-lg font-black text-emerald-700">{club.activeTourneys}</div>
+                                        <div className="text-[9px] font-bold text-emerald-600 uppercase">Minis Act.</div>
                                     </div>
-                                    <div className="text-center flex-1">
-                                        <div className="text-lg font-black text-amber-500">{club.finishedTourneys}</div>
-                                        <div className="text-[9px] text-slate-400 font-bold uppercase">Historial</div>
+                                    <div className="flex flex-col items-center justify-center p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                                        <div className="text-indigo-500 mb-1"><CalendarRange size={16}/></div>
+                                        <div className="text-lg font-black text-indigo-700">{club.activeLeagues}</div>
+                                        <div className="text-[9px] font-bold text-indigo-600 uppercase">Ligas Act.</div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="flex items-center justify-between pt-3 border-t border-slate-100 bg-slate-50/50 -mx-5 -mb-5 p-3 rounded-b-2xl">
-                                <button 
-                                    onClick={() => fetchClubDetails(club)}
-                                    className="text-xs font-bold text-slate-600 flex items-center gap-1 hover:text-emerald-600 transition-colors"
-                                >
-                                    <Eye size={14}/> DETALLES
-                                </button>
-                                <div className="flex gap-1">
-                                    <button onClick={() => { setNewName(club.name); setClubToEdit(club); }} className="p-2 text-slate-400 hover:text-blue-500 hover:bg-white rounded-lg transition-colors"><Edit2 size={16}/></button>
-                                    <button onClick={() => handleResendEmail(club)} className="p-2 text-slate-400 hover:text-indigo-500 hover:bg-white rounded-lg transition-colors"><Send size={16}/></button>
-                                    <button onClick={() => toggleClubStatus(club)} className={`p-2 rounded-lg transition-colors ${club.is_active ? 'text-slate-400 hover:text-rose-500 hover:bg-white' : 'text-rose-500 bg-rose-50'}`}>{club.is_active ? <Lock size={16}/> : <Unlock size={16}/>}</button>
+                                {/* MODULES STATUS SECTION */}
+                                <div className="bg-slate-50 rounded-xl p-4 mb-6 border border-slate-100">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Módulos Contratados</span>
+                                    </div>
+                                    <div className="flex gap-3">
+                                        {/* Minis Module (Always Active) */}
+                                        <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg shadow-sm w-1/2">
+                                            <Trophy size={14} className="text-blue-500"/>
+                                            <span className="text-xs font-bold text-slate-700 flex-1">Minis</span>
+                                            <Check size={14} className="text-emerald-500 ml-auto"/>
+                                        </div>
+
+                                        {/* League Module (Toggleable) */}
+                                        <button 
+                                            onClick={() => toggleLeagueModule(club)}
+                                            className={`flex items-center gap-2 px-3 py-2 rounded-lg border shadow-sm transition-all w-1/2 ${club.league_enabled ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200 grayscale opacity-60 hover:opacity-100 hover:grayscale-0'}`}
+                                        >
+                                            <CalendarRange size={14} className={club.league_enabled ? 'text-indigo-600' : 'text-slate-400'}/>
+                                            <span className={`text-xs font-bold flex-1 text-left ${club.league_enabled ? 'text-indigo-700' : 'text-slate-500'}`}>Ligas</span>
+                                            <div className={`w-3 h-3 rounded-full border ${club.league_enabled ? 'bg-indigo-500 border-indigo-600' : 'bg-slate-200 border-slate-300'}`}></div>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* ACTIONS FOOTER */}
+                                <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-100">
+                                    <button 
+                                        onClick={() => { setNewName(club.name); setClubToEdit(club); }}
+                                        className="flex items-center justify-center gap-2 py-3 rounded-xl bg-white border-2 border-slate-100 text-slate-600 font-bold text-xs hover:border-slate-300 transition-colors"
+                                    >
+                                        <Edit2 size={14}/> Editar Datos
+                                    </button>
+                                    
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => handleResendEmail(club)}
+                                            className="flex-1 flex items-center justify-center py-3 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold transition-colors"
+                                            title="Reenviar Acceso"
+                                        >
+                                            <Send size={16}/>
+                                        </button>
+                                        <button 
+                                            onClick={() => toggleClubStatus(club)}
+                                            className={`flex-1 flex items-center justify-center py-3 rounded-xl font-bold transition-colors ${club.is_active ? 'bg-rose-50 text-rose-500 hover:bg-rose-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
+                                            title={club.is_active ? "Bloquear Acceso" : "Reactivar Acceso"}
+                                        >
+                                            <Power size={16}/>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -481,10 +575,10 @@ const SuperAdmin: React.FC = () => {
                 </div>
             )}
 
-            {/* --- CLUB INSPECTOR MODAL (WITH LEAGUE TOGGLE) --- */}
+            {/* --- CLUB INSPECTOR MODAL (UPDATED - PRIVACY MODE - 3 COLUMNS) --- */}
             {inspectedClub && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-[2.5rem] w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col animate-scale-in">
+                    <div className="bg-white rounded-[2.5rem] w-full max-w-5xl shadow-2xl flex flex-col animate-scale-in overflow-hidden">
                         {/* Modal Header */}
                         <div className="bg-slate-900 p-8 text-white flex justify-between items-center shrink-0">
                             <div>
@@ -502,99 +596,112 @@ const SuperAdmin: React.FC = () => {
                             </button>
                         </div>
 
-                        {/* Feature Toggles Section */}
-                        <div className="bg-slate-100 p-6 border-b border-slate-200 flex flex-wrap gap-4">
-                            <div className="flex items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                                <div className={`p-2 rounded-lg ${inspectedClub.league_enabled ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
-                                    <CalendarRange size={24}/>
-                                </div>
-                                <div>
-                                    <div className="font-bold text-slate-800 text-sm">Módulo Liga</div>
-                                    <div className="text-[10px] text-slate-500 uppercase font-bold">{inspectedClub.league_enabled ? 'Activado' : 'Desactivado'}</div>
-                                </div>
-                                <button 
-                                    onClick={() => toggleLeagueModule(inspectedClub)}
-                                    className={`ml-4 w-12 h-6 rounded-full p-1 transition-colors ${inspectedClub.league_enabled ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                                >
-                                    <div className={`w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform ${inspectedClub.league_enabled ? 'translate-x-6' : ''}`}></div>
-                                </button>
-                            </div>
-                        </div>
-
                         {/* Modal Content */}
-                        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                            {loadingDetails ? (
+                        <div className="p-10 bg-slate-50">
+                            {loadingDetails || !inspectionStats ? (
                                 <div className="flex flex-col items-center justify-center py-20 gap-4">
                                     <RefreshCw size={40} className="animate-spin text-emerald-500"/>
-                                    <p className="font-bold text-slate-400 uppercase tracking-widest text-xs">Cargando Datos del Club...</p>
+                                    <p className="font-bold text-slate-400 uppercase tracking-widest text-xs">Calculando Estadísticas...</p>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    {/* TOURNAMENTS SECTION */}
-                                    <div className="space-y-6">
-                                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                                            <h3 className="font-black text-slate-800 flex items-center gap-2">
-                                                <Trophy size={20} className="text-amber-500"/> Torneos ({clubDetailData?.tournaments.length})
-                                            </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                    
+                                    {/* COLUMN 1: PLAYERS */}
+                                    <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-200 flex flex-col items-center text-center relative overflow-hidden">
+                                        <div className="absolute top-0 left-0 w-full h-2 bg-blue-500"></div>
+                                        <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-6">
+                                            <Users size={40}/>
                                         </div>
-                                        <div className="space-y-2">
-                                            {clubDetailData?.tournaments.length === 0 ? (
-                                                <p className="text-slate-400 text-sm italic py-4">Sin torneos registrados.</p>
-                                            ) : clubDetailData?.tournaments.map((t, i) => (
-                                                <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="font-bold text-slate-800 text-sm truncate">{t.title}</div>
-                                                        <div className="text-[10px] text-slate-400 font-bold uppercase flex items-center gap-1 mt-1">
-                                                            <Calendar size={10}/> {new Date(t.date).toLocaleDateString()}
-                                                        </div>
-                                                    </div>
-                                                    <span className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase ${t.status === 'finished' ? 'bg-slate-200 text-slate-500' : 'bg-rose-100 text-rose-600 animate-pulse'}`}>
-                                                        {t.status === 'finished' ? 'Finalizado' : 'Activo'}
-                                                    </span>
-                                                </div>
-                                            ))}
+                                        <div className="text-6xl font-black text-slate-800 mb-2">{inspectionStats.players}</div>
+                                        <div className="text-sm font-bold text-slate-400 uppercase tracking-widest">Jugadores Totales</div>
+                                        <div className="mt-6 text-xs text-slate-400 px-4">
+                                            Base de datos acumulada de jugadores registrados en el club.
                                         </div>
                                     </div>
 
-                                    {/* PLAYERS SECTION */}
-                                    <div className="space-y-6">
-                                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                                            <h3 className="font-black text-slate-800 flex items-center gap-2">
-                                                <Users size={20} className="text-blue-500"/> Jugadores ({clubDetailData?.players.length})
-                                            </h3>
+                                    {/* COLUMN 2: LEAGUES */}
+                                    <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-200 flex flex-col relative overflow-hidden">
+                                        <div className="absolute top-0 left-0 w-full h-2 bg-indigo-500"></div>
+                                        <div className="flex items-center gap-4 mb-6">
+                                            <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                                                <CalendarRange size={28}/>
+                                            </div>
+                                            <div>
+                                                <div className="text-3xl font-black text-slate-800">{inspectionStats.leagues.total}</div>
+                                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ligas Totales</div>
+                                            </div>
                                         </div>
-                                        <div className="space-y-2">
-                                            {clubDetailData?.players.length === 0 ? (
-                                                <p className="text-slate-400 text-sm italic py-4">Sin jugadores registrados.</p>
-                                            ) : clubDetailData?.players.map((p, i) => (
-                                                <div key={i} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl shadow-sm">
-                                                    <div>
-                                                        <div className="font-bold text-slate-800 text-sm">{p.name}</div>
-                                                        <div className="text-[10px] text-slate-400 font-bold uppercase flex items-center gap-1 mt-1">
-                                                            {p.categories?.[0] || 'Sin nivel'}
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-xs font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">
-                                                        {p.global_rating || '1200'} <span className="text-[8px] font-normal text-slate-400">ELO</span>
-                                                    </div>
+                                        
+                                        <div className="space-y-3 flex-1">
+                                            <div className="flex justify-between items-center p-3 bg-slate-50 rounded-xl">
+                                                <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                                                    <FilePlus size={14} className="text-slate-400"/> En Registro
                                                 </div>
-                                            ))}
+                                                <span className="font-black text-slate-800">{inspectionStats.leagues.setup}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                                                <div className="flex items-center gap-2 text-xs font-bold text-indigo-700">
+                                                    <Activity size={14}/> Activas
+                                                </div>
+                                                <span className="font-black text-indigo-700">{inspectionStats.leagues.active}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center p-3 bg-slate-50 rounded-xl">
+                                                <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                                                    <CheckCircle size={14} className="text-slate-400"/> Finalizadas
+                                                </div>
+                                                <span className="font-black text-slate-800">{inspectionStats.leagues.finished}</span>
+                                            </div>
                                         </div>
                                     </div>
+
+                                    {/* COLUMN 3: MINIS */}
+                                    <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-200 flex flex-col relative overflow-hidden">
+                                        <div className="absolute top-0 left-0 w-full h-2 bg-amber-500"></div>
+                                        <div className="flex items-center gap-4 mb-6">
+                                            <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center">
+                                                <Trophy size={28}/>
+                                            </div>
+                                            <div>
+                                                <div className="text-3xl font-black text-slate-800">{inspectionStats.minis.total}</div>
+                                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Minis Totales</div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="space-y-3 flex-1">
+                                            <div className="flex justify-between items-center p-3 bg-slate-50 rounded-xl">
+                                                <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                                                    <FilePlus size={14} className="text-slate-400"/> En Preparación
+                                                </div>
+                                                <span className="font-black text-slate-800">{inspectionStats.minis.setup}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center p-3 bg-amber-50 rounded-xl border border-amber-100">
+                                                <div className="flex items-center gap-2 text-xs font-bold text-amber-700">
+                                                    <Activity size={14}/> En Juego
+                                                </div>
+                                                <span className="font-black text-amber-700">{inspectionStats.minis.active}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center p-3 bg-slate-50 rounded-xl">
+                                                <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                                                    <CheckCircle size={14} className="text-slate-400"/> Finalizados
+                                                </div>
+                                                <span className="font-black text-slate-800">{inspectionStats.minis.finished}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                 </div>
                             )}
                         </div>
                         
                         {/* Modal Footer */}
-                        <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
-                            <button onClick={() => setInspectedClub(null)} className="px-8 py-3 bg-slate-900 text-white rounded-xl font-black shadow-lg">CERRAR</button>
+                        <div className="p-6 bg-white border-t border-slate-200 flex justify-end">
+                            <button onClick={() => setInspectedClub(null)} className="px-8 py-3 bg-slate-900 text-white rounded-xl font-black shadow-lg hover:bg-slate-800 transition-colors">CERRAR INFORME</button>
                         </div>
                     </div>
                 </div>
             )}
 
             {/* --- MODALS (MAINTAINED: Credentials, Repair, Edit, Delete) --- */}
-            {/* Same implementation as before for these modals, just ensuring they render correctly */}
             {tempCredentials && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4 animate-scale-in">
                     <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full relative">
