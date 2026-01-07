@@ -23,7 +23,7 @@ const AuthContext = createContext<AuthContextType>({
   role: null,
   signOut: async () => {},
   isOfflineMode: false,
-  checkUserRole: async () => 'player',
+  checkUserRole: async () => null,
   loginWithDevBypass: () => {},
 });
 
@@ -49,41 +49,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return 'admin';
       }
 
-      // 2. Comprobación en paralelo
       try {
-          // Check SuperAdmin
-          const superPromise = supabase
+          // 2. Comprobación SuperAdmin (Prioridad Absoluta)
+          const { data: superAdmin } = await supabase
               .from('superadmins')
               .select('id')
               .eq('email', userEmail)
               .maybeSingle();
 
-          // Check Club Owner (Admin) - Primary check via 'clubs' table
-          const clubPromise = supabase
-              .from('clubs')
-              .select('id')
-              .eq('owner_id', uid)
-              .maybeSingle();
-
-          const [superRes, clubRes] = await Promise.all([superPromise, clubPromise]);
-
-          if (superRes.data) {
+          if (superAdmin) {
               console.log("✅ Rol: SUPERADMIN");
               console.groupEnd();
               return 'superadmin';
           }
 
-          if (clubRes.data) {
-              console.log("✅ Rol: ADMIN (Club detectado)");
+          // 3. Comprobación de CLUB (Admin Principal)
+          const { data: club } = await supabase
+              .from('clubs')
+              .select('id')
+              .eq('owner_id', uid)
+              .maybeSingle();
+
+          if (club) {
+              console.log("✅ Rol: ADMIN (Club encontrado)");
               console.groupEnd();
               return 'admin';
           }
 
-          // 3. Fallback: Check 'players' table to distinguish Admin vs Player
-          // - user_id in 'players' = OWNER of the player (Admin)
-          // - profile_user_id in 'players' = LINKED USER (Player App)
-          
-          // Check if user is a Player App User
+          // 4. Lógica "Greedy" de Admin (Datos huérfanos)
+          // Si tiene datos creados pero no club, lo tratamos como Admin para que pueda terminar el setup
+          const [playersOwned, tournamentsOwned] = await Promise.all([
+              supabase.from('players').select('id').eq('user_id', uid).limit(1).maybeSingle(),
+              supabase.from('tournaments').select('id').eq('user_id', uid).limit(1).maybeSingle()
+          ]);
+
+          if (playersOwned.data || tournamentsOwned.data) {
+              console.log("✅ Rol: ADMIN (Datos encontrados sin Club)");
+              console.groupEnd();
+              return 'admin';
+          }
+
+          // 5. Jugador (Player App)
           const { data: playerProfile } = await supabase
               .from('players')
               .select('id')
@@ -96,30 +102,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               return 'player';
           }
 
-          // Check if user OWNS players (Admin without club record yet?)
-          const { data: ownerCheck } = await supabase
-              .from('players')
-              .select('id')
-              .eq('user_id', uid)
-              .limit(1)
-              .maybeSingle();
-
-          if (ownerCheck) {
-              console.log("✅ Rol: ADMIN (Posee jugadores, sin club)");
-              console.groupEnd();
-              return 'admin';
-          }
-
-          // Check by Email for Player (Invitation linking)
+          // Check by Email for Player (Invitation linking fallback)
           if (userEmail) {
               const { data: emailMatch } = await supabase
                   .from('players')
                   .select('id')
                   .eq('email', userEmail)
+                  .is('profile_user_id', null)
                   .maybeSingle();
               
               if (emailMatch) {
-                  // Technically they should claim the profile, but for role check treat as player
                   console.log("✅ Rol: PLAYER (Email detectado)");
                   console.groupEnd();
                   return 'player';
@@ -130,10 +122,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.error("Error verificando rol:", e);
       }
 
-      console.log("❓ Rol: PENDING (Nuevo usuario)");
+      console.warn("⛔ Rol: NULL (Sin coincidencias)");
       console.groupEnd();
-      // Default new users to 'admin' to allow them to create a club (Onboarding)
-      return 'admin';
+      // ESTRICTO: Si no encaja en nada, devolvemos null. No dejamos entrar.
+      return null;
   };
 
   const loginWithDevBypass = (targetRole: 'admin' | 'player' | 'superadmin') => {
@@ -158,10 +150,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initSession = async () => {
-        // TIMEOUT DE SEGURIDAD
         const safetyTimer = setTimeout(() => {
             if (mounted && loading) {
-                console.warn("[Auth] Timeout: Forzando carga.");
+                console.warn("[Auth] Timeout: Forzando fin carga.");
                 setLoading(false);
             }
         }, 3000);

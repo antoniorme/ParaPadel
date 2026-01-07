@@ -49,14 +49,21 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
   const { clubData, loadingClub } = useHistory(); 
   const location = useLocation();
 
-  // Unified Loading State: Wait for Auth AND Club Data (if admin required)
-  // We only wait for loadingClub if we are actually logged in as admin, to prevent blocking other routes
+  // Unified Loading State
   if (loading || (requireAdmin && user && role === 'admin' && loadingClub)) {
       return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400 font-bold animate-pulse">Cargando...</div>;
   }
   
   if (!user) return <Navigate to="/" replace />;
   
+  // STRICT ACCESS CONTROL: If no role is assigned, deny access completely.
+  // This prevents the "default to admin" behavior.
+  if (role === null) {
+      // User is authenticated but has no valid role (Zombie User).
+      // Redirect to Landing or handle appropriately. Do NOT let them through.
+      return <Navigate to="/" replace />;
+  }
+
   if (role === 'pending' && location.pathname !== '/pending') {
       return <Navigate to="/pending" replace />;
   }
@@ -65,15 +72,14 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
       return <Navigate to="/dashboard" replace />;
   }
 
-  if (requireAdmin && role !== 'admin' && role !== 'superadmin') {
+  // If trying to access Admin routes but is a Player -> Go to Player Dashboard
+  if (requireAdmin && role === 'player') {
       return <Navigate to="/p/dashboard" replace />;
   }
 
   // ROBUST ONBOARDING CHECK:
-  // If we are admin, NOT loading, and have NO club ID (meaning data fetch didn't return a record),
-  // we redirect to onboarding to set it up.
-  // We exclude superadmin from this check.
-  if (requireAdmin && !loadingClub && !clubData.id && location.pathname !== '/onboarding' && role !== 'superadmin') {
+  // Only if we are confirmed as 'admin', enforce onboarding if club data is missing.
+  if (requireAdmin && role === 'admin' && !loadingClub && !clubData.id && location.pathname !== '/onboarding') {
       return <Navigate to="/onboarding" replace />;
   }
 
@@ -87,10 +93,15 @@ const AppRoutes = () => {
 
   const getHomeRoute = () => {
       if (!user) return <Landing />;
+      // STRICT: If no role, stay on Landing (or go to specific "No Access" page)
+      if (role === null) return <Landing />;
+      
       if (role === 'superadmin') return <Navigate to="/superadmin" replace />;
-      if (role === 'admin') return <Navigate to="/dashboard" replace />;
+      if (role === 'player') return <Navigate to="/p/dashboard" replace />;
       if (role === 'pending') return <Navigate to="/pending" replace />;
-      return <Navigate to="/p/dashboard" replace />;
+      
+      // Default to Admin Dashboard if role is admin
+      return <Navigate to="/dashboard" replace />;
   };
 
   return (
@@ -99,7 +110,10 @@ const AppRoutes = () => {
         <Route path="/auth" element={user ? getHomeRoute() : <AuthPage />} />
         <Route path="/pending" element={<ProtectedRoute><PendingVerification /></ProtectedRoute>} />
         <Route path="/join/:clubId" element={<JoinTournament />} />
+        
+        {/* Onboarding is strictly for admins */}
         <Route path="/onboarding" element={<ProtectedRoute requireAdmin><Onboarding /></ProtectedRoute>} />
+        
         <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
         <Route path="/notifications/settings" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
 
