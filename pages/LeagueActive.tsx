@@ -6,7 +6,7 @@ import {
     Edit3, X, Image as ImageIcon,
     ChevronDown, ChevronUp, Clock, Info, GitMerge,
     Users, ArrowRight, Settings, PlusCircle, CheckCircle,
-    Calendar as CalendarIcon, Trash2, LayoutGrid, TrendingUp, Shuffle, Repeat, Plus, ChevronRight, Edit2
+    Calendar as CalendarIcon, Trash2, LayoutGrid, TrendingUp, Shuffle, Repeat, Plus, ChevronRight, Edit2, AlertTriangle, Save
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PosterGenerator } from '../components/PosterGenerator';
@@ -25,7 +25,7 @@ interface Standing {
 }
 
 const LeagueActive: React.FC = () => {
-    const { league, updateLeagueScore, advanceToPlayoffs, addPairToLeague, deletePairFromLeague, generateLeagueGroups } = useLeague();
+    const { league, updateLeagueScore, advanceToPlayoffs, addPairToLeague, deletePairFromLeague, updateLeaguePair, generateLeagueGroups } = useLeague();
     const { state, formatPlayerName, addPlayerToDB, getPairElo } = useTournament();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -34,23 +34,29 @@ const LeagueActive: React.FC = () => {
     const activeTab = (searchParams.get('tab') as 'management' | 'registration' | 'standings' | 'calendar' | 'playoffs') || 'management';
 
     // UI States
-    // Use MAIN Category ID always
     const mainCatId = league.mainCategoryId;
     
+    // Match Editing
     const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
     const [scoreText, setScoreText] = useState('');
     const [setsA, setSetsA] = useState(0);
     const [setsB, setSetsB] = useState(0);
     const [expandedRound, setExpandedRound] = useState<number | null>(null);
     
-    // Pair Details Modal State
+    // Modals & Confirmations
     const [selectedPairId, setSelectedPairId] = useState<string | null>(null);
+    const [isPairModalOpen, setIsPairModalOpen] = useState(false); // Handles Add & Edit
+    const [editingPairId, setEditingPairId] = useState<string | null>(null); // For pair editing
+    
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+    const [showGenerateConfirm, setShowGenerateConfirm] = useState<boolean>(false);
+    const [alertMessage, setAlertMessage] = useState<{type: 'error' | 'success', message: string} | null>(null);
 
-    // Registration / Group Generation States
-    const [isAddingPair, setIsAddingPair] = useState(false);
+    // Form Data
     const [p1, setP1] = useState('');
     const [p2, setP2] = useState('');
     const [doubleRound, setDoubleRound] = useState(false);
+    const [genMethod, setGenMethod] = useState<'elo-balanced' | 'elo-mixed'>('elo-balanced');
 
     // Poster Logic
     const [showPoster, setShowPoster] = useState(false);
@@ -126,46 +132,84 @@ const LeagueActive: React.FC = () => {
 
     const roundNumbers = Object.keys(matchesByRound).map(Number).sort((a,b) => a - b);
 
-    // REGISTRATION LOGIC
-    const handleAddPair = async () => {
-        if (!p1 || !p2 || !mainCatId) return;
-        await addPairToLeague({
-            player1Id: p1,
-            player2Id: p2,
-            category_id: mainCatId,
-            name: 'Pareja Liga'
-        });
+    // --- PAIR MANAGEMENT LOGIC ---
+    
+    const openAddModal = () => {
+        setEditingPairId(null);
         setP1('');
         setP2('');
-        setIsAddingPair(false);
+        setIsPairModalOpen(true);
     };
 
-    const handleDeletePair = async (pairId: string) => {
-        if (confirm("¿Estás seguro de eliminar esta pareja de la liga?")) {
-            await deletePairFromLeague(pairId);
+    const openEditModal = (pairId: string) => {
+        const pair = league.pairs.find(p => p.id === pairId);
+        if (!pair) return;
+        setEditingPairId(pairId);
+        setP1(pair.player1Id);
+        setP2(pair.player2Id || '');
+        setIsPairModalOpen(true);
+    };
+
+    const handleSavePair = async () => {
+        if (!p1 || !p2 || !mainCatId) return;
+        
+        if (editingPairId) {
+            await updateLeaguePair(editingPairId, p1, p2);
+        } else {
+            await addPairToLeague({
+                player1Id: p1,
+                player2Id: p2,
+                category_id: mainCatId,
+                name: 'Pareja Liga'
+            });
+        }
+        
+        setP1('');
+        setP2('');
+        setIsPairModalOpen(false);
+        setEditingPairId(null);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (showDeleteConfirm) {
+            await deletePairFromLeague(showDeleteConfirm);
+            setShowDeleteConfirm(null);
         }
     };
 
-    const handleGenerate = async (method: 'elo-balanced' | 'elo-mixed') => {
+    // --- GENERATION LOGIC ---
+
+    const handlePreGenerate = (method: 'elo-balanced' | 'elo-mixed') => {
         if (!mainCatId) return;
         const pairsInCategory = league.pairs.filter(p => p.category_id === mainCatId);
-        if (pairsInCategory.length < 4) return alert("Mínimo 4 parejas para generar grupos");
-        const groupsCount = pairsInCategory.length >= 12 ? 2 : 1;
-        const typeText = doubleRound ? "Ida y Vuelta" : "Una Vuelta";
-        
-        if (confirm(`Se van a generar ${groupsCount} grupos con formato ${typeText}. ¿Continuar?`)) {
-            await generateLeagueGroups(mainCatId, groupsCount, method, doubleRound);
-            setTab('calendar');
+        if (pairsInCategory.length < 4) {
+            setAlertMessage({ type: 'error', message: "Se necesitan al menos 4 parejas para generar la liga." });
+            return;
         }
+        setGenMethod(method);
+        setShowGenerateConfirm(true);
+    };
+
+    const handleConfirmGenerate = async () => {
+        if (!mainCatId) return;
+        const pairsInCategory = league.pairs.filter(p => p.category_id === mainCatId);
+        const groupsCount = pairsInCategory.length >= 12 ? 2 : 1;
+        await generateLeagueGroups(mainCatId, groupsCount, genMethod, doubleRound);
+        setShowGenerateConfirm(false);
+        setTab('calendar');
     };
 
     // Filter available players: exclude those already in a league pair
+    // UNLESS editing the current pair
     const availablePlayers = useMemo(() => {
         return state.players.filter(p => {
-            const isAssigned = league.pairs.some(lp => lp.player1Id === p.id || lp.player2Id === p.id);
+            const isAssigned = league.pairs.some(lp => {
+                if (editingPairId && lp.id === editingPairId) return false;
+                return lp.player1Id === p.id || lp.player2Id === p.id;
+            });
             return !isAssigned;
         });
-    }, [state.players, league.pairs]);
+    }, [state.players, league.pairs, editingPairId]);
 
     // Component for a Match Row
     const MatchRow = ({ match }: { match: any }) => (
@@ -198,7 +242,6 @@ const LeagueActive: React.FC = () => {
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-2xl font-black text-white">{league.title}</h2>
-                    {/* Simplified Header - No Categories */}
                 </div>
                 <div className="flex gap-2">
                     {activeTab === 'standings' && (
@@ -282,7 +325,7 @@ const LeagueActive: React.FC = () => {
                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Inscritos</div>
                         </div>
                         <button 
-                            onClick={() => setIsAddingPair(true)}
+                            onClick={openAddModal}
                             className="bg-indigo-500 rounded-[2rem] p-6 shadow-lg border border-indigo-400 text-center text-white active:scale-95 transition-transform group"
                         >
                             <div className="flex justify-center mb-1 group-hover:scale-110 transition-transform"><Plus size={32} strokeWidth={3}/></div>
@@ -317,9 +360,8 @@ const LeagueActive: React.FC = () => {
                                         </div>
 
                                         <div className="flex items-center gap-1">
-                                            {/* Not implemented editing for now to keep it simple, or reuse modal */}
-                                            {/* <button className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-lg border border-slate-100 hover:border-blue-200 transition-colors"><Edit2 size={18}/></button> */}
-                                            <button onClick={() => handleDeletePair(pair.id)} className="p-2 text-slate-400 hover:text-red-600 bg-slate-50 rounded-lg border border-slate-100 hover:border-red-200 transition-colors"><Trash2 size={18}/></button>
+                                            <button onClick={() => openEditModal(pair.id)} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-lg border border-slate-100 hover:border-blue-200 transition-colors"><Edit2 size={18}/></button>
+                                            <button onClick={() => setShowDeleteConfirm(pair.id)} className="p-2 text-slate-400 hover:text-red-600 bg-slate-50 rounded-lg border border-slate-100 hover:border-red-200 transition-colors"><Trash2 size={18}/></button>
                                         </div>
                                     </div>
                                 </div>
@@ -348,10 +390,10 @@ const LeagueActive: React.FC = () => {
                             </div>
 
                             <div className="space-y-2">
-                                <button onClick={() => handleGenerate('elo-balanced')} className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-indigo-50 rounded-xl border-2 border-transparent hover:border-indigo-200 transition-all text-left">
+                                <button onClick={() => handlePreGenerate('elo-balanced')} className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-indigo-50 rounded-xl border-2 border-transparent hover:border-indigo-200 transition-all text-left">
                                     <div className="flex items-center gap-3"><TrendingUp size={18} className="text-indigo-500"/><span className="font-bold text-slate-800 text-sm">Por Nivel (Equilibrado)</span></div>
                                 </button>
-                                <button onClick={() => handleGenerate('elo-mixed')} className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-indigo-50 rounded-xl border-2 border-transparent hover:border-indigo-200 transition-all text-left">
+                                <button onClick={() => handlePreGenerate('elo-mixed')} className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-indigo-50 rounded-xl border-2 border-transparent hover:border-indigo-200 transition-all text-left">
                                     <div className="flex items-center gap-3"><Shuffle size={18} className="text-indigo-500"/><span className="font-bold text-slate-800 text-sm">Sorteo Mix</span></div>
                                 </button>
                             </div>
@@ -438,13 +480,13 @@ const LeagueActive: React.FC = () => {
                 </div>
             )}
 
-            {/* PAIR ADDING MODAL */}
-            {isAddingPair && (
+            {/* PAIR ADD/EDIT MODAL */}
+            {isPairModalOpen && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center sm:p-4">
                     <div className="bg-white w-full h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-[2.5rem] sm:max-w-md shadow-2xl animate-slide-up flex flex-col">
                         <div className="flex justify-between items-center px-8 py-6 border-b border-slate-100">
-                             <h3 className="text-xl font-black text-slate-900">Inscribir Pareja</h3>
-                             <button onClick={() => setIsAddingPair(false)} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"><X size={20}/></button>
+                             <h3 className="text-xl font-black text-slate-900">{editingPairId ? 'Editar Pareja' : 'Inscribir Pareja'}</h3>
+                             <button onClick={() => setIsPairModalOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"><X size={20}/></button>
                         </div>
                         
                         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
@@ -470,14 +512,68 @@ const LeagueActive: React.FC = () => {
                             
                             <div className="mt-8">
                                 <button 
-                                    onClick={handleAddPair}
+                                    onClick={handleSavePair}
                                     disabled={!p1 || !p2}
-                                    className="w-full py-5 bg-indigo-500 text-white rounded-[1.5rem] font-black text-lg shadow-xl shadow-indigo-100 disabled:opacity-50 disabled:grayscale transition-all active:scale-95"
+                                    className="w-full py-5 bg-indigo-500 text-white rounded-[1.5rem] font-black text-lg shadow-xl shadow-indigo-100 disabled:opacity-50 disabled:grayscale transition-all active:scale-95 flex items-center justify-center gap-2"
                                 >
-                                    CONFIRMAR INSCRIPCIÓN
+                                    <Save size={20}/> {editingPairId ? 'GUARDAR CAMBIOS' : 'CONFIRMAR INSCRIPCIÓN'}
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* DELETE CONFIRMATION MODAL */}
+            {showDeleteConfirm && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                        <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-600">
+                            <Trash2 size={32} />
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 mb-2">¿Eliminar Pareja?</h3>
+                        <p className="text-slate-500 mb-6 text-sm">
+                            Esta acción eliminará a la pareja de la liga. Los jugadores no se borrarán del club.
+                        </p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setShowDeleteConfirm(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold">Cancelar</button>
+                            <button onClick={handleDeleteConfirm} className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold shadow-lg">Eliminar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* GENERATE CONFIRMATION MODAL */}
+            {showGenerateConfirm && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                        <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-600">
+                            <LayoutGrid size={32} />
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 mb-2">Generar Calendario</h3>
+                        <p className="text-slate-500 mb-6 text-sm">
+                            Se generarán los grupos y partidos. <br/>
+                            <strong>Método:</strong> {genMethod === 'elo-balanced' ? 'Equilibrado por Nivel' : 'Sorteo Mix'}.<br/>
+                            <strong>Formato:</strong> {doubleRound ? 'Ida y Vuelta' : 'Solo Ida'}.
+                        </p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setShowGenerateConfirm(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold">Cancelar</button>
+                            <button onClick={handleConfirmGenerate} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg">Confirmar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* GENERIC ALERT MODAL */}
+            {alertMessage && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+                        <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${alertMessage.type === 'error' ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                            {alertMessage.type === 'error' ? <AlertTriangle size={32} /> : <CheckCircle size={32} />}
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 mb-2">{alertMessage.type === 'error' ? 'Atención' : 'Éxito'}</h3>
+                        <p className="text-slate-500 mb-6 text-sm">{alertMessage.message}</p>
+                        <button onClick={() => setAlertMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Entendido</button>
                     </div>
                 </div>
             )}

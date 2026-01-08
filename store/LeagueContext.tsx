@@ -15,7 +15,8 @@ interface LeagueContextType {
     generateLeagueGroups: (categoryId: string, groupsCount: number, method: 'elo-balanced' | 'elo-mixed', doubleRound: boolean) => Promise<void>;
     advanceToPlayoffs: (categoryId: string) => Promise<void>;
     addPairToLeague: (pair: Partial<Pair>) => Promise<void>;
-    deletePairFromLeague: (pairId: string) => Promise<void>; // NEW
+    deletePairFromLeague: (pairId: string) => Promise<void>;
+    updateLeaguePair: (pairId: string, p1: string, p2: string) => Promise<void>; // NEW
     isLeagueModuleEnabled: boolean;
 }
 
@@ -241,6 +242,23 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }]);
         
         if (league.id) selectLeague(league.id);
+    };
+
+    const updateLeaguePair = async (pairId: string, p1: string, p2: string) => {
+        if (isOfflineMode) {
+            const updatedPairs = league.pairs.map(p => p.id === pairId ? { ...p, player1Id: p1, player2Id: p2 } : p);
+            const updatedLeague = { ...league, pairs: updatedPairs };
+            setLeague(updatedLeague);
+            localStorage.setItem(`league_data_${league.id}`, JSON.stringify(updatedLeague));
+            return;
+        }
+
+        try {
+            await supabase.from('league_pairs').update({ player1_id: p1, player2_id: p2 }).eq('id', pairId);
+            if (league.id) selectLeague(league.id);
+        } catch (e) {
+            console.error("Error updating pair:", e);
+        }
     };
 
     const deletePairFromLeague = async (pairId: string) => {
@@ -486,7 +504,7 @@ export const LeagueProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return (
         <LeagueContext.Provider value={{
             league, leaguesList, fetchLeagues, selectLeague, updateLeagueScore, createLeague,
-            generateLeagueGroups, advanceToPlayoffs, addPairToLeague, deletePairFromLeague,
+            generateLeagueGroups, advanceToPlayoffs, addPairToLeague, deletePairFromLeague, updateLeaguePair,
             isLeagueModuleEnabled
         }}>
             {children}
