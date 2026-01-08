@@ -212,7 +212,7 @@ const LeagueActive: React.FC = () => {
     }, [state.players, league.pairs, editingPairId]);
 
     // Component for a Match Row
-    const MatchRow = ({ match }: { match: any }) => (
+    const MatchRow: React.FC<{ match: any }> = ({ match }) => (
         <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between group">
             <div className="flex-1 min-w-0 pr-4">
                 <div className={`flex justify-between items-center mb-1 ${match.winnerId === match.pairAId ? 'text-indigo-600 font-black' : 'text-slate-700 font-medium'}`}>

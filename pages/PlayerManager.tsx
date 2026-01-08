@@ -84,6 +84,19 @@ const PlayerManager: React.FC = () => {
       });
   };
 
+  const toggleEditCategory = (cat: string) => {
+      if (!editingPlayer) return;
+      setEditingPlayer(prev => {
+          if (!prev) return null;
+          const cats = prev.categories || [];
+          const exists = cats.includes(cat);
+          return {
+              ...prev,
+              categories: exists ? cats.filter(c => c !== cat) : [...cats, cat]
+          };
+      });
+  };
+
   const getPositionLabel = (pos?: string, both?: boolean) => {
       if (!pos) return null;
       let label = pos === 'right' ? 'Derecha' : 'Revés';
@@ -245,9 +258,10 @@ const PlayerManager: React.FC = () => {
           </div>
       )}
 
+      {/* EDIT MODAL - FULL FEATURES RESTORED */}
       {editingPlayer && (
           <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-[200] flex items-center justify-center p-6">
-              <div className="bg-slate-900 rounded-[2rem] p-8 w-full max-w-md shadow-2xl animate-scale-in border border-slate-800 max-h-[90vh] overflow-y-auto">
+              <div className="bg-slate-900 rounded-[2rem] p-8 w-full max-w-md shadow-2xl animate-scale-in border border-slate-800 max-h-[90vh] overflow-y-auto custom-scrollbar">
                   <div className="flex justify-between items-center mb-8">
                       <h3 className="text-2xl font-black text-white">Editar Jugador</h3>
                       <button onClick={() => setShowDeleteConfirm(true)} className="p-3 bg-rose-950/40 text-rose-400 rounded-2xl hover:bg-rose-900/50 transition-colors border border-rose-900/50">
@@ -273,6 +287,60 @@ const PlayerManager: React.FC = () => {
                               </div>
                           </div>
                       </div>
+
+                      <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Apodo (Opcional)</label><input value={editingPlayer.nickname || ''} onChange={e => setEditingPlayer({...editingPlayer, nickname: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 mt-1.5 text-slate-100 font-bold outline-none focus:border-[#575AF9]" /></div>
+
+                      {/* POSICIÓN Y LADO */}
+                      <div className="space-y-3">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Posición Predilecta</label>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={() => setEditingPlayer({...editingPlayer, preferred_position: 'right'})}
+                                    className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-all border ${editingPlayer.preferred_position === 'right' ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' : 'bg-slate-950 border-slate-800 text-slate-500 hover:text-slate-300'}`}
+                                >
+                                    <ArrowRightCircle size={16}/> Derecha
+                                </button>
+                                <button 
+                                    onClick={() => setEditingPlayer({...editingPlayer, preferred_position: 'backhand'})}
+                                    className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-all border ${editingPlayer.preferred_position === 'backhand' ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' : 'bg-slate-950 border-slate-800 text-slate-500 hover:text-slate-300'}`}
+                                >
+                                    <ArrowLeftCircle size={16}/> Revés
+                                </button>
+                            </div>
+                            <div 
+                                onClick={() => setEditingPlayer({...editingPlayer, play_both_sides: !editingPlayer.play_both_sides})}
+                                className={`flex items-center gap-3 p-4 rounded-2xl cursor-pointer border transition-colors ${editingPlayer.play_both_sides ? 'bg-emerald-900/30 border-emerald-800' : 'bg-slate-950 border-slate-800 hover:bg-slate-900'}`}
+                            >
+                                <div className={`w-5 h-5 rounded border flex items-center justify-center ${editingPlayer.play_both_sides ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-700 bg-slate-950'}`}>
+                                    {editingPlayer.play_both_sides && <Check size={12} strokeWidth={4}/>}
+                                </div>
+                                <span className={`text-xs font-bold ${editingPlayer.play_both_sides ? 'text-emerald-400' : 'text-slate-500'}`}>Versátil (Juega en ambos lados)</span>
+                            </div>
+                      </div>
+
+                      {/* CATEGORÍAS */}
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Categorías (Base ELO)</label>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                            {TOURNAMENT_CATEGORIES.map(cat => (
+                                <button key={cat} onClick={() => toggleEditCategory(cat)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border transition-all ${editingPlayer.categories?.includes(cat) ? 'bg-[#575AF9] border-[#575AF9] text-white' : 'bg-slate-950 text-slate-500 border-slate-800 hover:border-slate-600'}`}>{cat}</button>
+                            ))}
+                        </div>
+                      </div>
+
+                      {/* AJUSTE MANUAL */}
+                      <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800">
+                          <label className="text-[10px] font-black text-amber-400 uppercase tracking-widest flex items-center gap-2 mb-4"><Trophy size={14}/> Ajuste Manual (1-10)</label>
+                          <div className="flex items-center gap-5">
+                              <input type="range" min="1" max="10" step="0.5" value={editingPlayer.manual_rating || 5} onChange={e => setEditingPlayer({...editingPlayer, manual_rating: parseFloat(e.target.value)})} className="w-full accent-amber-500 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer" />
+                              <span className="font-black text-2xl text-amber-400 w-10 text-center">{editingPlayer.manual_rating || 5}</span>
+                          </div>
+                          <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-800">
+                              <span className="text-[10px] text-slate-500 uppercase font-bold">Nuevo ELO Estimado</span>
+                              <span className="text-sm font-black text-white">{calculateInitialElo(editingPlayer.categories || [], editingPlayer.manual_rating || 5)} pts</span>
+                          </div>
+                      </div>
+
                   </div>
                   <div className="grid grid-cols-2 gap-4 mt-10">
                       <button onClick={() => setEditingPlayer(null)} className="py-4 bg-slate-800 text-slate-400 rounded-2xl font-black text-sm tracking-widest uppercase">Cancelar</button>
