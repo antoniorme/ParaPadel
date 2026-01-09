@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
-import { Users, Trash2, Edit2, Save, X, AlertTriangle, TrendingUp, Link as LinkIcon, UserPlus, Activity } from 'lucide-react';
+import { Users, Trash2, Edit2, Save, X, AlertTriangle, TrendingUp, Link as LinkIcon, UserPlus, Activity, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { PlayerSelector } from '../components/PlayerSelector';
 import { calculateDisplayRanking } from '../utils/Elo';
 
@@ -47,6 +47,20 @@ const Registration: React.FC = () => {
       const elo2 = p2 ? calculateDisplayRanking(p2) : elo1; 
       return Math.round((elo1 + elo2) / 2);
   };
+
+  // HELPER: Determine Tournament ELO Range based on levelRange string
+  const getTournamentRange = () => {
+      const text = (state.levelRange || '').toLowerCase();
+      if (text.includes('1ª') || text.includes('1a')) return { min: 5000, max: 6000, label: '1ª Cat' };
+      if (text.includes('2ª') || text.includes('2a')) return { min: 4000, max: 5000, label: '2ª Cat' };
+      if (text.includes('3ª') || text.includes('3a')) return { min: 3000, max: 4000, label: '3ª Cat' };
+      if (text.includes('4ª') || text.includes('4a')) return { min: 2000, max: 3000, label: '4ª Cat' };
+      if (text.includes('5ª') || text.includes('5a')) return { min: 1000, max: 2000, label: '5ª Cat' };
+      if (text.includes('iniciacion') || text.includes('iniciación')) return { min: 0, max: 1000, label: 'Iniciación' };
+      return null; // Dynamic / Open
+  };
+
+  const tournamentRange = getTournamentRange();
 
   // SORTED PAIRS (Highest Average ELO first)
   const sortedActivePairs = useMemo(() => {
@@ -120,10 +134,33 @@ const Registration: React.FC = () => {
                     const p2 = state.players.find(p => p.id === pair.player2Id);
                     const avgElo = getPairAverageElo(pair);
                     
-                    // Visual Bar Logic
-                    const rangeFloor = Math.floor(avgElo / 1000) * 1000;
-                    const rangeCeiling = rangeFloor + 1000;
-                    const progressPercent = Math.max(5, Math.min(100, ((avgElo - rangeFloor) / 1000) * 100));
+                    // Logic for Bar: Use strict Tournament Range OR Dynamic 1000pt block
+                    const rangeMin = tournamentRange ? tournamentRange.min : Math.floor(avgElo / 1000) * 1000;
+                    const rangeMax = tournamentRange ? tournamentRange.max : rangeMin + 1000;
+                    
+                    let progressPercent = 0;
+                    let barColor = THEME.cta;
+                    let statusLabel = null;
+
+                    if (avgElo > rangeMax) {
+                        progressPercent = 100;
+                        barColor = '#F59E0B'; // Amber/Gold for "Over"
+                        statusLabel = (
+                            <div className="text-[9px] font-black text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                <ArrowUpCircle size={10}/> NIVEL SUPERIOR
+                            </div>
+                        );
+                    } else if (avgElo < rangeMin) {
+                        progressPercent = 5; // Minimal bar
+                        barColor = '#EF4444'; // Red for "Under"
+                        statusLabel = (
+                            <div className="text-[9px] font-black text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                <ArrowDownCircle size={10}/> NIVEL BAJO
+                            </div>
+                        );
+                    } else {
+                        progressPercent = Math.max(5, Math.min(100, ((avgElo - rangeMin) / (rangeMax - rangeMin)) * 100));
+                    }
 
                     return (
                         <div key={pair.id} className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col">
@@ -148,11 +185,11 @@ const Registration: React.FC = () => {
 
                             {/* BOTTOM STRIP: ELO BAR */}
                             <div className="bg-slate-50 px-4 py-2 border-t border-slate-100">
-                                <div className="flex justify-between items-end mb-1">
+                                <div className="flex justify-between items-center mb-1.5">
                                     <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                                        <Activity size={10} className="text-slate-400"/> Media
+                                        <Activity size={10} className="text-slate-400"/> Media {avgElo}
                                     </div>
-                                    <div className="text-xs font-black text-slate-700">{avgElo} pts</div>
+                                    {statusLabel}
                                 </div>
                                 
                                 <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden flex relative">
@@ -160,14 +197,14 @@ const Registration: React.FC = () => {
                                         className="h-full rounded-full transition-all duration-500" 
                                         style={{ 
                                             width: `${progressPercent}%`, 
-                                            backgroundColor: THEME.cta 
+                                            backgroundColor: barColor 
                                         }}
                                     ></div>
                                 </div>
                                 
                                 <div className="flex justify-between mt-1 text-[9px] text-slate-400 font-mono">
-                                    <span>{rangeFloor}</span>
-                                    <span>{rangeCeiling}</span>
+                                    <span>{rangeMin}</span>
+                                    <span>{rangeMax}</span>
                                 </div>
                             </div>
                         </div>
