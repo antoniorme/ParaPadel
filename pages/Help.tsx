@@ -32,7 +32,7 @@ const Help: React.FC = () => {
       },
       { 
         q: "7. ¿Cómo funcionan los Puntos (ELO)?", 
-        a: "Hemos diseñado un sistema que premia el mérito pero protege al jugador. Se basa en tres pilares: su Categoría (Puntos Base), tu valoración Manual y los resultados de sus partidos. \n\nConsulta la tarjeta detallada 'Cómo funcionan los Puntos' al final de esta página para ver la tabla exacta." 
+        a: "Hemos actualizado el sistema a una escala de 0 a 6000 puntos para mayor claridad. Cada categoría representa un salto de 1000 puntos. Consulta la tabla detallada abajo." 
       },
   ];
 
@@ -77,7 +77,7 @@ const Help: React.FC = () => {
               </div>
               <div>
                   <h3 className="font-bold text-lg">Cómo funcionan los Puntos</h3>
-                  <p className="text-xs text-slate-400">Guía rápida para dueños de club</p>
+                  <p className="text-xs text-slate-400">Guía rápida del Sistema 0-6000</p>
               </div>
           </div>
           
@@ -86,75 +86,68 @@ const Help: React.FC = () => {
               {/* SECCIÓN 1: TABLA DE CATEGORÍAS */}
               <div>
                   <div className="flex items-center gap-2 mb-3 text-blue-600 font-bold uppercase text-xs tracking-wider">
-                      <Table size={16}/> 1. Puntos de Salida (La Base)
+                      <Table size={16}/> 1. Categorías y Rangos
                   </div>
                   <p className="text-sm text-slate-600 mb-4 leading-relaxed">
-                      Cuando creas un jugador, el sistema le asigna unos puntos iniciales según su categoría teórica. Este es su "suelo".
+                      El sistema asigna una puntuación base en el <strong>punto medio</strong> de cada categoría.
                   </p>
                   <div className="overflow-hidden rounded-xl border border-slate-200">
                       <table className="w-full text-sm text-left">
                           <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs">
                               <tr>
                                   <th className="px-4 py-3">Categoría</th>
-                                  <th className="px-4 py-3 text-right">Puntos ELO</th>
+                                  <th className="px-4 py-3 text-right">Rango</th>
+                                  <th className="px-4 py-3 text-right">Base</th>
                               </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 text-slate-700">
-                              <tr><td className="px-4 py-2 font-medium">Iniciación</td><td className="px-4 py-2 text-right font-bold">800</td></tr>
-                              <tr><td className="px-4 py-2 font-medium">5ª Categoría</td><td className="px-4 py-2 text-right font-bold">1000</td></tr>
-                              <tr><td className="px-4 py-2 font-medium">4ª Categoría</td><td className="px-4 py-2 text-right font-bold">1200</td></tr>
-                              <tr><td className="px-4 py-2 font-medium">3ª Categoría</td><td className="px-4 py-2 text-right font-bold">1400</td></tr>
-                              <tr><td className="px-4 py-2 font-medium">2ª Categoría</td><td className="px-4 py-2 text-right font-bold">1600</td></tr>
-                              <tr><td className="px-4 py-2 font-medium">1ª Categoría</td><td className="px-4 py-2 text-right font-bold">1800+</td></tr>
+                              <tr><td className="px-4 py-2 font-medium">Iniciación</td><td className="px-4 py-2 text-right text-slate-400 font-mono">0 - 1000</td><td className="px-4 py-2 text-right font-bold">500</td></tr>
+                              <tr><td className="px-4 py-2 font-medium">5ª Categoría</td><td className="px-4 py-2 text-right text-slate-400 font-mono">1000 - 2000</td><td className="px-4 py-2 text-right font-bold">1500</td></tr>
+                              <tr><td className="px-4 py-2 font-medium">4ª Categoría</td><td className="px-4 py-2 text-right text-slate-400 font-mono">2000 - 3000</td><td className="px-4 py-2 text-right font-bold">2500</td></tr>
+                              <tr><td className="px-4 py-2 font-medium">3ª Categoría</td><td className="px-4 py-2 text-right text-slate-400 font-mono">3000 - 4000</td><td className="px-4 py-2 text-right font-bold">3500</td></tr>
+                              <tr><td className="px-4 py-2 font-medium">2ª Categoría</td><td className="px-4 py-2 text-right text-slate-400 font-mono">4000 - 5000</td><td className="px-4 py-2 text-right font-bold">4500</td></tr>
+                              <tr><td className="px-4 py-2 font-medium">1ª Categoría</td><td className="px-4 py-2 text-right text-slate-400 font-mono">5000 - 6000</td><td className="px-4 py-2 text-right font-bold">5500</td></tr>
                           </tbody>
                       </table>
-                  </div>
-                  <div className="mt-3 bg-blue-50 p-3 rounded-lg border border-blue-100 text-xs text-blue-800 flex items-start gap-2">
-                      <Calculator size={14} className="shrink-0 mt-0.5"/>
-                      <span><strong>¿Juega en dos categorías?</strong> Si seleccionas, por ejemplo, 4ª y 3ª, el sistema hace la media automática (1300 pts).</span>
                   </div>
               </div>
 
               {/* SECCIÓN 2: AJUSTE MANUAL */}
               <div>
                   <div className="flex items-center gap-2 mb-3 text-amber-600 font-bold uppercase text-xs tracking-wider">
-                      <Sliders size={16}/> 2. El "Afinador" (Ajuste Manual)
+                      <Sliders size={16}/> 2. Ajuste Fino (+/- 400)
                   </div>
                   <p className="text-sm text-slate-600 leading-relaxed">
-                      Dentro de una categoría hay niveles muy distintos. El slider del <strong>1 al 10</strong> te permite afinar esa base.
+                      El slider del 1 al 10 te permite mover al jugador dentro de su franja sin saltar de categoría.
                   </p>
                   <ul className="mt-3 space-y-2 text-sm text-slate-600 list-disc pl-5">
-                      <li><strong>Nivel 5 (Neutro):</strong> Se queda con los puntos de la tabla.</li>
-                      <li><strong>Nivel 8-10 (Fuerte):</strong> Sumamos puntos extra (es un jugador puntero en su categoría).</li>
-                      <li><strong>Nivel 1-3 (Flojo):</strong> Restamos puntos (acaba de subir o es el más débil).</li>
+                      <li><strong>Nivel 5 (Neutro):</strong> Se queda con los puntos base.</li>
+                      <li><strong>Nivel 10 (Tope):</strong> Suma +400 puntos (casi sube de nivel).</li>
+                      <li><strong>Nivel 1 (Suelo):</strong> Resta -400 puntos.</li>
                   </ul>
               </div>
 
               {/* SECCIÓN 3: PARTIDOS */}
               <div>
                   <div className="flex items-center gap-2 mb-3 text-emerald-600 font-bold uppercase text-xs tracking-wider">
-                      <RefreshCw size={16}/> 3. Ganar y Perder (Partidos)
+                      <RefreshCw size={16}/> 3. Puntos por Partido
                   </div>
                   <p className="text-sm text-slate-600 mb-4 leading-relaxed">
-                      Una vez empieza a jugar, los puntos suben y bajan automáticamente.
+                      Al aumentar la escala, los puntos por victoria también han subido.
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                          <span className="font-bold text-slate-800 block mb-1">Premios por ganar</span>
+                          <span className="font-bold text-slate-800 block mb-1">Victoria Normal</span>
                           <p className="text-xs text-slate-500">
-                              Ganar a alguien mejor que tú da <strong>muchos puntos</strong> (ej. +20). Ganar a alguien peor da <strong>pocos puntos</strong> (ej. +2).
+                              Entre <strong>50 y 100 puntos</strong> dependiendo del rival.
                           </p>
                       </div>
                       <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                          <span className="font-bold text-slate-800 block mb-1">Bonus por Paliza</span>
+                          <span className="font-bold text-slate-800 block mb-1">Límite Seguro</span>
                           <p className="text-xs text-slate-500">
-                              No es lo mismo ganar 6-5 que 6-0. Si ganas con mucha diferencia, el sistema te da un pequeño bonus extra.
+                              Máximo <strong>150 puntos</strong> por partido para evitar saltos locos.
                           </p>
                       </div>
-                  </div>
-                  <div className="mt-3 bg-rose-50 p-3 rounded-lg border border-rose-100 text-xs text-rose-800 flex items-start gap-2">
-                      <ShieldAlert size={14} className="shrink-0 mt-0.5"/>
-                      <span><strong>Límite de Seguridad:</strong> Para evitar locuras, nadie puede ganar ni perder más de <strong>25 puntos</strong> en un solo partido.</span>
                   </div>
               </div>
 

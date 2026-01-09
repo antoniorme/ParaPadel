@@ -118,6 +118,11 @@ const PlayerProfile: React.FC = () => {
   const rawStatsElo = player.global_rating || 1200;
   const manualVal = player.manual_rating || 5;
 
+  // VISUAL PROGRESS (Relative to category 1000 points range)
+  const rangeFloor = Math.floor(currentRanking / 1000) * 1000;
+  const rangeCeiling = rangeFloor + 1000;
+  const progressPercent = Math.max(0, Math.min(100, ((currentRanking - rangeFloor) / 1000) * 100));
+
   // --- AVATAR LOGIC ---
   const getInitials = (name: string) => {
     return name.trim().split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
@@ -187,9 +192,17 @@ const PlayerProfile: React.FC = () => {
               </div>
           </div>
           
-          <div className="w-full bg-slate-700 h-2 rounded-full overflow-hidden mb-4">
-              {/* Visual bar relative to max 2000 */}
-              <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${Math.min((currentRanking / 2000) * 100, 100)}%` }}></div>
+          {/* VISUAL ELO BAR (CATEGORY RANGE) */}
+          <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase mb-1">
+              <span>Progreso Categoría</span>
+              <span>{Math.round(progressPercent)}%</span>
+          </div>
+          <div className="w-full bg-slate-700 h-2.5 rounded-full overflow-hidden mb-2">
+              <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${progressPercent}%` }}></div>
+          </div>
+          <div className="flex justify-between text-[10px] text-slate-500 font-mono mb-4">
+              <span>{rangeFloor}</span>
+              <span>{rangeCeiling}</span>
           </div>
 
           <div className="flex justify-between items-center text-xs text-slate-400 border-t border-slate-700 pt-3">

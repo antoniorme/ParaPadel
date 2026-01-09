@@ -7,7 +7,7 @@ import { useAuth } from '../../store/AuthContext';
 import { THEME, getFormatColor } from '../../utils/theme';
 /* Added Loader2 to imports */
 import { ArrowLeft, Trophy, Medal, Calendar, Hash, Activity, BarChart2, TrendingUp, ChevronDown, ChevronUp, Shuffle, Trash2, AlertTriangle, LogOut, Key, X, Lock, Check, Loader2 } from 'lucide-react';
-import { calculateDisplayRanking, calculateMatchDelta, getPairTeamElo } from '../../utils/Elo';
+import { calculateDisplayRanking, calculateMatchDelta, getPairTeamElo, manualToElo } from '../../utils/Elo';
 import { TournamentState, Match } from '../../types';
 import { supabase } from '../../lib/supabase';
 
@@ -69,7 +69,7 @@ const PlayerProfile: React.FC = () => {
             const partner = tData.players.find(p => p.id === partnerId);
             const partnerName = formatPlayerName(partner);
             
-            const myTeamElo = partner ? getPairTeamElo(currentPlayer, partner) : 1200;
+            const myTeamElo = partner ? getPairTeamElo(currentPlayer, partner) : 1500;
             const tMatches: ProcessedMatch[] = [];
             let tEloChange = 0;
             let resultBadge: 'champion' | 'consolation' | null = null;
@@ -95,7 +95,7 @@ const PlayerProfile: React.FC = () => {
                 const oppId = isPairA ? m.pairBId : m.pairAId;
                 const oppPair = tData.pairs.find(p => p.id === oppId);
                 let oppNames = 'Desconocidos';
-                let oppTeamElo = 1200;
+                let oppTeamElo = 1500;
                 if (oppPair) {
                     const op1 = tData.players.find(p => p.id === oppPair.player1Id);
                     const op2 = tData.players.find(p => p.id === oppPair.player2Id);
@@ -149,6 +149,13 @@ const PlayerProfile: React.FC = () => {
     if (!currentPlayer) return <div className="p-8 text-center text-slate-400"><p>Perfil no encontrado.</p><button onClick={() => navigate('/p/dashboard')} className="mt-4 text-[#575AF9] font-bold">Volver al inicio</button></div>;
 
     const initials = currentPlayer.name.split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
+    
+    // VISUAL ELO CALCULATION (Relative to Category)
+    const currentRanking = calculateDisplayRanking(currentPlayer);
+    const rangeFloor = Math.floor(currentRanking / 1000) * 1000;
+    const rangeCeiling = rangeFloor + 1000;
+    // Ensure we don't divide by zero or get negative width if outlier
+    const progressPercent = Math.max(0, Math.min(100, ((currentRanking - rangeFloor) / 1000) * 100));
 
     return (
         <div className="bg-slate-50 min-h-screen pb-20">
@@ -164,7 +171,22 @@ const PlayerProfile: React.FC = () => {
                     <h2 className="text-2xl font-black text-slate-900">{currentPlayer.nickname || currentPlayer.name}</h2>
                     <div className="flex items-center gap-2 mt-1 flex-wrap justify-center">
                         <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-xs font-bold uppercase">{currentPlayer.categories?.[0] || 'Sin Nivel'}</span>
-                        <span className="text-[#575AF9] font-black text-lg flex items-center gap-1 ml-2"><Activity size={16}/> {calculateDisplayRanking(currentPlayer)} pts</span>
+                        <span className="text-[#575AF9] font-black text-lg flex items-center gap-1 ml-2"><Activity size={16}/> {currentRanking} pts</span>
+                    </div>
+                </div>
+
+                {/* VISUAL ELO BAR (CATEGORY RANGE) */}
+                <div className="mt-6 bg-slate-900 rounded-2xl p-4 text-white shadow-lg relative overflow-hidden">
+                    <div className="flex justify-between text-xs text-slate-400 uppercase font-bold mb-2">
+                        <span>Progreso Categoría</span>
+                        <span>{Math.round(progressPercent)}%</span>
+                    </div>
+                    <div className="w-full bg-slate-700 h-2.5 rounded-full overflow-hidden mb-2">
+                        <div className="bg-gradient-to-r from-emerald-500 to-emerald-400 h-full rounded-full transition-all duration-1000 ease-out" style={{ width: `${progressPercent}%` }}></div>
+                    </div>
+                    <div className="flex justify-between text-[10px] text-slate-500 font-mono">
+                        <span>{rangeFloor}</span>
+                        <span>{rangeCeiling}</span>
                     </div>
                 </div>
 

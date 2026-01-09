@@ -267,10 +267,12 @@ const LeagueActive: React.FC = () => {
     if (!mainCatId) return <div className="p-10 text-center animate-pulse">Cargando datos de la liga...</div>;
 
     const allPairs = league.pairs.filter(p => p.category_id === mainCatId);
-    const completePairs = allPairs.filter(p => p.player2Id);
-    const incompletePairs = allPairs.filter(p => !p.player2Id);
+    
+    // Sort logic to prioritize "Solo" pairs at the top, then sort by newest first
+    const completePairs = allPairs.filter(p => p.player2Id).sort((a,b) => b.id.localeCompare(a.id));
+    const incompletePairs = allPairs.filter(p => !p.player2Id).sort((a,b) => b.id.localeCompare(a.id));
 
-    // Combine them for display, putting solos at top or bottom? Usually mixed in date order, but let's just map them.
+    // Combine: Solos First
     const displayPairs = [...incompletePairs, ...completePairs];
 
     return (
@@ -383,7 +385,7 @@ const LeagueActive: React.FC = () => {
                                 return (
                                     <div 
                                         key={pair.id} 
-                                        className={`p-4 rounded-xl flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow relative overflow-hidden ${isSolo ? 'bg-amber-50 border-2 border-amber-200' : 'bg-white border border-slate-200'}`}
+                                        className={`p-4 rounded-xl flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow relative overflow-hidden ${isSolo ? 'bg-amber-50 border-2 border-amber-200 order-first' : 'bg-white border border-slate-200'}`}
                                     >
                                         <div className="flex justify-between items-start mb-3">
                                             <div className="flex items-center gap-2">
