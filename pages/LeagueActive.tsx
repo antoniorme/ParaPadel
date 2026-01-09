@@ -6,7 +6,7 @@ import {
     Edit3, X, Image as ImageIcon,
     ChevronDown, ChevronUp, Clock, Info, GitMerge,
     Users, ArrowRight, Settings, PlusCircle, CheckCircle,
-    Calendar as CalendarIcon, Trash2, LayoutGrid, TrendingUp, Shuffle, Repeat, Plus, ChevronRight, Edit2, AlertTriangle, Save, Trophy
+    Calendar as CalendarIcon, Trash2, LayoutGrid, TrendingUp, Shuffle, Repeat, Plus, ChevronRight, Edit2, AlertTriangle, Save, Trophy, UserPlus, ArrowRightCircle, ArrowLeftCircle
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PosterGenerator } from '../components/PosterGenerator';
@@ -83,10 +83,21 @@ const LeagueActive: React.FC = () => {
         return `${formatPlayerName(p1)} & ${formatPlayerName(p2)}`;
     };
 
+    const getPositionLabel = (pos?: string, both?: boolean) => {
+        if (!pos) return null;
+        return (
+            <div className="flex items-center gap-1 text-[10px] uppercase font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200">
+                {pos === 'right' ? <ArrowRightCircle size={10}/> : <ArrowLeftCircle size={10}/>}
+                {pos === 'right' ? 'Derecha' : 'Revés'}
+                {both && <span title="Juega en ambos lados">+</span>}
+            </div>
+        );
+    };
+
     const calculateStandings = useMemo(() => {
         if (!mainCatId) return [];
         const standings: Record<string, Standing> = {};
-        league.pairs.filter(p => p.category_id === mainCatId).forEach(p => {
+        league.pairs.filter(p => p.category_id === mainCatId && p.player2Id).forEach(p => {
             standings[p.id] = { pairId: p.id, pairName: getPairName(p.id), played: 0, won: 0, lost: 0, setsF: 0, setsC: 0, points: 0 };
         });
         league.matches.filter(m => m.category_id === mainCatId && m.phase === 'group' && m.isFinished).forEach(m => {
@@ -158,14 +169,14 @@ const LeagueActive: React.FC = () => {
     };
 
     const handleSavePair = async () => {
-        if (!p1 || !p2 || !mainCatId) return;
+        if (!p1 || !mainCatId) return; // Allow p2 to be empty for solo
         
         if (editingPairId) {
             await updateLeaguePair(editingPairId, p1, p2);
         } else {
             await addPairToLeague({
                 player1Id: p1,
-                player2Id: p2,
+                player2Id: p2 || null,
                 category_id: mainCatId,
                 name: 'Pareja Liga'
             });
@@ -188,9 +199,9 @@ const LeagueActive: React.FC = () => {
 
     const handlePreGenerate = (method: 'elo-balanced' | 'elo-mixed') => {
         if (!mainCatId) return;
-        const pairsInCategory = league.pairs.filter(p => p.category_id === mainCatId);
+        const pairsInCategory = league.pairs.filter(p => p.category_id === mainCatId && p.player2Id);
         if (pairsInCategory.length < 4) {
-            setAlertMessage({ type: 'error', message: "Se necesitan al menos 4 parejas para generar la liga." });
+            setAlertMessage({ type: 'error', message: "Se necesitan al menos 4 parejas completas para generar la liga." });
             return;
         }
         setGenMethod(method);
@@ -199,7 +210,7 @@ const LeagueActive: React.FC = () => {
 
     const handleConfirmGenerate = async () => {
         if (!mainCatId) return;
-        const pairsInCategory = league.pairs.filter(p => p.category_id === mainCatId);
+        const pairsInCategory = league.pairs.filter(p => p.category_id === mainCatId && p.player2Id);
         const groupsCount = pairsInCategory.length >= 12 ? 2 : 1;
         await generateLeagueGroups(mainCatId, groupsCount, genMethod, doubleRound);
         setShowGenerateConfirm(false);
@@ -254,6 +265,13 @@ const LeagueActive: React.FC = () => {
     );
 
     if (!mainCatId) return <div className="p-10 text-center animate-pulse">Cargando datos de la liga...</div>;
+
+    const allPairs = league.pairs.filter(p => p.category_id === mainCatId);
+    const completePairs = allPairs.filter(p => p.player2Id);
+    const incompletePairs = allPairs.filter(p => !p.player2Id);
+
+    // Combine them for display, putting solos at top or bottom? Usually mixed in date order, but let's just map them.
+    const displayPairs = [...incompletePairs, ...completePairs];
 
     return (
         <div className="space-y-6 pb-32 animate-fade-in">
@@ -340,8 +358,8 @@ const LeagueActive: React.FC = () => {
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="bg-white rounded-[2rem] p-6 shadow-lg border border-indigo-100 text-center">
-                            <div className="text-3xl font-black text-indigo-500">{league.pairs.filter(p => p.category_id === mainCatId).length}</div>
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Inscritos</div>
+                            <div className="text-3xl font-black text-indigo-500">{completePairs.length}</div>
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Parejas</div>
                         </div>
                         <button 
                             onClick={openAddModal}
@@ -352,47 +370,71 @@ const LeagueActive: React.FC = () => {
                         </button>
                     </div>
 
-                    <div className="space-y-3">
-                        <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 px-2">Parejas Inscritas</h3>
-                        {league.pairs.filter(p => p.category_id === mainCatId).map((pair, idx) => {
-                            const player1 = state.players.find(p => p.id === pair.player1Id);
-                            const player2 = state.players.find(p => p.id === pair.player2Id);
-                            const pairElo = getPairElo(pair, state.players);
+                    <div>
+                        <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 px-2">Listado de Inscritos</h3>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {displayPairs.map((pair, idx) => {
+                                const player1 = state.players.find(p => p.id === pair.player1Id);
+                                const player2 = pair.player2Id ? state.players.find(p => p.id === pair.player2Id) : null;
+                                const isSolo = !player2;
+                                const pairElo = getPairElo(pair, state.players);
 
-                            return (
-                                <div key={pair.id} className="bg-white p-4 rounded-xl flex items-center justify-between border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                                    <div className="flex items-center gap-4 overflow-hidden w-full">
-                                        <span className="bg-slate-100 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 text-slate-500 border border-slate-200">{idx + 1}</span>
-                                        <div className="flex flex-col w-full">
-                                            <div className="text-base font-bold text-slate-800 truncate">{formatPlayerName(player1)}</div>
-                                            <div className="flex items-center gap-2 mt-0.5">
-                                                <span style={{ color: THEME.cta }} className="text-xs font-black">&</span>
-                                                <div className="text-base font-bold text-slate-800 truncate">{formatPlayerName(player2)}</div>
+                                return (
+                                    <div 
+                                        key={pair.id} 
+                                        className={`p-4 rounded-xl flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow relative overflow-hidden ${isSolo ? 'bg-amber-50 border-2 border-amber-200' : 'bg-white border border-slate-200'}`}
+                                    >
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${isSolo ? 'bg-amber-200 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>{idx + 1}</span>
+                                                {isSolo && <span className="text-[9px] uppercase font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">Busca Pareja</span>}
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <button onClick={() => openEditModal(pair.id)} className={`p-1.5 rounded-lg transition-colors ${isSolo ? 'text-amber-600 hover:bg-amber-100' : 'text-slate-400 hover:text-blue-600 hover:bg-slate-50'}`}><Edit2 size={16}/></button>
+                                                <button onClick={() => setShowDeleteConfirm(pair.id)} className={`p-1.5 rounded-lg transition-colors ${isSolo ? 'text-amber-600 hover:bg-amber-100' : 'text-slate-400 hover:text-red-600 hover:bg-slate-50'}`}><Trash2 size={16}/></button>
                                             </div>
                                         </div>
-                                    </div>
-                                    
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex flex-col items-center justify-center bg-slate-50 px-2 py-1 rounded border border-slate-100 min-w-[50px]">
-                                            <span className="text-[10px] text-slate-400 uppercase font-bold flex items-center gap-1"><TrendingUp size={8}/> ELO</span>
-                                            <span className="text-xs font-black text-slate-700">{pairElo}</span>
-                                        </div>
 
-                                        <div className="flex items-center gap-1">
-                                            <button onClick={() => openEditModal(pair.id)} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-lg border border-slate-100 hover:border-blue-200 transition-colors"><Edit2 size={18}/></button>
-                                            <button onClick={() => setShowDeleteConfirm(pair.id)} className="p-2 text-slate-400 hover:text-red-600 bg-slate-50 rounded-lg border border-slate-100 hover:border-red-200 transition-colors"><Trash2 size={18}/></button>
+                                        <div className="space-y-1 mb-3">
+                                            <div className="text-sm font-bold text-slate-800 truncate">{formatPlayerName(player1)}</div>
+                                            {isSolo && player1 && (
+                                                <div className="mt-1 flex items-center gap-2">
+                                                    {getPositionLabel(player1.preferred_position, player1.play_both_sides)}
+                                                </div>
+                                            )}
+                                            
+                                            {player2 ? (
+                                                <div className="flex items-center gap-2">
+                                                    <span style={{ color: THEME.cta }} className="text-xs font-black">&</span>
+                                                    <div className="text-sm font-bold text-slate-800 truncate">{formatPlayerName(player2)}</div>
+                                                </div>
+                                            ) : (
+                                                <div className="text-xs text-amber-500 italic mt-1 flex items-center gap-1">
+                                                    <UserPlus size={12}/> Esperando compañero...
+                                                </div>
+                                            )}
                                         </div>
+                                        
+                                        {!isSolo && (
+                                            <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                                                <div className="bg-slate-50 px-2 py-1 rounded text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                                                    <TrendingUp size={10}/> ELO {pairElo}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
-                            );
-                        })}
-                        {league.pairs.filter(p => p.category_id === mainCatId).length === 0 && (
-                            <div className="text-center py-10 text-slate-400 text-sm italic bg-white/5 rounded-2xl border border-white/10">No hay parejas inscritas.</div>
+                                );
+                            })}
+                        </div>
+
+                        {displayPairs.length === 0 && (
+                            <div className="text-center py-10 text-slate-400 text-sm italic bg-white/5 rounded-2xl border border-white/10">No hay inscripciones aún.</div>
                         )}
                     </div>
 
                     {/* Generator Engine (Only if in registration) */}
-                    {league.status === 'registration' && league.pairs.filter(p => p.category_id === mainCatId).length >= 4 && (
+                    {league.status === 'registration' && completePairs.length >= 4 && (
                         <div className="bg-white rounded-[2rem] p-6 shadow-xl border border-indigo-200 mt-8">
                             <h3 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
                                 <LayoutGrid className="text-indigo-500" size={20}/> Generar Calendario
@@ -539,10 +581,11 @@ const LeagueActive: React.FC = () => {
                             <div className="mt-8">
                                 <button 
                                     onClick={handleSavePair}
-                                    disabled={!p1 || !p2}
+                                    disabled={!p1 && !p2} 
                                     className="w-full py-5 bg-indigo-500 text-white rounded-[1.5rem] font-black text-lg shadow-xl shadow-indigo-100 disabled:opacity-50 disabled:grayscale transition-all active:scale-95 flex items-center justify-center gap-2"
                                 >
-                                    <Save size={20}/> {editingPairId ? 'GUARDAR CAMBIOS' : 'CONFIRMAR INSCRIPCIÓN'}
+                                    <Save size={20}/> 
+                                    {editingPairId ? 'GUARDAR CAMBIOS' : (!p2 ? 'AÑADIR COMO SOLO' : 'CONFIRMAR INSCRIPCIÓN')}
                                 </button>
                             </div>
                         </div>

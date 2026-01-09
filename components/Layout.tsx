@@ -99,7 +99,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         className={`hidden md:flex flex-col fixed inset-y-0 z-50 border-r transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'} ${isDarkMode || isLeaguePath ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}
       >
           {/* Logo Area */}
-          <div className={`p-6 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} h-20`}>
+          <div className={`p-6 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} h-20 shrink-0`}>
               <div className={`w-8 h-8 rounded-lg overflow-hidden shrink-0 border-2 ${isLeaguePath ? 'border-indigo-200 bg-indigo-600' : isDarkMode ? 'border-slate-800 bg-slate-800' : 'border-slate-100 bg-slate-50'} flex items-center justify-center`}>
                     {clubData.logoUrl ? (
                         <img src={clubData.logoUrl} alt="Logo" className="w-full h-full object-cover" />
@@ -113,14 +113,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                   </h1>
               )}
           </div>
-
-          {/* Toggle Button */}
-          <button 
-            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className={`absolute -right-3 top-20 bg-indigo-500 text-white rounded-full p-1 shadow-lg border-2 ${isDarkMode ? 'border-slate-900' : 'border-slate-50'} hover:scale-110 transition-transform z-50`}
-          >
-              {isSidebarCollapsed ? <ChevronRight size={14}/> : <ChevronLeft size={14}/>}
-          </button>
 
           {/* Navigation Items */}
           <div className="flex-1 overflow-y-auto px-3 space-y-2 mt-4 custom-scrollbar">
@@ -139,7 +131,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                           
                           {/* Tooltip on Hover when Collapsed */}
                           {isSidebarCollapsed && (
-                              <div className="absolute left-full ml-3 px-2 py-1 bg-slate-800 text-white text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none shadow-xl">
+                              <div className="absolute left-full ml-3 px-3 py-1.5 bg-slate-800 text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-[60] pointer-events-none shadow-xl border border-slate-700">
                                   {item.label}
                               </div>
                           )}
@@ -148,14 +140,30 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               })}
           </div>
 
-          {/* Footer Actions */}
-          <div className="p-3 border-t border-white/5 space-y-2">
+          {/* Footer Actions (Collapse & Logout) */}
+          <div className="p-3 border-t border-white/5 space-y-2 mt-auto bg-inherit z-10 relative">
+              
+              {/* Collapse Button (Moved Bottom) */}
+              <button 
+                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                className={`flex w-full items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-xl transition-colors ${isDarkMode || isLeaguePath ? 'text-slate-500 hover:bg-white/5 hover:text-white' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}
+                title={isSidebarCollapsed ? "Expandir Menú" : "Contraer Menú"}
+              >
+                  {isSidebarCollapsed ? <PanelLeftOpen size={20}/> : <PanelLeftClose size={20}/>}
+                  {!isSidebarCollapsed && <span className="text-xs font-bold uppercase">Contraer</span>}
+              </button>
+
               <button 
                 onClick={handleLogout} 
-                className={`flex w-full items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-xl text-rose-500 hover:bg-rose-500/10 font-bold transition-colors`}
-                title={isSidebarCollapsed ? "Cerrar Sesión" : ""}
+                className={`flex w-full items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-xl text-rose-500 hover:bg-rose-500/10 font-bold transition-colors group relative`}
               >
-                  <LogOut size={20} /> {!isSidebarCollapsed && "Salir"}
+                  <LogOut size={20} /> 
+                  {!isSidebarCollapsed && "Salir"}
+                  {isSidebarCollapsed && (
+                      <div className="absolute left-full ml-3 px-3 py-1.5 bg-rose-900 text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-[60] pointer-events-none shadow-xl">
+                          Cerrar Sesión
+                      </div>
+                  )}
               </button>
           </div>
       </aside>
