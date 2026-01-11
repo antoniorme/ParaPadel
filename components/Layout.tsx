@@ -26,17 +26,15 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   // CONTEXT DETECTION
   const isMiniList = location.pathname === '/minis';
   const isSpecificMini = location.pathname.startsWith('/tournament/');
-  const isMiniContext = isMiniList || isSpecificMini;
+  const isSetup = location.pathname === '/setup'; // Setup is part of Mini Module
+  const isMiniContext = isMiniList || isSpecificMini || isSetup;
   const isLeagueContext = location.pathname.startsWith('/league');
   
-  // DARK MODE LOGIC: All "Mini" related pages are Dark Gradient
-  const isDarkMode = isMiniContext || true;
-
   // 1. GLOBAL NAVIGATION (SIDEBAR)
   const menuItems = [
       { path: '/dashboard', label: 'Inicio', icon: Home },
-      { path: '/minis', label: 'Minis', icon: Trophy }, // RESTORED
-      { path: '/league', label: 'Ligas', icon: CalendarRange }, // RESTORED
+      { path: '/minis', label: 'Minis', icon: Trophy },
+      { path: '/league', label: 'Ligas', icon: CalendarRange },
       { path: '/players', label: 'Jugadores', icon: UserCog },
       { path: '/history', label: 'Historial', icon: History },
       { path: '/club', label: 'Mi Club', icon: Settings },
@@ -48,7 +46,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   }
 
   // 2. CONTEXT NAVIGATION (BOTTOM DOCK)
-  // Only show when inside a specific tournament management flow
+  // Only show when inside a specific tournament management flow (excluding setup)
   const tournamentNavItems = [
     { path: '/tournament/manage', label: 'Gestión', icon: Settings },
     { path: '/tournament/registration', label: 'Registro', icon: Users },
@@ -66,7 +64,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   ];
 
   let contextNavItems = null;
-  // Show bottom nav ONLY when managing a SPECIFIC tournament (not the list)
+  // Show bottom nav ONLY when managing a SPECIFIC tournament (not the list, not setup)
   if (isSpecificMini) contextNavItems = tournamentNavItems;
   else if (isLeagueContext && location.pathname.includes('/league/active')) contextNavItems = leagueNavItems;
 
@@ -78,12 +76,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   };
 
   const handleBackToHub = () => {
-      // Logic for back button depends on where we are
       if (isSpecificMini) {
           closeTournament();
-          navigate('/minis'); // Go back to Mini List
+          navigate('/minis'); 
       } else {
-          navigate('/dashboard'); // Go back to Main Hub
+          navigate('/dashboard'); 
       }
   };
 
@@ -93,7 +90,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   // BACKGROUND LOGIC
   let bgClass = 'bg-slate-50'; 
-  if (isMiniContext) bgClass = 'bg-slate-900 text-white'; // Dark Gradient for ALL Mini pages (List & Specific)
+  if (isMiniContext) bgClass = 'bg-slate-900 text-white'; // Dark Gradient for ALL Mini pages
   else if (isLeagueContext) bgClass = 'bg-indigo-500'; 
 
   const showDefaultBranding = clubData.name === 'Mi Club de Padel' || clubData.name === 'ParaPadel';
@@ -240,15 +237,15 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       {/* --- CONTEXT NAVIGATION (BOTTOM DOCK) --- */}
       {contextNavItems && (
         <div className="fixed bottom-0 left-0 right-0 z-[40] p-4 pointer-events-none flex justify-center md:pl-20">
-            <nav className={`w-full max-w-md backdrop-blur-md border rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.3)] flex justify-around items-center px-2 py-1 pointer-events-auto transition-all duration-500 ${isSpecificMini ? 'bg-slate-900/90 border-slate-700 shadow-slate-900/50' : 'bg-white/95 border-slate-200'}`}>
+            <nav className={`w-full max-w-md backdrop-blur-md border rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.3)] flex justify-around items-center px-2 py-1 pointer-events-auto transition-all duration-500 ${isSpecificMini ? 'bg-white/95 border-slate-200' : 'bg-white/95 border-slate-200'}`}>
               {contextNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname + location.search === item.path || location.pathname === item.path;
 
-                // For Minis (Dark Theme)
-                const activeColor = isSpecificMini ? 'text-white' : 'text-[#575AF9]';
-                const inactiveColor = isSpecificMini ? 'text-slate-500' : 'text-slate-400';
-                const activeBg = isSpecificMini ? 'bg-white/10 scale-110' : 'bg-[#575AF9]/10 scale-110';
+                // UNIFIED STYLE FOR DOCK (White base)
+                const activeColor = 'text-[#575AF9]';
+                const inactiveColor = 'text-slate-400';
+                const activeBg = 'bg-[#575AF9]/10 scale-110';
 
                 return (
                   <Link

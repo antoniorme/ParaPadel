@@ -118,13 +118,13 @@ const TournamentSetup: React.FC = () => {
     };
 
     return (
-        <div className="space-y-6 pb-20">
+        <div className="space-y-6 pb-20 text-slate-900">
             <div className="flex items-center gap-4">
-                <button onClick={() => navigate('/dashboard')} className="p-2 bg-white border border-slate-200 rounded-full text-slate-600"><ArrowLeft size={20} /></button>
-                <h2 className="text-2xl font-bold text-slate-900">{isEditing ? 'Configuración' : 'Nuevo Torneo'}</h2>
+                <button onClick={() => navigate('/dashboard')} className="p-2 bg-white/10 text-white rounded-full hover:bg-white/20 border border-white/10"><ArrowLeft size={20} /></button>
+                <h2 className="text-2xl font-bold text-white">{isEditing ? 'Configuración' : 'Nuevo Torneo'}</h2>
             </div>
 
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6 animate-fade-in">
+            <div className="bg-white p-6 rounded-2xl shadow-xl space-y-6 animate-fade-in">
                   
                   {/* TIPO DE MINI (FORMATO) */}
                   <div>

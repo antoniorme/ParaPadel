@@ -155,28 +155,28 @@ const Registration: React.FC = () => {
                     const avgElo = getPairAverageElo(pair);
                     
                     return (
-                        <div key={pair.id} className="bg-slate-800 rounded-xl border border-slate-700 shadow-sm overflow-hidden flex flex-col">
+                        <div key={pair.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                             {/* TOP PART: NAMES AND ACTIONS */}
                             <div className="p-4 flex items-center justify-between">
                                 <div className="flex items-center gap-3 overflow-hidden w-full">
-                                    <span className="bg-slate-700 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 text-slate-300 border border-slate-600">{idx + 1}</span>
+                                    <span className="bg-slate-100 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 text-slate-500 border border-slate-200">{idx + 1}</span>
                                     <div className="flex flex-col w-full min-w-0">
-                                        <div className="text-sm font-bold text-white truncate">{formatPlayerName(p1)}</div>
+                                        <div className="text-sm font-bold text-slate-800 truncate">{formatPlayerName(p1)}</div>
                                         <div className="flex items-center gap-1.5 mt-0.5">
                                             <span style={{ color: THEME.cta }} className="text-[10px] font-black">&</span>
-                                            <div className="text-sm font-bold text-white truncate">{formatPlayerName(p2)}</div>
+                                            <div className="text-sm font-bold text-slate-800 truncate">{formatPlayerName(p2)}</div>
                                         </div>
                                     </div>
                                 </div>
                                 
                                 <div className="flex items-center gap-1 shrink-0 ml-2">
-                                    <button onClick={() => startEditPair(pair.id)} className="p-2 text-slate-400 hover:text-white bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors"><Edit2 size={16}/></button>
-                                    <button onClick={() => setShowDeleteModal(pair.id)} className="p-2 text-slate-400 hover:text-rose-500 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors"><Trash2 size={16}/></button>
+                                    <button onClick={() => startEditPair(pair.id)} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"><Edit2 size={16}/></button>
+                                    <button onClick={() => setShowDeleteModal(pair.id)} className="p-2 text-slate-400 hover:text-rose-500 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"><Trash2 size={16}/></button>
                                 </div>
                             </div>
 
                             {/* BOTTOM STRIP: ELO BAR */}
-                            <div className="bg-slate-900/50 px-4 py-2 border-t border-slate-700">
+                            <div className="bg-slate-50 px-4 py-2 border-t border-slate-100">
                                 <LevelProgressBar 
                                     elo={avgElo} 
                                     rangeMin={tournamentRange?.min} 
@@ -186,38 +186,38 @@ const Registration: React.FC = () => {
                         </div>
                     )
                 })}
-                 {pairs.length === 0 && <p className="text-slate-500 text-sm italic p-6 text-center border-2 border-dashed border-slate-700 rounded-xl col-span-full">No hay parejas registradas.</p>}
+                 {pairs.length === 0 && <p className="text-slate-400 text-sm italic p-6 text-center border-2 border-dashed border-slate-600 rounded-xl col-span-full">No hay parejas registradas.</p>}
             </div>
       </div>
   );
 
   return (
     <div className="space-y-6 pb-20 text-white">
-      <div className="flex justify-between items-center bg-slate-800/80 backdrop-blur-md p-6 rounded-xl border border-slate-700 shadow-sm">
-        <div><h2 className="text-2xl font-bold text-white">Registro</h2><p className="text-sm text-slate-400">Gestión de Inscripciones</p></div>
+      <div className="flex justify-between items-center bg-white p-6 rounded-xl border border-slate-200 shadow-sm text-slate-900">
+        <div><h2 className="text-2xl font-bold">Registro</h2><p className="text-sm text-slate-500">Gestión de Inscripciones</p></div>
         <div className={`flex flex-col items-end text-[#575AF9]`}><span className="text-4xl font-bold">{totalRegistered}</span></div>
       </div>
 
-      <button onClick={openNewPairModal} className="w-full bg-slate-800/80 hover:bg-slate-800 border-2 border-slate-700 hover:border-[#575AF9] p-6 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all shadow-lg active:scale-95 group">
-          <div style={{ color: THEME.cta }} className="bg-slate-700 p-3 rounded-full group-hover:bg-slate-600 transition-colors"><Users size={32} /></div>
-          <span className="font-black text-white text-lg">AÑADIR NUEVA PAREJA</span>
+      <button onClick={openNewPairModal} className="w-full bg-white hover:bg-slate-50 border-2 border-slate-200 hover:border-[#575AF9] p-6 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all shadow-lg active:scale-95 group">
+          <div style={{ color: THEME.cta }} className="bg-slate-50 p-3 rounded-full group-hover:bg-indigo-50 transition-colors"><Users size={32} /></div>
+          <span className="font-black text-slate-900 text-lg">AÑADIR NUEVA PAREJA</span>
       </button>
       
       {/* SOLO PLAYERS BAG */}
       {soloPairs.length > 0 && (
-          <div className="mt-8 bg-amber-900/20 p-6 rounded-2xl border border-amber-800/50">
+          <div className="mt-8 bg-amber-50 p-6 rounded-2xl border border-amber-100">
               <div className="flex items-center gap-2 mb-4">
-                  <UserPlus className="text-amber-500"/>
-                  <h3 className="text-sm uppercase font-bold tracking-wider text-amber-500">Bolsa de Jugadores (Sin Pareja)</h3>
+                  <UserPlus className="text-amber-600"/>
+                  <h3 className="text-sm uppercase font-bold tracking-wider text-amber-700">Bolsa de Jugadores (Sin Pareja)</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                   {soloPairs.map(solo => {
                       const p = state.players.find(p => p.id === solo.player1Id);
                       return (
-                          <div key={solo.id} className="bg-slate-800 p-4 rounded-xl shadow-sm border border-amber-900/50 flex justify-between items-center">
-                              <div className="font-bold text-white">{formatPlayerName(p)}</div>
+                          <div key={solo.id} className="bg-white p-4 rounded-xl shadow-sm border border-amber-200 flex justify-between items-center">
+                              <div className="font-bold text-slate-800">{formatPlayerName(p)}</div>
                               <div className="flex gap-2">
-                                  <button onClick={() => handleOpenSoloMatch(solo.id)} className="px-3 py-1.5 bg-amber-500/20 text-amber-500 rounded-lg text-xs font-bold hover:bg-amber-500/30 flex items-center gap-1 border border-amber-500/20">
+                                  <button onClick={() => handleOpenSoloMatch(solo.id)} className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-xs font-bold hover:bg-amber-200 flex items-center gap-1 border border-amber-200">
                                       <LinkIcon size={12}/> Emparejar
                                   </button>
                                   <button onClick={() => setShowDeleteModal(solo.id)} className="p-1.5 text-slate-400 hover:text-rose-500"><Trash2 size={16}/></button>
@@ -233,11 +233,11 @@ const Registration: React.FC = () => {
 
       {/* PAIR MODAL */}
       {isPairModalOpen && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-              <div className="bg-white w-full h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl sm:max-w-lg shadow-2xl animate-slide-up flex flex-col">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <div className="bg-white w-full h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl sm:max-w-lg shadow-2xl animate-slide-up flex flex-col text-slate-900">
                   {/* Compact Header */}
                   <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 shrink-0">
-                      <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                      <h3 className="text-lg font-bold flex items-center gap-2">
                           <Users style={{ color: THEME.cta }} size={20}/>
                           {isEditingPairId ? 'Editar Pareja' : 'Nueva Pareja'}
                       </h3>
@@ -247,7 +247,7 @@ const Registration: React.FC = () => {
                   </div>
                   
                   {/* Scrollable Body */}
-                  <div className="flex-1 overflow-y-auto p-6 custom-scrollbar text-slate-900">
+                  <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                       <PlayerSelector 
                         label="JUGADOR 1" 
                         selectedId={selectedP1} 
@@ -283,9 +283,9 @@ const Registration: React.FC = () => {
       
       {/* SOLO MATCH MODAL */}
       {showSoloMatchModal && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-                  <h3 className="text-lg font-bold text-slate-900 mb-4">Emparejar Jugador</h3>
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl text-slate-900">
+                  <h3 className="text-lg font-bold mb-4">Emparejar Jugador</h3>
                   <p className="text-sm text-slate-500 mb-4">Elige un compañero. Puedes buscar en el club o seleccionar a otro jugador suelto.</p>
                   
                   <div className="mb-4">
@@ -316,12 +316,12 @@ const Registration: React.FC = () => {
       )}
 
       {showDeleteModal && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center text-slate-900">
                   <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-600">
                       <Trash2 size={32} />
                   </div>
-                  <h3 className="text-xl font-black text-slate-900 mb-2">¿Eliminar Pareja?</h3>
+                  <h3 className="text-xl font-black mb-2">¿Eliminar Pareja?</h3>
                   <p className="text-slate-500 mb-6 text-sm">
                       Se borrará la inscripción de esta pareja. <br/>
                       <span className="font-bold text-slate-700">Los jugadores NO se borrarán</span> de la base de datos del club.
@@ -335,12 +335,12 @@ const Registration: React.FC = () => {
       )}
 
       {alertMessage && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center text-slate-900">
                   <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4 text-orange-600">
                       <AlertTriangle size={32} />
                   </div>
-                  <h3 className="text-xl font-black text-slate-900 mb-2">Atención</h3>
+                  <h3 className="text-xl font-black mb-2">Atención</h3>
                   <p className="text-slate-500 mb-6">{alertMessage}</p>
                   <button onClick={() => setAlertMessage(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg">Entendido</button>
               </div>

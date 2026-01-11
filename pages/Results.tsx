@@ -65,11 +65,11 @@ const Results: React.FC = () => {
       const winner = hasResult ? (scoreA > scoreB ? 'p1' : 'p2') : null;
 
       return (
-        <div className="bg-slate-800 rounded-lg border border-slate-700 shadow-sm overflow-hidden mb-2 relative group">
-            <div className="bg-slate-900/50 px-3 py-1 text-[10px] font-bold text-slate-400 uppercase border-b border-slate-700 flex justify-between items-center">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden mb-2 relative group">
+            <div className="bg-slate-50 px-3 py-1 text-[10px] font-bold text-slate-400 uppercase border-b border-slate-100 flex justify-between items-center">
                 <span>{title}</span>
                 <div className="flex items-center gap-2">
-                    {hasResult && <span className="text-white">{scoreA} - {scoreB}</span>}
+                    {hasResult && <span className="text-slate-800">{scoreA} - {scoreB}</span>}
                     {isFinal && hasResult && (
                         <button 
                             onClick={() => handleOpenPoster(winner === 'p1' ? p1 : p2)}
@@ -81,12 +81,12 @@ const Results: React.FC = () => {
                 </div>
             </div>
             <div className="p-3 text-sm">
-                <div className={`flex justify-between p-1 rounded ${winner === 'p1' ? 'bg-emerald-500/20' : ''}`}>
-                    <span className={`font-medium truncate ${winner === 'p1' ? 'text-emerald-400 font-bold' : 'text-slate-300'}`}>{p1}</span>
+                <div className={`flex justify-between p-1 rounded ${winner === 'p1' ? 'bg-emerald-50' : ''}`}>
+                    <span className={`font-medium truncate ${winner === 'p1' ? 'text-emerald-600 font-bold' : 'text-slate-600'}`}>{p1}</span>
                     {winner === 'p1' && <Trophy size={14} className="text-emerald-500 flex-shrink-0"/>}
                 </div>
-                <div className={`flex justify-between mt-1 p-1 rounded ${winner === 'p2' ? 'bg-emerald-500/20' : ''}`}>
-                    <span className={`font-medium truncate ${winner === 'p2' ? 'text-emerald-400 font-bold' : 'text-slate-300'}`}>{p2}</span>
+                <div className={`flex justify-between mt-1 p-1 rounded ${winner === 'p2' ? 'bg-emerald-50' : ''}`}>
+                    <span className={`font-medium truncate ${winner === 'p2' ? 'text-emerald-600 font-bold' : 'text-slate-600'}`}>{p2}</span>
                     {winner === 'p2' && <Trophy size={14} className="text-emerald-500 flex-shrink-0"/>}
                 </div>
             </div>
@@ -177,29 +177,29 @@ const Results: React.FC = () => {
       return (
           <div className="space-y-6 pb-20 text-white">
               <div className="flex items-center gap-4 mb-6">
-                  <button onClick={() => setSelectedGroup(null)} className="p-2 bg-slate-800 border border-slate-700 rounded-full text-slate-400 hover:text-white"><ArrowLeft size={20} /></button>
+                  <button onClick={() => setSelectedGroup(null)} className="p-2 bg-white/10 border border-white/10 rounded-full text-slate-300 hover:text-white hover:bg-white/20"><ArrowLeft size={20} /></button>
                   <h2 className="text-2xl font-bold">Partidos Grupo {selectedGroup}</h2>
               </div>
               <div className="space-y-3">
                   {groupMatches.map(match => (
-                      <div key={match.id} className="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-sm">
-                          <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
-                              <span className="text-xs font-bold text-slate-500 uppercase">Ronda {match.round}</span>
+                      <div key={match.id} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm text-slate-900">
+                          <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
+                              <span className="text-xs font-bold text-slate-400 uppercase">Ronda {match.round}</span>
                               <button onClick={() => { setEditMatchId(match.id); setScoreA(match.scoreA?.toString() || ''); setScoreB(match.scoreB?.toString() || ''); }} className="text-slate-400 hover:text-blue-500"><Edit2 size={16} /></button>
                           </div>
                           <div className="flex items-center justify-between mb-2">
-                              <span className="text-slate-300 font-bold">{getPairName(match.pairAId)}</span>
-                              <span className="text-xl font-black text-white">{match.scoreA ?? '-'}</span>
+                              <span className="text-slate-700 font-bold">{getPairName(match.pairAId)}</span>
+                              <span className="text-xl font-black text-slate-900">{match.scoreA ?? '-'}</span>
                           </div>
                           <div className="flex items-center justify-between">
-                              <span className="text-slate-300 font-bold">{getPairName(match.pairBId)}</span>
-                              <span className="text-xl font-black text-white">{match.scoreB ?? '-'}</span>
+                              <span className="text-slate-700 font-bold">{getPairName(match.pairBId)}</span>
+                              <span className="text-xl font-black text-slate-900">{match.scoreB ?? '-'}</span>
                           </div>
                       </div>
                   ))}
               </div>
                {editMatchId && (
-                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
                         <div className="bg-white rounded-2xl p-6 w-full max-w-xs shadow-2xl text-slate-900">
                             <h3 className="text-lg font-bold mb-4 text-center">Editar Resultado</h3>
                              <div className="flex gap-4 mb-6">
@@ -223,34 +223,34 @@ const Results: React.FC = () => {
       <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h2 className="text-2xl font-bold">Resultados</h2>
-            <div className="px-3 py-1 bg-slate-800 text-slate-400 rounded-lg text-xs font-bold uppercase tracking-wider border border-slate-700">
+            <div className="px-3 py-1 bg-white/10 text-white rounded-lg text-xs font-bold uppercase tracking-wider border border-white/10">
                 Ronda {state.currentRound}
             </div>
           </div>
-          <div className="flex bg-slate-800 p-1 rounded-lg">
-              <button onClick={() => setTab('groups')} style={{ color: tab === 'groups' ? themeColor : undefined }} className={`p-2 rounded-md transition-all ${tab === 'groups' ? 'bg-slate-700 shadow text-white' : 'text-slate-500'}`}><Grid size={20}/></button>
-              <button onClick={() => setTab('bracket')} style={{ color: tab === 'bracket' ? themeColor : undefined }} className={`p-2 rounded-md transition-all ${tab === 'bracket' ? 'bg-slate-700 shadow text-white' : 'text-slate-500'}`}><GitMerge size={20}/></button>
+          <div className="flex bg-white/10 p-1 rounded-lg">
+              <button onClick={() => setTab('groups')} style={{ color: tab === 'groups' ? themeColor : undefined }} className={`p-2 rounded-md transition-all ${tab === 'groups' ? 'bg-white shadow text-slate-900' : 'text-slate-400'}`}><Grid size={20}/></button>
+              <button onClick={() => setTab('bracket')} style={{ color: tab === 'bracket' ? themeColor : undefined }} className={`p-2 rounded-md transition-all ${tab === 'bracket' ? 'bg-white shadow text-slate-900' : 'text-slate-400'}`}><GitMerge size={20}/></button>
           </div>
       </div>
 
       {tab === 'groups' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {state.groups.map(group => (
-                <div key={group.id} onClick={() => setSelectedGroup(group.id)} className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-sm cursor-pointer hover:border-blue-500/50 transition-colors group">
-                    <div className="bg-slate-700 px-4 py-3 font-bold text-slate-300 flex justify-between group-hover:bg-slate-600 group-hover:text-white transition-colors">
+                <div key={group.id} onClick={() => setSelectedGroup(group.id)} className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm cursor-pointer hover:border-blue-500/50 transition-colors group">
+                    <div className="bg-slate-50 px-4 py-3 font-bold text-slate-600 flex justify-between group-hover:bg-slate-100 group-hover:text-slate-800 transition-colors">
                         <span>GRUPO {group.id}</span>
-                        <span className="text-[10px] uppercase tracking-wider bg-slate-800 px-2 py-1 rounded text-slate-400">Ver Partidos</span>
+                        <span className="text-[10px] uppercase tracking-wider bg-white px-2 py-1 rounded text-slate-400 border border-slate-100">Ver Partidos</span>
                     </div>
-                    <div className="divide-y divide-slate-700">
+                    <div className="divide-y divide-slate-100">
                         {getSortedGroupPairs(group.id).map((pair, idx) => (
-                            <div key={pair.id} className={`flex justify-between items-center p-4 ${idx < (isMini12 ? 2 : isMini10 ? 4 : 2) ? 'bg-emerald-500/10' : ''}`}>
+                            <div key={pair.id} className={`flex justify-between items-center p-4 ${idx < (isMini12 ? 2 : isMini10 ? 4 : 2) ? 'bg-emerald-50' : ''}`}>
                                 <div className="flex items-center gap-3">
-                                    <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center ${idx < (isMini12 ? 2 : isMini10 ? 4 : 2) ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-500'}`}>{idx + 1}</span>
-                                    <span className="text-sm font-bold text-slate-200">{getPairName(pair.id)}</span>
+                                    <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center ${idx < (isMini12 ? 2 : isMini10 ? 4 : 2) ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>{idx + 1}</span>
+                                    <span className="text-sm font-bold text-slate-800">{getPairName(pair.id)}</span>
                                 </div>
                                 <div className="flex gap-4 text-sm font-mono mr-1">
-                                    <div className="flex flex-col items-center"><span className="text-[10px] text-slate-500 uppercase">Vic</span><span className="font-bold text-white">{pair.stats.won}</span></div>
-                                    <div className="flex flex-col items-center w-8"><span className="text-[10px] text-slate-500 uppercase">Dif</span><span className={`font-bold ${pair.stats.gameDiff > 0 ? 'text-emerald-400' : pair.stats.gameDiff < 0 ? 'text-rose-400' : 'text-slate-400'}`}>{pair.stats.gameDiff > 0 ? '+' : ''}{pair.stats.gameDiff}</span></div>
+                                    <div className="flex flex-col items-center"><span className="text-[10px] text-slate-400 uppercase">Vic</span><span className="font-bold text-slate-800">{pair.stats.won}</span></div>
+                                    <div className="flex flex-col items-center w-8"><span className="text-[10px] text-slate-400 uppercase">Dif</span><span className={`font-bold ${pair.stats.gameDiff > 0 ? 'text-emerald-500' : pair.stats.gameDiff < 0 ? 'text-rose-500' : 'text-slate-400'}`}>{pair.stats.gameDiff > 0 ? '+' : ''}{pair.stats.gameDiff}</span></div>
                                 </div>
                             </div>
                         ))}
@@ -263,13 +263,13 @@ const Results: React.FC = () => {
       {tab === 'bracket' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* MAIN BRACKET - INVERTED ORDER (FINAL -> SF -> QF) */}
-              <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+              <div className="bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/10">
                   <h3 className="text-emerald-400 font-bold mb-4 text-center flex items-center justify-center gap-2"><Trophy size={18}/> Cuadrante Oro</h3>
                   <div className="space-y-6 relative flex flex-col-reverse">
                       
                       {/* QF */}
                       <div>
-                          <p className="text-xs text-slate-500 font-bold mb-2 uppercase tracking-widest">Cuartos</p>
+                          <p className="text-xs text-slate-400 font-bold mb-2 uppercase tracking-widest">Cuartos</p>
                           <BracketMatch title="QF1" {...qf1} />
                           <BracketMatch title="QF2" {...qf2} />
                           <BracketMatch title="QF3" {...qf3} />
@@ -279,7 +279,7 @@ const Results: React.FC = () => {
                       {/* SF */}
                       {state.currentRound >= roundSF && (
                           <div className="animate-fade-in mb-4">
-                              <p className="text-xs text-slate-500 font-bold mb-2 uppercase tracking-widest">Semis</p>
+                              <p className="text-xs text-slate-400 font-bold mb-2 uppercase tracking-widest">Semis</p>
                               <BracketMatch title="SF1" {...sf1} />
                               <BracketMatch title="SF2" {...sf2} />
                           </div>
@@ -298,7 +298,7 @@ const Results: React.FC = () => {
               </div>
 
               {/* CONSOLATION BRACKET - INVERTED ORDER */}
-              <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+              <div className="bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/10">
                   <h3 className="text-blue-400 font-bold mb-4 text-center flex items-center justify-center gap-2"><Grid size={18}/> Cuadrante Plata</h3>
                   <div className="space-y-6 relative flex flex-col-reverse">
                       

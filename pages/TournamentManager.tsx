@@ -65,25 +65,25 @@ const ManualGroupingWizard: React.FC<WizardProps> = ({ pairs, players, onComplet
 
     return (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[150] flex flex-col items-center justify-center p-4">
-            <div className="bg-slate-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl h-[85vh] flex flex-col border border-slate-700">
-                <div className="text-center mb-4"><h3 className="text-2xl font-black text-white">Configurar Grupo {currentGroup}</h3><p className="text-slate-400 text-sm">Selecciona {effectiveGroupSize} parejas de la lista</p></div>
+            <div className="bg-white rounded-3xl p-6 w-full max-w-lg shadow-2xl h-[85vh] flex flex-col">
+                <div className="text-center mb-4"><h3 className="text-2xl font-black text-slate-900">Configurar Grupo {currentGroup}</h3><p className="text-slate-500 text-sm">Selecciona {effectiveGroupSize} parejas de la lista</p></div>
                 <div className="flex-1 overflow-y-auto pr-2 space-y-2 mb-4 custom-scrollbar">
                     {availablePairs.map(pair => {
                         const p1 = players.find(p => p.id === pair.player1Id);
                         const p2 = players.find(p => p.id === pair.player2Id);
                         const isSelected = selectedForGroup.includes(pair.id);
                         return (
-                            <div key={pair.id} onClick={() => toggleSelection(pair.id)} className={`p-3 rounded-xl border flex justify-between items-center cursor-pointer transition-all ${isSelected ? 'border-[#575AF9] bg-indigo-500/20' : 'border-slate-700 bg-slate-900 hover:bg-slate-800'}`}>
-                                <div><div className="font-bold text-slate-200 text-sm">{formatName(p1)}</div><div className="font-bold text-slate-200 text-sm">& {formatName(p2)}</div></div>
-                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-[#575AF9] border-[#575AF9]' : 'border-slate-600'}`}>{isSelected && <CheckIcon size={14} className="text-white" strokeWidth={3}/>}</div>
+                            <div key={pair.id} onClick={() => toggleSelection(pair.id)} className={`p-3 rounded-xl border flex justify-between items-center cursor-pointer transition-all ${isSelected ? 'border-[#575AF9] bg-indigo-50' : 'border-slate-100 bg-white hover:bg-slate-50'}`}>
+                                <div><div className="font-bold text-slate-800 text-sm">{formatName(p1)}</div><div className="font-bold text-slate-800 text-sm">& {formatName(p2)}</div></div>
+                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-[#575AF9] border-[#575AF9]' : 'border-slate-200'}`}>{isSelected && <CheckIcon size={14} className="text-white" strokeWidth={3}/>}</div>
                             </div>
                         )
                     })}
                 </div>
-                <div className="flex flex-col gap-3 pt-4 border-t border-slate-700">
+                <div className="flex flex-col gap-3 pt-4 border-t border-slate-100">
                     <div className="text-center font-bold text-[#575AF9] mb-2">Seleccionadas: {selectedForGroup.length} / {effectiveGroupSize}</div>
-                    <button onClick={confirmGroup} disabled={selectedForGroup.length !== effectiveGroupSize} className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-2 ${selectedForGroup.length === effectiveGroupSize ? 'bg-[#575AF9] text-white animate-pulse' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}>{currentGroupIdx === groupNames.length - 1 ? 'Finalizar y Empezar' : `Confirmar Grupo ${currentGroup} >`}</button>
-                    <button onClick={onCancel} className="w-full py-3 bg-slate-900 text-slate-400 rounded-xl font-bold border border-slate-700">Cancelar</button>
+                    <button onClick={confirmGroup} disabled={selectedForGroup.length !== effectiveGroupSize} className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-2 ${selectedForGroup.length === effectiveGroupSize ? 'bg-[#575AF9] text-white animate-pulse' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>{currentGroupIdx === groupNames.length - 1 ? 'Finalizar y Empezar' : `Confirmar Grupo ${currentGroup} >`}</button>
+                    <button onClick={onCancel} className="w-full py-3 bg-slate-100 text-slate-500 rounded-xl font-bold border border-slate-200">Cancelar</button>
                 </div>
             </div>
         </div>
@@ -132,7 +132,6 @@ const TournamentManager: React.FC = () => {
 
   // --- SHARE LOGIC ---
   const generateWhatsAppMessage = () => {
-      // (Simplified for this snippet)
       return `Torneo en ${clubData.name} - ${state.title}\nApúntate: ${window.location.origin}/#/join/${user?.id}`;
   };
 
@@ -166,14 +165,14 @@ const TournamentManager: React.FC = () => {
   const StatCard = ({ title, value, subValue, icon: Icon, onClick, active }: any) => (
     <div 
       onClick={onClick}
-      className={`p-4 rounded-2xl border transition-all shadow-sm flex flex-col justify-between h-24 relative overflow-hidden bg-slate-800/80 backdrop-blur-md border-white/10 text-slate-300 hover:border-white/30 cursor-pointer`}
+      className={`p-4 rounded-2xl border transition-all shadow-sm flex flex-col justify-between h-24 relative overflow-hidden bg-white border-slate-100 cursor-pointer hover:border-indigo-200 hover:shadow-md`}
     >
       <div className="flex justify-between items-start z-10">
           <div>
               <h3 className="text-[10px] font-bold uppercase tracking-wider opacity-70 text-slate-400">{title}</h3>
-              <div className="text-2xl font-black tracking-tight mt-1 text-white">{value}</div>
+              <div className="text-2xl font-black tracking-tight mt-1 text-slate-800">{value}</div>
           </div>
-          <div className={`p-2 rounded-xl bg-white/10 text-white`}>
+          <div className={`p-2 rounded-xl bg-slate-50 text-indigo-500`}>
             <Icon size={20} />
           </div>
       </div>
@@ -187,25 +186,25 @@ const TournamentManager: React.FC = () => {
     <div className="pb-10 space-y-6 text-white animate-fade-in">
       
       {/* 1. HEADER */}
-      <div className="bg-slate-800/50 backdrop-blur-xl p-5 rounded-2xl border border-white/10 shadow-xl relative overflow-hidden">
+      <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xl relative overflow-hidden">
           <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><Trophy size={120} /></div>
           <div className="relative z-10 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${isSetupMode ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'}`}>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${isSetupMode ? 'bg-orange-100 text-orange-600 border-orange-200' : 'bg-emerald-100 text-emerald-600 border-emerald-200'}`}>
                         {isSetupMode ? 'Inscripción' : 'En Juego'}
                     </span>
                     <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1">
                         <Calendar size={12}/> {dateStr}, {timeStr}
                     </span>
                 </div>
-                <button onClick={() => navigate('/setup')} className="p-2 bg-white/10 text-slate-300 hover:text-white rounded-lg transition-colors">
+                <button onClick={() => navigate('/setup')} className="p-2 bg-slate-50 text-slate-400 hover:text-indigo-500 rounded-lg transition-colors">
                     <Edit size={16}/>
                 </button>
               </div>
-              <h1 className="text-2xl font-black text-white leading-tight">{state.title || 'Torneo Sin Título'}</h1>
+              <h1 className="text-2xl font-black text-slate-900 leading-tight">{state.title || 'Torneo Sin Título'}</h1>
               <div className="flex flex-wrap gap-2 pt-1">
-                  {state.levelRange && <div className="flex items-center gap-1 bg-slate-700/50 px-2 py-1 rounded-md text-xs font-bold text-slate-300 border border-white/10"><TrendingUp size={12}/> {state.levelRange}</div>}
+                  {state.levelRange && <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-md text-xs font-bold text-slate-600 border border-slate-100"><TrendingUp size={12}/> {state.levelRange}</div>}
               </div>
           </div>
       </div>
@@ -225,23 +224,23 @@ const TournamentManager: React.FC = () => {
       {/* 3. SETUP PHASE PANEL */}
       {isSetupMode && (
           <div className="animate-fade-in space-y-6">
-              <div className="bg-slate-800/50 backdrop-blur-xl p-5 rounded-2xl border border-white/10 shadow-sm">
-                  <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><Settings size={18}/> Gestión de Inscripciones</h3>
+              <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2"><Settings size={18} className="text-slate-400"/> Gestión de Inscripciones</h3>
                   
                   {/* Progress Bar */}
                   <div className="mb-2 flex justify-between text-xs font-bold">
-                      <span className={missingPairs > 0 ? "text-amber-400" : "text-emerald-400"}>{missingPairs > 0 ? `Faltan ${missingPairs} parejas` : '¡Completo!'}</span>
+                      <span className={missingPairs > 0 ? "text-amber-500" : "text-emerald-500"}>{missingPairs > 0 ? `Faltan ${missingPairs} parejas` : '¡Completo!'}</span>
                       <span className="text-slate-400">{Math.round((titularPairs.length / currentLimit) * 100)}%</span>
                   </div>
-                  <div className="w-full h-3 bg-slate-700 rounded-full overflow-hidden mb-6">
-                      <div className={`h-full transition-all duration-500 rounded-full ${missingPairs > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min((titularPairs.length / currentLimit) * 100, 100)}%` }}></div>
+                  <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden mb-6">
+                      <div className={`h-full transition-all duration-500 rounded-full ${missingPairs > 0 ? 'bg-amber-400' : 'bg-emerald-500'}`} style={{ width: `${Math.min((titularPairs.length / currentLimit) * 100, 100)}%` }}></div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <button onClick={() => navigate('/tournament/registration')} className="w-full py-3 bg-slate-700 hover:bg-slate-600 border border-slate-600 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2">
+                      <button onClick={() => navigate('/tournament/registration')} className="w-full py-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 font-bold rounded-xl transition-all flex items-center justify-center gap-2">
                           <Users size={18}/> Lista Jugadores
                       </button>
-                      <button onClick={() => setShowShareModal(true)} className="w-full py-3 bg-indigo-500/20 border border-indigo-500/50 text-indigo-300 font-bold rounded-xl hover:bg-indigo-500/30 transition-all flex items-center justify-center gap-2">
+                      <button onClick={() => setShowShareModal(true)} className="w-full py-3 bg-indigo-50 border border-indigo-100 text-indigo-600 font-bold rounded-xl hover:bg-indigo-100 transition-all flex items-center justify-center gap-2">
                           <Share2 size={18}/> Convocatoria
                       </button>
                   </div>
@@ -251,8 +250,8 @@ const TournamentManager: React.FC = () => {
               <button 
                 onClick={() => setShowGenerationModal(true)}
                 disabled={!canStart}
-                style={{ backgroundColor: canStart ? THEME.cta : '#334155' }}
-                className={`w-full py-6 rounded-xl font-black text-white text-lg shadow-lg flex flex-col items-center justify-center gap-1 transition-all ${canStart ? 'hover:opacity-90 active:scale-95' : 'cursor-not-allowed text-slate-500'}`}
+                style={{ backgroundColor: canStart ? THEME.cta : '#e2e8f0' }}
+                className={`w-full py-6 rounded-xl font-black text-white text-lg shadow-lg flex flex-col items-center justify-center gap-1 transition-all ${canStart ? 'hover:opacity-90 active:scale-95' : 'cursor-not-allowed text-slate-400'}`}
               >
                   <div className="flex items-center gap-2">
                     {canStart ? <Play size={24} fill="currentColor"/> : <Lock size={24}/>}
@@ -273,14 +272,14 @@ const TournamentManager: React.FC = () => {
           </div>
       )}
 
-      {/* GENERATION MODAL (Dark) */}
+      {/* GENERATION MODAL (White) */}
       {showGenerationModal && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center sm:p-4">
-              <div className="bg-slate-800 w-full h-auto rounded-t-3xl sm:rounded-3xl p-6 max-w-lg shadow-2xl animate-slide-up border border-slate-700">
-                  <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-white">Tipo de Sorteo</h3><button onClick={() => setShowGenerationModal(false)} className="p-2 bg-slate-700 text-slate-400 rounded-full"><X size={20}/></button></div>
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center sm:p-4">
+              <div className="bg-white w-full h-auto rounded-t-3xl sm:rounded-3xl p-6 max-w-lg shadow-2xl animate-slide-up">
+                  <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-slate-900">Tipo de Sorteo</h3><button onClick={() => setShowGenerationModal(false)} className="p-2 bg-slate-100 rounded-full"><X size={20}/></button></div>
                   <div className="space-y-3 mb-6">
-                      <button onClick={() => setGenerationMethod('elo-balanced')} className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all ${generationMethod === 'elo-balanced' ? 'border-[#575AF9] bg-indigo-500/20' : 'border-slate-700 bg-slate-900'}`}><TrendingUp size={24} className="text-[#575AF9]"/><div><div className="font-bold text-white">Por Nivel (Equilibrado)</div><div className="text-xs text-slate-400">Mejores al Grupo A, peores al D.</div></div></button>
-                      <button onClick={() => setGenerationMethod('elo-mixed')} className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all ${generationMethod === 'elo-mixed' ? 'border-[#575AF9] bg-indigo-500/20' : 'border-slate-700 bg-slate-900'}`}><Shuffle size={24} className="text-[#575AF9]"/><div><div className="font-bold text-white">Mix (Cremallera)</div><div className="text-xs text-slate-400">Reparte el nivel en todos los grupos.</div></div></button>
+                      <button onClick={() => setGenerationMethod('elo-balanced')} className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all ${generationMethod === 'elo-balanced' ? 'border-[#575AF9] bg-indigo-50' : 'border-slate-100 bg-white'}`}><TrendingUp size={24} className="text-[#575AF9]"/><div><div className="font-bold text-slate-900">Por Nivel (Equilibrado)</div><div className="text-xs text-slate-500">Mejores al Grupo A, peores al D.</div></div></button>
+                      <button onClick={() => setGenerationMethod('elo-mixed')} className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all ${generationMethod === 'elo-mixed' ? 'border-[#575AF9] bg-indigo-50' : 'border-slate-100 bg-white'}`}><Shuffle size={24} className="text-[#575AF9]"/><div><div className="font-bold text-slate-900">Mix (Cremallera)</div><div className="text-xs text-slate-500">Reparte el nivel en todos los grupos.</div></div></button>
                   </div>
                   <button onClick={handleStartTournament} style={{ backgroundColor: THEME.cta }} className="w-full py-4 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 hover:opacity-90 active:scale-95"><Play size={20} fill="currentColor"/> EMPEZAR YA</button>
               </div>
@@ -290,18 +289,18 @@ const TournamentManager: React.FC = () => {
       {/* SHARE MODAL */}
       {showShareModal && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center sm:p-4">
-              <div className="bg-slate-800 w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl animate-slide-up flex flex-col max-h-[90vh] border border-slate-700 text-white">
-                  <div className="p-6 border-b border-slate-700 flex justify-between items-center shrink-0">
-                      <h3 className="text-xl font-black flex items-center gap-2"><MessageCircle className="text-emerald-500"/> Compartir Torneo</h3>
-                      <button onClick={() => setShowShareModal(false)} className="p-2 bg-slate-700 rounded-full text-slate-400 hover:bg-slate-600"><X size={20}/></button>
+              <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl animate-slide-up flex flex-col max-h-[90vh]">
+                  <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
+                      <h3 className="text-xl font-black text-slate-900 flex items-center gap-2"><MessageCircle className="text-emerald-500"/> Compartir Torneo</h3>
+                      <button onClick={() => setShowShareModal(false)} className="p-2 bg-slate-100 rounded-full text-slate-400 hover:bg-slate-200"><X size={20}/></button>
                   </div>
-                  <div className="flex-1 overflow-y-auto p-6 bg-slate-900/50">
-                      <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 shadow-inner font-mono text-xs whitespace-pre-wrap leading-relaxed text-slate-300 select-all">
+                  <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+                      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-inner font-mono text-xs whitespace-pre-wrap leading-relaxed text-slate-700 select-all">
                           {generateWhatsAppMessage()}
                       </div>
                   </div>
-                  <div className="p-6 border-t border-slate-700 grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0 bg-slate-800 rounded-b-3xl">
-                      <button onClick={handleCopyMessage} className="py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 bg-slate-700 text-slate-300 hover:bg-slate-600">
+                  <div className="p-6 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0 bg-white">
+                      <button onClick={handleCopyMessage} className="py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 bg-slate-100 text-slate-700 hover:bg-slate-200">
                           {linkCopied ? <CheckIcon size={20}/> : <Copy size={20}/>} {linkCopied ? '¡Copiado!' : 'Copiar Texto'}
                       </button>
                   </div>

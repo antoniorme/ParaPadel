@@ -111,11 +111,11 @@ const CheckIn: React.FC = () => {
         const allPaid = pair.paidP1 && pair.paidP2;
         
         return (
-            <div className={`bg-slate-800 rounded-xl p-4 shadow-sm border-2 relative transition-all ${allPaid ? 'border-emerald-500/50 bg-emerald-900/10' : 'border-slate-700 hover:border-blue-500/50'}`}>
+            <div className={`bg-white rounded-xl p-4 shadow-sm border-2 relative transition-all ${allPaid ? 'border-emerald-500/50 bg-emerald-50' : 'border-slate-200 hover:border-blue-500/50'}`}>
                 {/* Swap Button (Absolute) */}
                 <button 
                     onClick={() => openSubModal(pair.id)}
-                    className="absolute top-2 right-2 p-2 bg-slate-700 text-slate-400 hover:text-blue-400 rounded-full border border-slate-600 hover:border-blue-500/50 shadow-sm transition-all active:scale-95"
+                    className="absolute top-2 right-2 p-2 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-full border border-slate-200 hover:border-blue-500/50 shadow-sm transition-all active:scale-95"
                     title="Sustituir Pareja"
                 >
                     <RefreshCw size={14} />
@@ -126,7 +126,7 @@ const CheckIn: React.FC = () => {
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pareja {idx}</span>
                     <button 
                     onClick={() => toggleWaterDB(pair.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all shadow-sm active:scale-95 ${pair.waterReceived ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' : 'bg-slate-700 border border-slate-600 text-slate-400 hover:border-blue-500/50 hover:text-blue-400'}`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all shadow-sm active:scale-95 ${pair.waterReceived ? 'bg-blue-500/20 text-blue-600 border border-blue-500/50' : 'bg-slate-50 border border-slate-200 text-slate-400 hover:border-blue-500/50 hover:text-blue-600'}`}
                     >
                         <Droplets size={14} fill={pair.waterReceived ? "currentColor" : "none"}/> 
                         {pair.waterReceived ? 'OK' : 'AGUA'}
@@ -135,20 +135,20 @@ const CheckIn: React.FC = () => {
 
                 {/* Players & Payment Buttons */}
                 <div className="space-y-3">
-                    <div className="flex justify-between items-center bg-slate-900/50 p-2 rounded-lg border border-slate-700/50">
-                        <span className={`text-sm font-bold truncate pr-2 ${pair.paidP1 ? 'text-white' : 'text-rose-400'}`}>{formatPlayerName(p1)}</span>
+                    <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
+                        <span className={`text-sm font-bold truncate pr-2 ${pair.paidP1 ? 'text-slate-800' : 'text-rose-500'}`}>{formatPlayerName(p1)}</span>
                         <button 
                         onClick={() => p1 && togglePaymentDB(p1.id, pair.id, true)} 
-                        className={`w-9 h-9 flex items-center justify-center rounded-lg shadow-sm transition-all border shrink-0 active:scale-95 ${pair.paidP1 ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-slate-700 text-slate-400 border-slate-600 hover:border-emerald-500/50 hover:text-emerald-400'}`}
+                        className={`w-9 h-9 flex items-center justify-center rounded-lg shadow-sm transition-all border shrink-0 active:scale-95 ${pair.paidP1 ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-white text-slate-400 border-slate-200 hover:border-emerald-500/50 hover:text-emerald-500'}`}
                         >
                             {pair.paidP1 ? <Check size={18} strokeWidth={4} /> : <DollarSign size={18}/>}
                         </button>
                     </div>
-                    <div className="flex justify-between items-center bg-slate-900/50 p-2 rounded-lg border border-slate-700/50">
-                        <span className={`text-sm font-bold truncate pr-2 ${pair.paidP2 ? 'text-white' : 'text-rose-400'}`}>{formatPlayerName(p2)}</span>
+                    <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
+                        <span className={`text-sm font-bold truncate pr-2 ${pair.paidP2 ? 'text-slate-800' : 'text-rose-500'}`}>{formatPlayerName(p2)}</span>
                         <button 
                         onClick={() => p2 && togglePaymentDB(p2.id, pair.id, false)} 
-                        className={`w-9 h-9 flex items-center justify-center rounded-lg shadow-sm transition-all border shrink-0 active:scale-95 ${pair.paidP2 ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-slate-700 text-slate-400 border-slate-600 hover:border-emerald-500/50 hover:text-emerald-400'}`}
+                        className={`w-9 h-9 flex items-center justify-center rounded-lg shadow-sm transition-all border shrink-0 active:scale-95 ${pair.paidP2 ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-white text-slate-400 border-slate-200 hover:border-emerald-500/50 hover:text-emerald-500'}`}
                         >
                             {pair.paidP2 ? <Check size={18} strokeWidth={4} /> : <DollarSign size={18}/>}
                         </button>
@@ -160,7 +160,7 @@ const CheckIn: React.FC = () => {
 
   return (
     <div className="space-y-8 pb-32 text-white">
-      <h2 className="text-2xl font-bold text-white">Control y Pistas</h2>
+      <h2 className="text-2xl font-bold">Control y Pistas</h2>
 
       {/* Courts List (Grid for Desktop) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -168,7 +168,7 @@ const CheckIn: React.FC = () => {
             const pairsOnCourt = getPairsForCourt(court.id);
             
             return (
-                <div key={court.id} className="relative bg-slate-800/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-700 p-2">
+                <div key={court.id} className="relative bg-white/95 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200 p-2">
                     {/* Clean Header with Dynamic Color */}
                     <div style={{ backgroundColor: themeColor }} className="flex items-center justify-between mb-4 text-white p-4 rounded-xl shadow-md transition-colors duration-300 border border-white/10">
                         <span className="text-xl font-black tracking-tight">PISTA {court.id}</span>
@@ -186,7 +186,7 @@ const CheckIn: React.FC = () => {
                         {pairsOnCourt.length > 0 ? pairsOnCourt.map((pair, idx) => (
                             <PairCard key={pair.id} pair={pair} idx={pair.id.split('-')[1] || idx+1} />
                         )) : (
-                            <div className="text-center py-6 text-slate-500 text-sm bg-slate-800 rounded-xl border border-dashed border-slate-700">Sin partidos asignados</div>
+                            <div className="text-center py-6 text-slate-400 text-sm bg-slate-50 rounded-xl border border-dashed border-slate-200">Sin partidos asignados</div>
                         )}
                     </div>
                 </div>
@@ -196,8 +196,8 @@ const CheckIn: React.FC = () => {
 
       {/* Resting Section */}
       {restingPairs.length > 0 && (
-          <div className="mt-12 bg-slate-800/50 p-6 rounded-2xl border border-slate-700">
-              <h3 className="text-slate-400 font-bold mb-6 uppercase flex items-center gap-2">
+          <div className="mt-12 bg-white/10 backdrop-blur-md p-6 rounded-2xl border border-white/10">
+              <h3 className="text-white font-bold mb-6 uppercase flex items-center gap-2">
                   <Users size={20}/> Descansan Turno 1 (Grupo D)
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -212,20 +212,20 @@ const CheckIn: React.FC = () => {
       {reservePairs.length > 0 && (
           <div className="mt-12">
                <div className="flex items-center gap-2 mb-4 px-2">
-                   <div className="bg-amber-900/20 p-2 rounded-lg text-amber-500"><Users size={20}/></div>
+                   <div className="bg-amber-100 p-2 rounded-lg text-amber-600"><Users size={20}/></div>
                    <h3 className="text-lg font-bold text-white">Banquillo / Reservas</h3>
                    <span className="bg-slate-700 text-slate-300 text-xs font-bold px-2 py-0.5 rounded-full">{reservePairs.length}</span>
                </div>
-               <div className="bg-amber-900/10 p-4 rounded-2xl border border-amber-900/30 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+               <div className="bg-white/5 p-4 rounded-2xl border border-white/10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                    {reservePairs.map((pair, idx) => {
                        const p1 = getPlayer(pair.player1Id);
                        const p2 = getPlayer(pair.player2Id);
                        return (
-                           <div key={pair.id} className="bg-slate-800 p-4 rounded-xl border border-amber-900/50 shadow-sm flex items-center justify-between">
+                           <div key={pair.id} className="bg-white p-4 rounded-xl border border-amber-200 shadow-sm flex items-center justify-between">
                                <div>
                                    <div className="text-[10px] font-bold text-amber-500 uppercase mb-1">Reserva #{idx+1}</div>
-                                   <div className="font-bold text-slate-200 text-sm">{formatPlayerName(p1)}</div>
-                                   <div className="font-bold text-slate-200 text-sm">& {formatPlayerName(p2)}</div>
+                                   <div className="font-bold text-slate-800 text-sm">{formatPlayerName(p1)}</div>
+                                   <div className="font-bold text-slate-800 text-sm">& {formatPlayerName(p2)}</div>
                                </div>
                            </div>
                        )
@@ -236,11 +236,11 @@ const CheckIn: React.FC = () => {
 
       {/* SUBSTITUTION MODAL */}
       {subModalOpen && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center sm:p-4">
-              <div className="bg-white w-full h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl sm:max-w-lg shadow-2xl animate-slide-up flex flex-col">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center sm:p-4">
+              <div className="bg-white w-full h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl sm:max-w-lg shadow-2xl animate-slide-up flex flex-col text-slate-900">
                   {/* HEADER */}
                   <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 shrink-0">
-                      <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                      <h3 className="text-lg font-bold flex items-center gap-2">
                           <RefreshCw className="text-blue-600"/> Sustituir Pareja
                       </h3>
                       <button onClick={() => setSubModalOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200">
@@ -255,7 +255,7 @@ const CheckIn: React.FC = () => {
                   </div>
 
                   {/* BODY (USES WHITE BACKGROUND FOR MODAL CONTENT) */}
-                  <div className="flex-1 overflow-y-auto p-6 custom-scrollbar text-slate-900">
+                  <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                       {subTab === 'reserve' ? (
                           <>
                               {reservePairs.length === 0 ? (
