@@ -598,6 +598,7 @@ export default function ActiveTournament() {
             {/* PAIR DETAIL MODAL USAGE */}
             {selectedPairId && <PairDetailModal pairId={selectedPairId} onClose={() => setSelectedPairId(null)} />}
             
+        </div>
     </div>
   );
 }
