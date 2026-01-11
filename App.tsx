@@ -14,6 +14,7 @@ import { PlayerLayout } from './components/PlayerLayout';
 import Dashboard from './pages/Dashboard';
 import Registration from './pages/Registration';
 import CheckIn from './pages/CheckIn';
+// FIX: Using default import
 import ActiveTournament from './pages/ActiveTournament';
 import Results from './pages/Results';
 import Landing from './pages/Landing';
