@@ -29,8 +29,6 @@ const Registration: React.FC = () => {
   const soloPairs = state.pairs.filter(p => p.player2Id === null) || [];
   const totalRegistered = activePairs.length;
 
-  // Filter out players who are already assigned to a pair (confirmed or solo)
-  // But allow if we are editing the current pair, or if checking against "otherSelectedId"
   const availablePlayers = state.players.filter(p => {
       const isAssigned = state.pairs.some(pair => {
           if (isEditingPairId && pair.id === isEditingPairId) return false;
@@ -48,15 +46,60 @@ const Registration: React.FC = () => {
       return Math.round((elo1 + elo2) / 2);
   };
 
-  // HELPER: Determine Tournament ELO Range based on levelRange string
+  // HELPER: Sophisticated Range Parsing
+  // Handles: "5ª Categoría", "5ª Alta", "5ª Alta - 4ª Baja"
   const getTournamentRange = () => {
       const text = (state.levelRange || '').toLowerCase();
-      if (text.includes('1ª') || text.includes('1a')) return { min: 5000, max: 6000, label: '1ª Cat' };
-      if (text.includes('2ª') || text.includes('2a')) return { min: 4000, max: 5000, label: '2ª Cat' };
-      if (text.includes('3ª') || text.includes('3a')) return { min: 3000, max: 4000, label: '3ª Cat' };
-      if (text.includes('4ª') || text.includes('4a')) return { min: 2000, max: 3000, label: '4ª Cat' };
-      if (text.includes('5ª') || text.includes('5a')) return { min: 1000, max: 2000, label: '5ª Cat' };
-      if (text.includes('iniciacion') || text.includes('iniciación')) return { min: 0, max: 1000, label: 'Iniciación' };
+      
+      // Base limits per Category number (approximate)
+      // 5: 1000-2000
+      // 4: 2000-3000
+      // 3: 3000-4000
+      // 2: 4000-5000
+      // 1: 5000-6000
+      
+      const parseSingleLevel = (str: string): { min: number, max: number } | null => {
+          let baseMin = 0;
+          let baseMax = 6000;
+          
+          if (str.includes('iniciacion') || str.includes('iniciación')) return { min: 0, max: 1000 };
+          
+          // Detect Number (5, 4, 3, 2, 1)
+          if (str.includes('5')) { baseMin = 1000; baseMax = 2000; }
+          else if (str.includes('4')) { baseMin = 2000; baseMax = 3000; }
+          else if (str.includes('3')) { baseMin = 3000; baseMax = 4000; }
+          else if (str.includes('2')) { baseMin = 4000; baseMax = 5000; }
+          else if (str.includes('1')) { baseMin = 5000; baseMax = 6000; }
+          else return null;
+
+          // Apply Modifiers
+          if (str.includes('alta')) {
+              // "Alta" is usually the upper half (e.g., 5ª Alta is 1500-2000)
+              baseMin = baseMin + 500; 
+          } else if (str.includes('baja')) {
+              // "Baja" is usually the lower half (e.g., 5ª Baja is 1000-1500)
+              baseMax = baseMax - 500;
+          }
+          
+          return { min: baseMin, max: baseMax };
+      };
+
+      // Check if range (contains "-")
+      if (text.includes('-')) {
+          const parts = text.split('-');
+          const start = parseSingleLevel(parts[0]); // "5ª Alta"
+          const end = parseSingleLevel(parts[1]);   // "4ª Baja"
+          
+          if (start && end) {
+              // Range is Min of Start to Max of End
+              return { min: start.min, max: end.max, label: state.levelRange };
+          }
+      }
+
+      // Single Level
+      const single = parseSingleLevel(text);
+      if (single) return { min: single.min, max: single.max, label: state.levelRange };
+
       return null; // Dynamic / Open
   };
 

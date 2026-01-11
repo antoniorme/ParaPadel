@@ -18,6 +18,7 @@ interface AlertState {
     message: string;
 }
 
+// FIX: Using default export function declaration
 export default function ActiveTournament() {
   const { state, updateScoreDB, nextRoundDB, resetToSetupDB, formatPlayerName, finishTournamentDB, archiveAndResetDB, pendingSyncCount } = useTournament();
   const { resetTimer } = useTimer();

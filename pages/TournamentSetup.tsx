@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
-import { FileText, Gift, Euro, Plus, X, Play, ArrowLeft, Save, AlertTriangle, Check, LayoutGrid, Users } from 'lucide-react';
+import { FileText, Gift, Euro, Plus, X, Play, ArrowLeft, Save, AlertTriangle, Check, LayoutGrid, Users, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { TournamentFormat } from '../types';
 
@@ -19,7 +19,7 @@ const TournamentSetup: React.FC = () => {
     const [price, setPrice] = useState(15);
     const [format, setFormat] = useState<TournamentFormat>('16_mini');
     const [description, setDescription] = useState('');
-    const [levelRange, setLevelRange] = useState('');
+    const [levelRange, setLevelRange] = useState('Abierto');
     const [prizes, setPrizes] = useState<string[]>([]);
     const [prizeInput, setPrizeInput] = useState('');
     const [extras, setExtras] = useState<string[]>(['Bolas Nuevas', 'Agua']);
@@ -37,7 +37,7 @@ const TournamentSetup: React.FC = () => {
             setPrice(state.price || 15);
             setFormat(state.format || '16_mini');
             setDescription(state.description || '');
-            setLevelRange(state.levelRange || '');
+            setLevelRange(state.levelRange || 'Abierto');
             setPrizes(state.prizes || []);
             setExtras(state.includedItems || ['Bolas Nuevas', 'Agua']);
         }
@@ -45,6 +45,22 @@ const TournamentSetup: React.FC = () => {
 
     const suggestedExtras = ['Bolas Nuevas', 'Agua', 'Fruta', 'Cerveza', 'Camiseta', 'Grip'];
     
+    // COMPLEX LEVEL OPTIONS
+    const levelOptions = [
+        "Abierto",
+        "Iniciación",
+        "5ª Categoría",
+        "5ª Alta",
+        "5ª Alta - 4ª Baja",
+        "4ª Categoría",
+        "4ª Alta",
+        "4ª Alta - 3ª Baja",
+        "3ª Categoría",
+        "3ª Alta",
+        "2ª Categoría",
+        "1ª Categoría"
+    ];
+
     const formats: { id: TournamentFormat, label: string, desc: string }[] = [
         { id: '16_mini', label: '16 Parejas', desc: '4 Grupos de 4' },
         { id: '12_mini', label: '12 Parejas', desc: '3 Grupos de 4' },
@@ -174,9 +190,20 @@ const TournamentSetup: React.FC = () => {
                                <input type="number" value={price} onChange={e => setPrice(parseInt(e.target.value))} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 pl-9 font-bold text-slate-800 outline-none focus:border-[#575AF9]"/>
                            </div>
                         </div>
-                        <div>
-                             <label className="text-xs font-bold text-slate-500 uppercase mb-1">Categorías / Nivel</label>
-                             <input value={levelRange} onChange={e => setLevelRange(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-800 outline-none focus:border-[#575AF9]" placeholder="Ej. 3ª y 4ª Cat"/>
+                        <div className="relative">
+                             <label className="text-xs font-bold text-slate-500 uppercase mb-1">Categoría / Nivel</label>
+                             <div className="relative">
+                                 <select 
+                                    value={levelRange} 
+                                    onChange={e => setLevelRange(e.target.value)} 
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 pr-8 font-bold text-slate-800 outline-none focus:border-[#575AF9] appearance-none"
+                                 >
+                                     {levelOptions.map(opt => (
+                                         <option key={opt} value={opt}>{opt}</option>
+                                     ))}
+                                 </select>
+                                 <ChevronDown size={16} className="absolute right-3 top-4 text-slate-400 pointer-events-none"/>
+                             </div>
                         </div>
                   </div>
                   
