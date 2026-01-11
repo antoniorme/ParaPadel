@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { useTournament } from '../store/TournamentContext';
-import { THEME, getFormatColor } from '../utils/theme';
+import { getFormatColor, THEME } from '../utils/theme';
 import { useTimer } from '../store/TimerContext';
 import { ChevronRight, Edit2, Info, User, Play, RotateCcw, CheckCircle, XCircle, Trophy, Medal, Settings, Coffee, ArrowRight, Archive, X, AlertTriangle, CloudOff, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -350,7 +351,7 @@ export default function ActiveTournament() {
       );
   }
 
-  // 3. ACTIVE MATCHES STATE ("DIRECTO") - WITH DARK BACKGROUND GRADIENT
+  // 3. ACTIVE MATCHES STATE ("DIRECTO")
   return (
     <div className="fixed inset-0 overflow-y-auto bg-slate-900 text-white">
         {/* Background Decor from Landing */}
@@ -401,7 +402,6 @@ export default function ActiveTournament() {
                     sortedMatchesPriority.map(match => {
                         const isWaiting = match.courtId === 0; const isPlayable = playableMatchIds.has(match.id); const isTechnicalRest = !isPlayable && !isWaiting;
                         
-                        // CARDS REMAIN WHITE FOR READABILITY
                         const cardClasses = isWaiting 
                             ? 'bg-slate-100 border-slate-300 opacity-90' 
                             : isTechnicalRest 
@@ -496,17 +496,16 @@ export default function ActiveTournament() {
                 </div>
             )}
             
-            {/* SCORE MODAL - IMPROVED WITH CLOSE BUTTON & BACKDROP CLICK */}
+            {/* SCORE MODAL */}
             {selectedMatchId && (
                 <div 
                     className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-fade-in"
-                    onClick={() => setSelectedMatchId(null)} // Close on backdrop click
+                    onClick={() => setSelectedMatchId(null)}
                 >
                     <div 
                         className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in relative text-slate-900"
-                        onClick={(e) => e.stopPropagation()} // Prevent close when clicking inside
+                        onClick={(e) => e.stopPropagation()}
                     >
-                        {/* CLOSE BUTTON (X) */}
                         <button 
                             onClick={() => setSelectedMatchId(null)} 
                             className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors"
@@ -564,6 +563,7 @@ export default function ActiveTournament() {
                 </div>
             )}
             
+            {/* NEXT MATCH INFO MODAL */}
             {nextMatchInfo && (
                 <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
                     <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center text-slate-900">
@@ -619,11 +619,45 @@ export default function ActiveTournament() {
                 </div>
             )}
 
-            {showResetConfirm && (<div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center text-slate-900"><div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600"><RotateCcw size={32} /></div><h3 className="text-xl font-black text-slate-900 mb-2">¿Reiniciar Configuración?</h3><p className="text-slate-500 mb-6 text-sm">Se borrarán todos los partidos generados y volverás a la pantalla de configuración. <strong className="block mt-2 text-slate-800">Las parejas inscritas NO se borrarán.</strong></p><div className="flex gap-3"><button onClick={() => setShowResetConfirm(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold">Cancelar</button><button onClick={handleResetToSetup} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold shadow-lg">Reiniciar</button></div></div></div>)}
-            {showRoundConfirm && (<div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4"><div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-scale-in text-center text-slate-900"><div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-600 animate-pulse"><Play size={40} fill="currentColor" /></div><h3 className="text-2xl font-black text-slate-900 mb-2">¿Avanzar Ronda?</h3><p className="text-slate-500 mb-8">Se generarán los partidos de la siguiente fase. Asegúrate de que todos los resultados actuales estén correctos.</p><div className="grid grid-cols-1 gap-3"><button onClick={confirmNextRound} style={{ backgroundColor: THEME.cta }} className="w-full py-4 text-white rounded-xl font-bold shadow-lg transition-transform active:scale-95 hover:opacity-90">Confirmar y Avanzar</button><button onClick={() => setShowRoundConfirm(false)} className="w-full py-4 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200">Revisar Resultados</button></div></div></div>)}
-            {selectedPairId && (<div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-end sm:items-center justify-center sm:p-4"><div className="bg-white rounded-t-3xl sm:rounded-3xl p-6 w-full max-w-md shadow-2xl animate-slide-up h-[80vh] sm:h-auto flex flex-col text-slate-900"><div className="flex justify-end mb-2"><button onClick={() => setSelectedPairId(null)} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"><X size={20}/></button></div><PairDetailContent pairId={selectedPairId} /></div></div>)}
+            {/* CONFIRM MODALS */}
+            {showResetConfirm && (
+                <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scale-in text-center text-slate-900">
+                        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600"><RotateCcw size={32} /></div>
+                        <h3 className="text-xl font-black text-slate-900 mb-2">¿Reiniciar Configuración?</h3>
+                        <p className="text-slate-500 mb-6 text-sm">Se borrarán todos los partidos generados y volverás a la pantalla de configuración. <strong className="block mt-2 text-slate-800">Las parejas inscritas NO se borrarán.</strong></p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setShowResetConfirm(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold">Cancelar</button>
+                            <button onClick={handleResetToSetup} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold shadow-lg">Reiniciar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {showRoundConfirm && (
+                <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-scale-in text-center text-slate-900">
+                        <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-600 animate-pulse"><Play size={40} fill="currentColor" /></div>
+                        <h3 className="text-2xl font-black text-slate-900 mb-2">¿Avanzar Ronda?</h3>
+                        <p className="text-slate-500 mb-8">Se generarán los partidos de la siguiente fase. Asegúrate de que todos los resultados actuales estén correctos.</p>
+                        <div className="grid grid-cols-1 gap-3">
+                            <button onClick={confirmNextRound} style={{ backgroundColor: THEME.cta }} className="w-full py-4 text-white rounded-xl font-bold shadow-lg transition-transform active:scale-95 hover:opacity-90">Confirmar y Avanzar</button>
+                            <button onClick={() => setShowRoundConfirm(false)} className="w-full py-4 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200">Revisar Resultados</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {selectedPairId && (
+                <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-end sm:items-center justify-center sm:p-4">
+                    <div className="bg-white rounded-t-3xl sm:rounded-3xl p-6 w-full max-w-md shadow-2xl animate-slide-up h-[80vh] sm:h-auto flex flex-col text-slate-900">
+                        <div className="flex justify-end mb-2">
+                            <button onClick={() => setSelectedPairId(null)} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"><X size={20}/></button>
+                        </div>
+                        <PairDetailContent pairId={selectedPairId} />
+                    </div>
+                </div>
+            )}
     </div>
-    <div className="fixed inset-0 pointer-events-none" /> {/* Added missing closing div structure */}
-  </div>
   );
 }
