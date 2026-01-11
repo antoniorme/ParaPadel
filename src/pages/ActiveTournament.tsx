@@ -20,7 +20,6 @@ interface AlertState {
 }
 
 // --- EXTRACTED COMPONENT: PAIR DETAIL MODAL ---
-// Moving this outside the main component fixes scoping and syntax nesting issues.
 const PairDetailModal = ({ pairId, onClose }: { pairId: string; onClose: () => void }) => {
     const { state, formatPlayerName } = useTournament();
 
@@ -475,7 +474,6 @@ export default function ActiveTournament() {
                             <div className="p-4 flex-1 flex flex-col justify-center">
                                 <div className="flex items-center justify-between mb-2 cursor-pointer hover:bg-slate-100 p-1 -mx-1 rounded transition-colors" onClick={() => setSelectedPairId(match.pairAId)}><span className={`text-base font-bold w-3/4 truncate flex items-center gap-2 ${isTechnicalRest ? 'text-slate-500' : 'text-slate-800'}`}>{getPairName(match.pairAId)} <Info size={12} className="text-slate-300"/></span><span className="text-2xl font-black text-slate-900">{match.scoreA ?? '-'}</span></div>
                                 <div className="flex items-center justify-between cursor-pointer hover:bg-slate-100 p-1 -mx-1 rounded transition-colors" onClick={() => setSelectedPairId(match.pairBId)}><span className={`text-base font-bold w-3/4 truncate flex items-center gap-2 ${isTechnicalRest ? 'text-slate-500' : 'text-slate-800'}`}>{getPairName(match.pairBId)} <Info size={12} className="text-slate-300"/></span><span className="text-2xl font-black text-slate-900">{match.scoreB ?? '-'}</span></div>
-                                
                                 {!match.isFinished && !isTechnicalRest && !isWaiting && (
                                     <button 
                                         onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} 
@@ -646,6 +644,8 @@ export default function ActiveTournament() {
             {/* PAIR DETAIL MODAL USAGE */}
             {selectedPairId && <PairDetailModal pairId={selectedPairId} onClose={() => setSelectedPairId(null)} />}
             
+    </div> 
+    {/* Correctly closing the main container div and the root div */}
     </div>
   );
 }
