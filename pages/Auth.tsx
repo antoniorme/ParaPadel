@@ -205,19 +205,13 @@ const AuthPage: React.FC = () => {
                             />
                         </div>
                         
-                        {(!IS_LOCAL || HCAPTCHA_SITE_TOKEN) && (
+                        {HCAPTCHA_SITE_TOKEN && (
                             <div className="flex justify-center my-4 min-h-[78px]">
-                                {HCAPTCHA_SITE_TOKEN ? (
-                                    <HCaptcha
-                                        sitekey={HCAPTCHA_SITE_TOKEN}
-                                        onVerify={onCaptchaVerify}
-                                        ref={captchaRef}
-                                    />
-                                ) : (
-                                    <div className="text-xs text-rose-500 font-bold border border-rose-200 bg-rose-50 p-2 rounded">
-                                        Error: Captcha no configurado
-                                    </div>
-                                )}
+                                <HCaptcha
+                                    sitekey={HCAPTCHA_SITE_TOKEN}
+                                    onVerify={onCaptchaVerify}
+                                    ref={captchaRef}
+                                />
                             </div>
                         )}
 
@@ -303,28 +297,20 @@ const AuthPage: React.FC = () => {
               </div>
           )}
 
-          {/* CAPTCHA WIDGET */}
-          {(!IS_LOCAL || HCAPTCHA_SITE_TOKEN) ? (
+          {/* CAPTCHA WIDGET — solo si está configurado */}
+          {HCAPTCHA_SITE_TOKEN ? (
               <div className="flex justify-center my-2 transform scale-90 sm:scale-100 origin-center min-h-[78px]">
-                  {HCAPTCHA_SITE_TOKEN ? (
-                      <HCaptcha
-                          sitekey={HCAPTCHA_SITE_TOKEN}
-                          onVerify={onCaptchaVerify}
-                          ref={captchaRef}
-                      />
-                  ) : (
-                      <div className="bg-rose-100 border border-rose-200 text-rose-700 p-4 rounded-xl text-xs font-bold w-full text-center">
-                          <ShieldAlert size={24} className="mx-auto mb-2"/>
-                          ERROR DE CONFIGURACIÓN<br/>
-                          (Falta VITE_HCAPTCHA_SITE_TOKEN)
-                      </div>
-                  )}
+                  <HCaptcha
+                      sitekey={HCAPTCHA_SITE_TOKEN}
+                      onVerify={onCaptchaVerify}
+                      ref={captchaRef}
+                  />
               </div>
-          ) : (
+          ) : IS_LOCAL ? (
               <div className="bg-indigo-50 border border-indigo-100 p-3 rounded-xl flex items-center justify-center gap-2 text-indigo-700 text-xs font-bold mb-2">
                   <ShieldCheck size={16}/> Modo Local: Captcha Omitido
               </div>
-          )}
+          ) : null}
 
           {view === 'login' && (
               <div className="text-right">
