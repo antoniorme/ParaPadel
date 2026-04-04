@@ -88,13 +88,14 @@ const AuthPage: React.FC = () => {
   };
 
   const ensurePlayerRecord = async (userId: string, userEmail: string) => {
-      const { data } = await supabase.from('players').select('id').eq('user_id', userId).maybeSingle();
+      // Los jugadores son entidades independientes (multi-club).
+      // profile_user_id = su propio auth id. user_id = club que los gestiona (null aquí).
+      const { data } = await supabase.from('players').select('id').eq('profile_user_id', userId).maybeSingle();
       if (!data) {
           await supabase.from('players').insert([{
-              user_id: userId,
+              profile_user_id: userId,
               email: userEmail,
               name: userEmail.split('@')[0],
-              role: 'player'
           }]);
       }
   };
