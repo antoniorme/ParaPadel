@@ -59,16 +59,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     // Load Notifications
     const loadNotifications = useCallback(async () => {
         const recipientId = getCurrentRecipientId();
-        
-        // PRIORITIZE ONLINE LOAD IF USER EXISTS, EVEN IF 'isOfflineMode' FLAG SAYS TRUE (HANDLING FLICKER)
+
         const canUseSupabase = !!user && !isOfflineMode;
 
         if (!canUseSupabase) {
-            // Local Mode
             const stored = localStorage.getItem(LOCAL_NOTIF_KEY);
             if (stored) {
                 const all: AppNotification[] = JSON.parse(stored);
-                // Filter for current user context strictly
                 const mine = all.filter(n => n.userId === recipientId);
                 setNotifications(mine.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
             } else {
@@ -77,14 +74,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             return;
         }
 
-        // Online Mode
+        // Online Mode — abort si tarda más de 8s para no acumular requests colgados
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+
         try {
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('notifications')
                 .select('*')
                 .eq('user_id', recipientId)
-                .order('created_at', { ascending: false });
-            
+                .order('created_at', { ascending: false })
+                .abortSignal(controller.signal);
+
             if (data) {
                 const mapped: AppNotification[] = data.map(n => ({
                     id: n.id,
@@ -100,14 +101,16 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 setNotifications(mapped);
             }
         } catch (e) {
-            // notifications fetch failed silently
+            // fetch fallido o abortado — no reintentar, esperar al siguiente ciclo
+        } finally {
+            clearTimeout(timeout);
         }
     }, [isOfflineMode, user, getCurrentRecipientId]);
 
     useEffect(() => {
         loadNotifications();
-        // Poll for updates (Supabase realtime is better but polling is safer for now)
-        const interval = setInterval(loadNotifications, 5000); 
+        // Polling cada 30s — suficiente para notificaciones, no sobrecarga la DB
+        const interval = setInterval(loadNotifications, 30000);
         return () => clearInterval(interval);
     }, [loadNotifications]);
 
