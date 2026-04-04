@@ -31,12 +31,12 @@ const LeagueDashboard: React.FC = () => {
         <div className="space-y-8 pb-20 animate-fade-in">
             {/* BACK BUTTON & HEADER */}
             <div>
-                <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-slate-500 font-bold text-sm hover:text-slate-800 transition-colors mb-4 px-1">
+                <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-white/60 font-bold text-sm hover:text-white transition-colors mb-4 px-1">
                     <ArrowLeft size={18}/> Volver al Club
                 </button>
                 <div className="flex justify-between items-center px-1">
                     <div className="flex flex-col">
-                        <h2 className="text-2xl font-black text-slate-800 drop-shadow-sm">Mis Ligas</h2>
+                        <h2 className="text-2xl font-black text-white">Mis Ligas</h2>
                         {role === 'superadmin' && !isLeagueModuleEnabled && (
                             <span className="text-[10px] font-bold text-amber-500 uppercase tracking-tighter">Acceso SuperAdmin (Módulo desactivado)</span>
                         )}
