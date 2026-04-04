@@ -63,7 +63,7 @@ const AuthPage: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      if (!IS_LOCAL && (!HCAPTCHA_SITE_TOKEN || !captchaToken)) {
+      if (!IS_LOCAL && HCAPTCHA_SITE_TOKEN && !captchaToken) {
           setError("Por seguridad, debes completar el captcha.");
           setLoading(false);
           return;
@@ -123,7 +123,7 @@ const AuthPage: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      if (!IS_LOCAL && (!HCAPTCHA_SITE_TOKEN || !captchaToken)) {
+      if (!IS_LOCAL && HCAPTCHA_SITE_TOKEN && !captchaToken) {
           setError("Por seguridad, debes completar el captcha.");
           setLoading(false);
           return;
