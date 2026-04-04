@@ -24,27 +24,29 @@ const MiniDashboard: React.FC = () => {
 
     return (
         <div className="space-y-8 pb-20 animate-fade-in text-white">
-            <div className="flex items-center gap-4 mb-6">
-                <button onClick={() => navigate('/dashboard')} className="p-2 bg-white/10 text-white rounded-full hover:bg-white/20 transition-colors">
-                    <ArrowLeft size={20} />
-                </button>
-                <div>
-                    <h2 className="text-2xl font-black text-white">Mis Minis</h2>
-                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Gestión de Torneos Express</p>
-                </div>
-                <div className="ml-auto flex gap-2">
-                    <button 
-                        onClick={() => navigate('/lite/setup')} 
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 text-white font-bold text-sm shadow-lg active:scale-95 transition-transform hover:bg-emerald-600"
-                    >
-                        <Trophy size={20}/> MINI EXPRESS
+            <div className="mb-6">
+                <div className="flex items-start gap-3 mb-4">
+                    <button onClick={() => navigate('/dashboard')} className="hidden md:flex p-2 bg-white/10 text-white rounded-full hover:bg-white/20 transition-colors shrink-0 mt-1">
+                        <ArrowLeft size={20} />
                     </button>
-                    <button 
-                        onClick={() => navigate('/setup')} 
-                        style={{ backgroundColor: THEME.cta }}
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-bold text-sm shadow-lg active:scale-95 transition-transform hover:opacity-90"
+                    <div>
+                        <h2 className="text-2xl font-black text-white">Mis Minis</h2>
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Gestión de Torneos Express</p>
+                    </div>
+                </div>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => navigate('/lite/setup')}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 text-white font-bold text-sm shadow-lg active:scale-95 transition-transform hover:bg-emerald-600"
                     >
-                        <Plus size={20}/> NUEVO
+                        <Trophy size={16}/> MINI EXPRESS
+                    </button>
+                    <button
+                        onClick={() => navigate('/setup')}
+                        style={{ backgroundColor: THEME.cta }}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white font-bold text-sm shadow-lg active:scale-95 transition-transform hover:opacity-90"
+                    >
+                        <Plus size={16}/> NUEVO
                     </button>
                 </div>
             </div>
@@ -55,6 +57,7 @@ const MiniDashboard: React.FC = () => {
                     title="No hay torneos"
                     body="Crea un torneo para empezar a gestionar inscripciones y el directo."
                     action={{ label: 'CREAR PRIMER TORNEO', onClick: () => navigate('/setup') }}
+                    dark
                 />
             ) : (
                 <div className="space-y-8">

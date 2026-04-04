@@ -57,6 +57,7 @@ const LeagueDashboard: React.FC = () => {
                     title="No hay ligas creadas"
                     body="Configura tu primera liga profesional para empezar a gestionar grupos y resultados."
                     action={{ label: 'CONFIGURAR LIGA', onClick: () => navigate('/league/setup') }}
+                    dark
                 />
             ) : (
                 <div className="grid grid-cols-1 gap-4">

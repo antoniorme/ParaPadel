@@ -229,7 +229,7 @@ const TournamentSetup: React.FC = () => {
                       <label className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-1"><Gift size={14}/> Premios</label>
                       <div className="flex gap-2 mb-2">
                           <input value={prizeInput} onChange={e => setPrizeInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddPrize()} className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm outline-none focus:border-[#575AF9]" placeholder="Ej. Palas Nox AT10"/>
-                          <button onClick={handleAddPrize} className="bg-slate-800 text-white px-4 py-2 rounded-xl hover:bg-slate-900 font-bold text-xs uppercase tracking-wide whitespace-nowrap">
+                          <button onClick={handleAddPrize} className="bg-[#575AF9] text-white px-4 py-3 rounded-xl hover:opacity-90 font-bold text-sm whitespace-nowrap transition-opacity">
                               Añadir
                           </button>
                       </div>
@@ -243,10 +243,10 @@ const TournamentSetup: React.FC = () => {
                       </div>
                   </div>
 
-                  <button 
-                    onClick={handleSubmit} 
-                    style={{ backgroundColor: THEME.cta }} 
-                    className="w-full py-5 rounded-xl font-bold text-white text-lg shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 hover:opacity-90 mt-4"
+                  <button
+                    onClick={handleSubmit}
+                    style={{ backgroundColor: THEME.cta }}
+                    className="w-full py-4 rounded-xl font-bold text-white text-base shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 hover:opacity-90 mt-4"
                   >
                       {isEditing ? <Save size={24}/> : <Play size={24} fill="currentColor" />} 
                       {isEditing ? 'GUARDAR CONFIGURACIÓN' : 'PUBLICAR Y ABRIR INSCRIPCIONES'}

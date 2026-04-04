@@ -152,7 +152,7 @@ const PlayerManager: React.FC = () => {
   return (
     <div className="space-y-8 pb-20">
       <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-black text-white">Gestión Jugadores</h2>
+          <h2 className="text-2xl font-black text-slate-900">Gestión Jugadores</h2>
           <div className="flex gap-2">
               <button 
                 onClick={() => setShowMergeModal(true)}

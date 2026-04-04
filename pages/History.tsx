@@ -47,13 +47,12 @@ const History: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-20">
-      <h2 className="text-2xl font-black text-white">Historial de Minis</h2>
-      
+      <h2 className="text-2xl font-black text-slate-900">Historial de Minis</h2>
+
       {pastTournaments.length === 0 ? (
           <EmptyState
               icon={<Trophy size={32}/>}
               title="Aún no hay torneos finalizados"
-              dark
           />
       ) : (
           <div className="space-y-4">

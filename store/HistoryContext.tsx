@@ -113,6 +113,12 @@ export const HistoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }, [fetchClubData]);
 
     const updateClubData = async (data: ClubData) => {
+        if (isOfflineMode) {
+            const offlineData = { ...data, id: data.id || 'local-club' };
+            setClubData(offlineData);
+            localStorage.setItem(CLUB_KEY, JSON.stringify(offlineData));
+            return;
+        }
         setClubData(data);
         localStorage.setItem(CLUB_KEY, JSON.stringify(data));
 

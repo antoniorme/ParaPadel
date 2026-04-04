@@ -23,9 +23,9 @@ const VARIANT_STYLES: Record<ButtonVariant, string> = {
 };
 
 const SIZE_STYLES: Record<ButtonSize, string> = {
-  sm: 'px-4 py-2 text-xs',
-  md: 'px-6 py-3.5 text-sm',
-  lg: 'px-8 py-4 text-base',
+  sm: 'px-4 py-2.5 text-sm min-h-[40px]',   // acciones secundarias, filtros
+  md: 'px-6 py-3 text-sm min-h-[44px]',      // botón estándar (toque mínimo 44px)
+  lg: 'px-8 py-4 text-base min-h-[52px]',    // CTA principal de página
 };
 
 export const Button: React.FC<ButtonProps> = ({

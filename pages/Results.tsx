@@ -186,7 +186,7 @@ const Results: React.FC = () => {
                       <div key={match.id} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm text-slate-900">
                           <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
                               <span className="text-xs font-bold text-slate-400 uppercase">Ronda {match.round}</span>
-                              <button onClick={() => { setEditMatchId(match.id); setScoreA(match.scoreA?.toString() || ''); setScoreB(match.scoreB?.toString() || ''); }} className="text-slate-400 hover:text-blue-500"><Edit2 size={16} /></button>
+                              <button onClick={() => { setEditMatchId(match.id); setScoreA(match.scoreA?.toString() || ''); setScoreB(match.scoreB?.toString() || ''); }} className="p-2 text-slate-400 hover:text-blue-500 hover:bg-slate-100 rounded-lg transition-colors"><Edit2 size={16} /></button>
                           </div>
                           <div className="flex items-center justify-between mb-2">
                               <span className="text-slate-700 font-bold">{getPairName(match.pairAId)}</span>

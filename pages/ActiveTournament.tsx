@@ -442,7 +442,7 @@ export default function ActiveTournament() {
                                 {match.isFinished && (
                                     <div className="flex items-center gap-2">
                                         <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full border border-emerald-200">Finalizado</span>
-                                        <button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className="p-1 text-slate-500 hover:text-blue-600 bg-white rounded-lg transition-colors border border-slate-200"><Edit2 size={12} /></button>
+                                        <button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className="p-2 text-slate-500 hover:text-blue-600 bg-white rounded-lg transition-colors border border-slate-200"><Edit2 size={14} /></button>
                                     </div>
                                 )}
                             </div>
@@ -459,8 +459,8 @@ export default function ActiveTournament() {
                                         Introducir Resultado
                                     </button>
                                 )}
-                                {isWaiting && !match.isFinished && (<button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className={`w-full mt-4 py-2 bg-slate-300 hover:bg-slate-400 rounded-lg text-center text-[10px] font-bold text-slate-600 uppercase transition-colors`}>Forzar Resultado</button>)}
-                                {isTechnicalRest && (<div className="w-full mt-4 py-2 bg-slate-300 rounded-lg text-center text-[10px] font-bold text-slate-500 uppercase">Pista Ocupada</div>)}
+                                {isWaiting && !match.isFinished && (<button onClick={() => handleOpenScore(match.id, match.scoreA, match.scoreB)} className={`w-full mt-4 py-2.5 bg-slate-200 hover:bg-slate-300 rounded-lg text-center text-xs font-bold text-slate-600 uppercase transition-colors`}>Forzar Resultado</button>)}
+                                {isTechnicalRest && (<div className="w-full mt-4 py-2.5 bg-slate-100 rounded-lg text-center text-xs font-bold text-slate-400 uppercase">Pista Ocupada</div>)}
                             </div>
                         </div>
                         );
