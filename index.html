@@ -1,0 +1,72 @@
+
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    
+    <!-- Mobile Web App Settings -->
+    <meta name="theme-color" content="#f8fafc" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="ParaPadel" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <title>ParaPadel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+      /* Light Mode Background */
+      body { 
+        font-family: 'Inter', sans-serif; 
+        background-color: #f8fafc; 
+        color: #0f172a; 
+        -webkit-tap-highlight-color: transparent; /* Elimina flash azul al tocar en móvil */
+        overflow-x: hidden; /* CRITICAL: Prevent horizontal scroll */
+        width: 100%;
+      }
+      
+      /* Mejorar scroll en móvil */
+      html, body {
+        overscroll-behavior-y: none;
+      }
+
+      /* Utilitarios de animación simple */
+      .animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+      @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+      
+      .animate-slide-left { animation: slideLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+      @keyframes slideLeft { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+      .animate-fade-in { animation: fadeIn 0.2s ease-out; }
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+      
+      /* Ocultar barra de scroll pero permitir scroll */
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+      /* Ajuste para iOS Notch/Dynamic Island */
+      .safe-pb { padding-bottom: env(safe-area-inset-bottom); }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "vite": "https://esm.sh/vite@^7.2.7",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.10.1",
+    "lucide-react": "https://esm.sh/lucide-react@^0.560.0",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.87.1",
+    "@hcaptcha/react-hcaptcha": "https://esm.sh/@hcaptcha/react-hcaptcha@^1.17.1",
+    "react-google-recaptcha": "https://esm.sh/react-google-recaptcha@^3.1.0"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
