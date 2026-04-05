@@ -35,6 +35,7 @@ import Notifications from './pages/Notifications';
 import NotificationSettings from './pages/NotificationSettings';
 import PendingVerification from './pages/PendingVerification';
 import LiteSetup from './pages/lite/LiteSetup'; // NEW
+import ClubCalendar from './pages/ClubCalendar';
 
 // League Pages
 import LeagueDashboard from './pages/LeagueDashboard';
@@ -164,6 +165,9 @@ const AppRoutes = () => {
                     <Route path="/league/groups/:categoryId" element={<ProtectedRoute requireAdmin><LeagueGroups /></ProtectedRoute>} />
                     <Route path="/league/active" element={<ProtectedRoute requireAdmin><LeagueActive /></ProtectedRoute>} />
                     
+                    {/* COURTS / CALENDAR */}
+                    <Route path="/courts" element={<ProtectedRoute requireAdmin><ClubCalendar /></ProtectedRoute>} />
+
                     {/* SHARED MODULES */}
                     <Route path="/players" element={<ProtectedRoute requireAdmin><PlayerManager /></ProtectedRoute>} />
                     <Route path="/players/:playerId" element={<ProtectedRoute requireAdmin><AdminPlayerProfile /></ProtectedRoute>} />
