@@ -46,6 +46,10 @@ const AuthPage: React.FC = () => {
     if (searchParams.get('mode') === 'register') {
       setView('register');
     }
+    // Contraseña cambiada correctamente — mostrar éxito en la vista de login
+    if (searchParams.get('password_updated') === '1') {
+      setSuccessMsg('¡Contraseña actualizada! Ya puedes iniciar sesión.');
+    }
     // Mostrar error si viene de un magic link expirado o inválido
     const authError = searchParams.get('auth_error');
     if (authError) {
