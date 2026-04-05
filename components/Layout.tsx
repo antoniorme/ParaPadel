@@ -33,9 +33,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   // 1. GLOBAL NAVIGATION (SIDEBAR)
   const menuItems = [
       { path: '/dashboard', label: 'Inicio', icon: Home, visible: true },
-      { path: '/minis', label: 'Minis', icon: Trophy, visible: clubData.minis_full_enabled !== false || clubData.minis_lite_enabled === true },
+      { path: '/minis', label: 'Minis', icon: Trophy, visible: clubData.minis_full_enabled !== false || clubData.minis_lite_enabled === true, badge: (clubData.minis_lite_enabled === true && !clubData.minis_full_enabled) ? 'LITE' : undefined },
       { path: '/league', label: 'Ligas', icon: CalendarRange, visible: clubData.league_enabled === true },
-      { path: '/courts', label: 'Pistas', icon: CalendarDays, visible: true },
+      { path: '/courts', label: 'Pistas', icon: CalendarDays, visible: clubData.courts_enabled === true },
       { path: '/players', label: 'Jugadores', icon: UserCog, visible: clubData.show_players !== false },
       { path: '/history', label: 'Historial', icon: History, visible: clubData.show_history !== false },
       { path: '/club', label: 'Mi Club', icon: Settings, visible: true },
@@ -137,8 +137,15 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                         to={item.path}
                         className={`group relative flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-xl font-bold transition-all ${isActive ? 'bg-[#575AF9] text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
                       >
-                          <Icon size={20} strokeWidth={2.5} /> 
-                          {!isSidebarCollapsed && <span className="text-sm">{item.label}</span>}
+                          <Icon size={20} strokeWidth={2.5} />
+                          {!isSidebarCollapsed && (
+                              <span className="flex-1 text-sm">{item.label}</span>
+                          )}
+                          {!isSidebarCollapsed && item.badge && (
+                              <span className="text-[9px] font-black bg-emerald-500 text-white px-1.5 py-0.5 rounded-full leading-none">
+                                  {item.badge}
+                              </span>
+                          )}
                           {isSidebarCollapsed && (
                               <div className="absolute left-full ml-3 px-3 py-1.5 bg-slate-800 text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-[60] pointer-events-none shadow-xl border border-slate-700">
                                   {item.label}
@@ -281,7 +288,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                       
                       {menuItems.slice(1).map(item => (
                           <Link key={item.path} to={item.path} onClick={() => setIsMenuOpen(false)} className={`flex items-center gap-3 p-3 rounded-xl font-medium transition-colors text-slate-300 hover:bg-slate-800`}>
-                              <item.icon size={20} /> {item.label}
+                              <item.icon size={20} />
+                              <span className="flex-1">{item.label}</span>
+                              {item.badge && (
+                                  <span className="text-[9px] font-black bg-emerald-500 text-white px-1.5 py-0.5 rounded-full leading-none">
+                                      {item.badge}
+                                  </span>
+                              )}
                           </Link>
                       ))}
                   </div>

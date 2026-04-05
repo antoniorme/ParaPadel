@@ -163,6 +163,7 @@ export interface ClubData {
     minis_full_enabled?: boolean; // NEW
     show_players?: boolean; // NEW
     show_history?: boolean; // NEW
+    courts_enabled?: boolean; // Módulo calendario de pistas
 }
 
 export interface PastTournament {
