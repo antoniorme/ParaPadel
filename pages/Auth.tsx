@@ -79,8 +79,8 @@ const AuthPage: React.FC = () => {
           // Use a cleaner redirect URL that works with HashRouter
           // We point to the root, but include the hash path we want to end up at
           const { error } = await supabase.auth.resetPasswordForEmail(email, {
-              redirectTo: window.location.origin + '/#/reset-password',
-              captchaToken: captchaToken || undefined 
+              redirectTo: window.location.origin + '/reset-password',
+              captchaToken: captchaToken || undefined
           });
           if (error) throw error;
           setSuccessMsg("Si el email existe, recibirás un enlace para entrar.");
