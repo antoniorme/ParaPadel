@@ -55,14 +55,25 @@ const AuthErrorHandler: React.FC = () => {
   const navigate = useNavigate();
   React.useEffect(() => {
     const hash = window.location.hash;
+
+    // Caso 1: Error en el enlace (otp_expired, etc.)
     if (hash.includes('error=')) {
       const params = new URLSearchParams(hash.replace('#', ''));
       const errorCode = params.get('error_code') || params.get('error');
       const errorDesc = params.get('error_description')?.replace(/\+/g, ' ') || 'Enlace inválido o expirado';
-      // Limpiar el hash de la URL
       window.history.replaceState(null, '', window.location.pathname);
-      // Redirigir a auth con el mensaje de error
       navigate(`/auth?auth_error=${encodeURIComponent(errorCode === 'otp_expired' ? 'El enlace ha expirado. Solicita uno nuevo.' : errorDesc)}`, { replace: true });
+      return;
+    }
+
+    // Caso 2: Token de recovery en URL malformada (doble-hash): /#/reset-password#access_token=...
+    // Ocurre cuando redirectTo tenía formato HashRouter (/#/reset-password) en lugar de /reset-password
+    // Reencaminamos al token al formato correcto para que Supabase JS lo parsee
+    if (hash.includes('type=recovery') && hash.includes('access_token=')) {
+      const secondHashIdx = hash.indexOf('#', 1);
+      // Si hay doble-hash, los params están tras el segundo #; si no, tras el primero
+      const tokenParams = secondHashIdx !== -1 ? hash.substring(secondHashIdx + 1) : hash.substring(1);
+      navigate(`/reset-password#${tokenParams}`, { replace: true });
     }
   }, [navigate]);
   return null;
