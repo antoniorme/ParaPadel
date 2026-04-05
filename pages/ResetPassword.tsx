@@ -34,6 +34,22 @@ const ResetPassword: React.FC = () => {
         );
     }
 
+    // success se comprueba ANTES que !user para que signOut u otros eventos
+    // de sesión no tapen la pantalla de éxito
+    if (success) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+                <div className="bg-white p-8 rounded-2xl shadow-xl max-w-sm w-full text-center animate-fade-in">
+                    <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-600">
+                        <CheckCircle size={32} />
+                    </div>
+                    <h2 className="text-2xl font-black text-slate-900 mb-2">¡Contraseña Actualizada!</h2>
+                    <p className="text-slate-500 mb-6">Contraseña cambiada. Redirigiendo...</p>
+                </div>
+            </div>
+        );
+    }
+
     if (!user) {
         return (
             <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
@@ -72,32 +88,16 @@ const ResetPassword: React.FC = () => {
             const { error } = await supabase.auth.updateUser({ password: password });
             if (error) throw error;
             setSuccess(true);
-            // Cerramos la sesión de recovery y mandamos al login
-            // (estándar de seguridad: reautenticarse tras cambio de contraseña)
-            await supabase.auth.signOut();
+            // Sesión sigue activa tras updateUser — ir directo al dashboard
             setTimeout(() => {
-                navigate('/auth?password_updated=1');
-            }, 2000);
+                navigate('/dashboard');
+            }, 1500);
         } catch (err: any) {
             setError(err.message || "Error al actualizar la contraseña.");
         } finally {
             setLoading(false);
         }
     };
-
-    if (success) {
-        return (
-            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
-                <div className="bg-white p-8 rounded-2xl shadow-xl max-w-sm w-full text-center animate-fade-in">
-                    <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-600">
-                        <CheckCircle size={32} />
-                    </div>
-                    <h2 className="text-2xl font-black text-slate-900 mb-2">¡Contraseña Actualizada!</h2>
-                    <p className="text-slate-500 mb-6">Contraseña cambiada. Inicia sesión con tus nuevas credenciales.</p>
-                </div>
-            </div>
-        );
-    }
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
