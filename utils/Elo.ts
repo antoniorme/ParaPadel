@@ -1,12 +1,23 @@
 
-import { Player, Pair } from '../types';
+import { Player, Pair, Match } from '../types';
 
 // CONFIGURACIÓN ELO
 // Escala x5 respecto a la anterior (aprox).
 // K_FACTOR BASE: 50 (Duro para pares).
-const BASE_K_FACTOR = 50; 
+const BASE_K_FACTOR = 50;
 // Aumentamos el límite para permitir el "Factor de Corrección" en sorpresas grandes
-const MAX_POINTS_CAP = 300; 
+const MAX_POINTS_CAP = 300;
+
+// ── ANTI-FRAUDE CONFIG (no documentar públicamente) ───────────────────────────
+
+// Máximo ELO que se puede ganar en un día fuera de torneo oficial
+const DAILY_ELO_CAP_FRIENDLY = 80;
+// Máximo partidos por día que computan ELO (fuera de torneo oficial)
+const MAX_DAILY_FRIENDLY_MATCHES = 2;
+// Multiplicador para partidos amistosos vs torneos oficiales
+const FRIENDLY_MATCH_MULTIPLIER = 0.6;
+// Multiplicador por repetir rivales: primer reencuentro x0.5, segundo x0.25, etc.
+const REPEAT_OPPONENT_BASE_MULTIPLIER = 0.5;
 
 // 1. TABLA DE ANCLAS (Puntos Base por Categoría)
 // Sistema 0-6000. Cada categoría son 1000 puntos.
@@ -106,6 +117,109 @@ export const calculateMatchDelta = (
 
     return Math.round(delta);
 };
+
+// ── ANTI-FRAUDE: REGLAS DE APLICACIÓN ────────────────────────────────────────
+
+/**
+ * Cuántas veces han jugado estos dos pares entre sí en el historial dado.
+ * Se usa para aplicar el multiplicador de repetición de rivales.
+ */
+export const countPreviousMatchups = (
+    myPairId: string,
+    opponentPairId: string,
+    matchHistory: Match[]
+): number => {
+    return matchHistory.filter(m =>
+        m.isFinished &&
+        ((m.pairAId === myPairId && m.pairBId === opponentPairId) ||
+         (m.pairAId === opponentPairId && m.pairBId === myPairId))
+    ).length;
+};
+
+/**
+ * Multiplicador por repetición de rivales.
+ * 0 veces jugados → x1.0 (sin penalización)
+ * 1 vez → x0.5
+ * 2 veces → x0.25
+ * 3+ veces → x0.125 (piso)
+ */
+export const getRepeatOpponentMultiplier = (timesPreviouslyPlayed: number): number => {
+    if (timesPreviouslyPlayed <= 0) return 1.0;
+    const multiplier = Math.pow(REPEAT_OPPONENT_BASE_MULTIPLIER, timesPreviouslyPlayed);
+    return Math.max(multiplier, 0.125); // piso de 12.5%
+};
+
+/**
+ * Cuántos partidos amistosos (no en torneo oficial) ha jugado un jugador hoy.
+ * Si llega al límite, el delta de ELO será 0.
+ */
+export const getFriendlyMatchCountToday = (
+    playerId: string,
+    matchHistory: Match[],
+    pairs: Pair[]
+): number => {
+    const today = new Date().toDateString();
+    const myPairIds = pairs
+        .filter(p => p.player1Id === playerId || p.player2Id === playerId)
+        .map(p => p.id);
+
+    return matchHistory.filter(m => {
+        if (!m.isFinished) return false;
+        if (m.bracket === 'main' || m.bracket === 'consolation') return false; // torneo oficial
+        const involvedInMatch = myPairIds.includes(m.pairAId) || myPairIds.includes(m.pairBId);
+        if (!involvedInMatch) return false;
+        // Sin timestamp en Match, usamos heurística: si el modelo tuviese created_at lo usaríamos
+        // Por ahora contamos todos los del historial reciente (se refinará con timestamps)
+        return true;
+    }).length;
+};
+
+/**
+ * Aplica todas las reglas anti-fraude a un delta de ELO calculado.
+ *
+ * @param rawDelta       - Delta calculado por calculateMatchDelta
+ * @param isTournament   - Si el partido es dentro de un torneo oficial
+ * @param repeatTimes    - Veces que estos rivales se han enfrentado antes
+ * @param eloGainedToday - ELO ya ganado hoy en partidos amistosos
+ * @param friendlyMatchesToday - Partidos amistosos jugados hoy
+ */
+export const applyAntiFraudRules = (
+    rawDelta: number,
+    isTournament: boolean,
+    repeatTimes: number,
+    eloGainedToday: number = 0,
+    friendlyMatchesToday: number = 0
+): number => {
+    // Los partidos de torneo oficial no tienen límite diario ni multiplicador amistoso,
+    // pero sí tienen la penalización por repetir rivales (por si acaso)
+    const repeatMultiplier = getRepeatOpponentMultiplier(repeatTimes);
+    let delta = Math.round(rawDelta * repeatMultiplier);
+
+    if (isTournament) {
+        // En torneo: solo aplicamos la penalización por repetir rivales
+        return delta;
+    }
+
+    // Partido amistoso: aplicar multiplicador de amistoso
+    delta = Math.round(delta * FRIENDLY_MATCH_MULTIPLIER);
+
+    // Límite de partidos por día
+    if (friendlyMatchesToday >= MAX_DAILY_FRIENDLY_MATCHES) {
+        return 0;
+    }
+
+    // Cap de ELO diario (solo cuenta ELO positivo)
+    if (delta > 0 && eloGainedToday >= DAILY_ELO_CAP_FRIENDLY) {
+        return 0;
+    }
+    if (delta > 0 && eloGainedToday + delta > DAILY_ELO_CAP_FRIENDLY) {
+        delta = DAILY_ELO_CAP_FRIENDLY - eloGainedToday;
+    }
+
+    return delta;
+};
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
 
 // HELPER: Visual
 export const calculateDisplayRanking = (player: Player): number => {
