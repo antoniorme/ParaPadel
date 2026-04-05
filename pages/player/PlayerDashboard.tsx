@@ -6,7 +6,7 @@ import { useHistory } from '../../store/HistoryContext';
 import { useNotifications } from '../../store/NotificationContext';
 import { useAuth } from '../../store/AuthContext';
 import { THEME } from '../../utils/theme';
-import { Activity, TrendingUp, Award, Calendar, UserCircle, ShieldAlert, Terminal } from 'lucide-react';
+import { Activity, TrendingUp, Award, Calendar, UserCircle, ShieldAlert, Terminal, ArrowLeft } from 'lucide-react';
 import { calculateDisplayRanking } from '../../utils/Elo';
 
 const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -23,12 +23,13 @@ const PlayerDashboard: React.FC = () => {
     });
 
     // REDIRECCIÓN AUTOMÁTICA PARA ADMINS
-    // Si el usuario es admin/superadmin, no debe ver esta pantalla móvil nunca.
+    // Excepto si están en modo preview desde SuperAdmin
+    const isPreviewMode = sessionStorage.getItem('superadmin_preview') === 'player';
     useEffect(() => {
-        if (role === 'admin' || role === 'superadmin') {
+        if (!isPreviewMode && (role === 'admin' || role === 'superadmin')) {
             navigate('/dashboard', { replace: true });
         }
-    }, [role, navigate]);
+    }, [role, navigate, isPreviewMode]);
 
     useEffect(() => {
         if (myPlayerId) {
@@ -70,7 +71,8 @@ const PlayerDashboard: React.FC = () => {
     }, [currentPlayer, pastTournaments, state, myPlayerId]);
 
     // Si aún estamos determinando el rol o redirigiendo, mostramos loading invisible
-    if (role === 'admin' || role === 'superadmin') return null;
+    // Excepción: superadmin en modo preview
+    if ((role === 'admin' || role === 'superadmin') && !isPreviewMode) return null;
 
     // Si el usuario llega aquí y no tiene perfil de jugador creado aún
     if (!currentPlayer) {
@@ -94,6 +96,19 @@ const PlayerDashboard: React.FC = () => {
 
     return (
         <div className="p-6 space-y-8 relative pb-24">
+            {/* Banner modo preview superadmin */}
+            {isPreviewMode && (
+                <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+                    <span className="text-xs font-bold text-amber-700">👁 Modo preview — Vista jugador</span>
+                    <button
+                        onClick={() => { sessionStorage.removeItem('superadmin_preview'); navigate('/superadmin'); }}
+                        className="flex items-center gap-1 text-xs font-bold text-amber-700 hover:text-amber-900"
+                    >
+                        <ArrowLeft size={14}/> Volver
+                    </button>
+                </div>
+            )}
+
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Hola de nuevo,</h1>

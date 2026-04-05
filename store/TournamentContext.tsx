@@ -86,7 +86,7 @@ const reducer = (state: TournamentState, action: TournamentAction): TournamentSt
 
 export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(reducer, initialState);
-    const { isOnline } = useAuth();
+    const { isOnline, user, isOfflineMode } = useAuth();
     const [isOverlayOpen, setOverlayOpen] = useState(false);
 
     const formatPlayerName = useCallback((p?: Player) => {
@@ -146,13 +146,15 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     // ── INIT ──────────────────────────────────────────────────────────────────
 
     useEffect(() => {
+        // Wait until auth resolves — if not offline mode, user must exist
+        if (!isOfflineMode && !user) return;
         const init = async () => {
             const players = await db.loadPlayers();
             dispatch({ type: 'SET_STATE', payload: { players } });
             db.fetchTournamentList();
         };
         init();
-    }, []);
+    }, [user?.id, isOfflineMode]); // Re-run when user becomes available
 
     const loadData = async () => { await db.fetchTournamentList(); };
 

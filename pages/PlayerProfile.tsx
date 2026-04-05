@@ -151,7 +151,7 @@ const PlayerProfile: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4"><button onClick={() => setIsEditing(true)} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-lg"><Edit2 size={20} /></button></div>
+          <div className="absolute top-0 right-0 p-4"><button onClick={() => setIsEditing(true)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-slate-50 rounded-lg"><Edit2 size={20} /></button></div>
           
           <div className="flex items-center gap-6">
                <div className={`w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-black shadow-inner border-4 border-slate-50 ${getAvatarColor(player.name)}`}>
