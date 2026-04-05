@@ -72,8 +72,11 @@ const ResetPassword: React.FC = () => {
             const { error } = await supabase.auth.updateUser({ password: password });
             if (error) throw error;
             setSuccess(true);
+            // Cerramos la sesión de recovery y mandamos al login
+            // (estándar de seguridad: reautenticarse tras cambio de contraseña)
+            await supabase.auth.signOut();
             setTimeout(() => {
-                navigate('/dashboard');
+                navigate('/auth?password_updated=1');
             }, 2000);
         } catch (err: any) {
             setError(err.message || "Error al actualizar la contraseña.");
@@ -90,7 +93,7 @@ const ResetPassword: React.FC = () => {
                         <CheckCircle size={32} />
                     </div>
                     <h2 className="text-2xl font-black text-slate-900 mb-2">¡Contraseña Actualizada!</h2>
-                    <p className="text-slate-500 mb-6">Tu contraseña ha sido cambiada correctamente. Redirigiendo...</p>
+                    <p className="text-slate-500 mb-6">Contraseña cambiada. Inicia sesión con tus nuevas credenciales.</p>
                 </div>
             </div>
         );
