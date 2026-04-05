@@ -70,12 +70,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .from('clubs').select('id').eq('owner_id', uid).maybeSingle();
       if (club) return 'admin';
 
-      const [{ data: ownedPlayers }, { data: ownedTournaments }] = await Promise.all([
-        supabase.from('players').select('id').eq('user_id', uid).limit(1).maybeSingle(),
-        supabase.from('tournaments').select('id').eq('user_id', uid).limit(1).maybeSingle(),
-      ]);
-      if (ownedPlayers || ownedTournaments) return 'admin';
+      // Fallback: tiene torneos a su nombre pero aún no tiene club creado
+      const { data: ownedTournaments } = await supabase
+        .from('tournaments').select('id').eq('user_id', uid).limit(1).maybeSingle();
+      if (ownedTournaments) return 'admin';
 
+      // Jugador — tiene perfil propio vinculado a su auth id
       const { data: playerProfile } = await supabase
         .from('players').select('id').eq('profile_user_id', uid).maybeSingle();
       if (playerProfile) return 'player';
@@ -153,12 +153,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(session);
         const currentUser = session?.user ?? null;
         setUser(currentUser);
-        if (currentUser && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+
+        if (event === 'PASSWORD_RECOVERY') {
+          // El usuario llegó desde un link de reset password — no redirigir, dejar que ResetPassword.tsx lo maneje
+          setLoading(false);
+          return;
+        }
+
+        if (currentUser && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'USER_UPDATED')) {
           checkUserRole(currentUser.id, currentUser.email).then(r => {
             if (mounted) { setRole(r); setLoading(false); }
           });
         } else if (!currentUser) {
           setRole(null);
+          setLoading(false);
         }
       }
     });

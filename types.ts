@@ -196,6 +196,58 @@ export interface PublicTournament {
 
 export type NotificationType = 'invite' | 'match_start' | 'result' | 'system' | 'alert';
 
+// ── CALENDARIO DE PISTAS ──────────────────────────────────────────────────────
+
+export interface CourtConfig {
+  id: string;
+  club_id: string;
+  court_number: number;
+  court_name: string;
+  slot_minutes: 60 | 90;
+  open_time: string;   // "08:00"
+  close_time: string;  // "22:00"
+  active_days: number[]; // 0=Dom 1=Lun ... 6=Sáb
+  is_active: boolean;
+  sort_order: number;
+}
+
+export type BlockType = 'manual' | 'tournament' | 'maintenance' | 'private';
+
+export interface CourtBlock {
+  id: string;
+  club_id: string;
+  court_number: number;
+  start_at: string;   // ISO timestamp
+  end_at: string;     // ISO timestamp
+  reason: string;
+  block_type: BlockType;
+  tournament_id?: string;
+  created_by?: string;
+  created_at: string;
+}
+
+export type ReservationStatus = 'pending' | 'confirmed' | 'rejected' | 'cancelled';
+export type ReservationSource = 'app' | 'whatsapp' | 'admin' | 'join_link';
+
+export interface CourtReservation {
+  id: string;
+  club_id: string;
+  court_number: number;
+  player_id?: string;
+  player_name?: string;
+  player_phone?: string;
+  player_email?: string;
+  partner_name?: string;
+  start_at: string;
+  end_at: string;
+  status: ReservationStatus;
+  source: ReservationSource;
+  notes?: string;
+  confirmed_by?: string;
+  confirmed_at?: string;
+  created_at: string;
+}
+
 export interface AppNotification {
     id: string;
     userId: string;

@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../store/AuthContext';
 import { Modal } from '../components';
-import { AlertTriangle, Check, X, RefreshCw, Key, Edit2, Trash2, Copy } from 'lucide-react';
+import { AlertTriangle, Check, X, RefreshCw, Key, Edit2, Trash2, Copy, Smartphone, LayoutDashboard } from 'lucide-react';
 
 import SuperAdminHeader from './superadmin/SuperAdminHeader';
 import ClubCard from './superadmin/ClubCard';
@@ -14,6 +15,7 @@ import { ClubWithStats, Club, InspectionStats } from './superadmin/types';
 
 const SuperAdmin: React.FC = () => {
     const { isOfflineMode } = useAuth();
+    const navigate = useNavigate();
 
     // ── DATA ──────────────────────────────────────────────────────────────────
     const [clubs, setClubs] = useState<ClubWithStats[]>([]);
@@ -147,6 +149,22 @@ const SuperAdmin: React.FC = () => {
                 globalStats={globalStats}
                 onNewClub={() => setShowCreateModal(true)}
             />
+
+            {/* Preview buttons */}
+            <div className="flex gap-3 px-2">
+                <button
+                    onClick={() => { sessionStorage.setItem('superadmin_preview', 'player'); navigate('/p/dashboard'); }}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-xl font-bold text-sm hover:bg-indigo-100 transition-colors"
+                >
+                    <Smartphone size={16}/> Ver como Jugador
+                </button>
+                <button
+                    onClick={() => navigate('/dashboard')}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-100 transition-colors"
+                >
+                    <LayoutDashboard size={16}/> Ver como Club
+                </button>
+            </div>
 
             {/* Toast notification */}
             {(errorMsg || successMsg) && (

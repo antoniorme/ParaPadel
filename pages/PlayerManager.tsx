@@ -1,9 +1,9 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
-import { Search, Edit2, Save, Eye, Trophy, Activity, Plus, Check, X, Trash2, AlertTriangle, ArrowRightCircle, ArrowLeftCircle, Shuffle, Mail, Phone, Merge, ArrowRight, ArrowLeft } from 'lucide-react';
-import { Modal } from '../components';
+import { Search, Edit2, Eye, Trophy, Activity, Plus, Check, X, Trash2, AlertTriangle, ArrowRightCircle, ArrowLeftCircle, Shuffle, Mail, Phone, Merge, ArrowRight, ArrowLeft, Users } from 'lucide-react';
+import { Modal, EmptyState } from '../components';
 import { Player } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { calculateDisplayRanking, calculateInitialElo, manualToElo } from '../utils/Elo';
@@ -152,7 +152,7 @@ const PlayerManager: React.FC = () => {
   return (
     <div className="space-y-8 pb-20">
       <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-black text-white">Gestión Jugadores</h2>
+          <h2 className="text-2xl font-black text-slate-900">Gestión Jugadores</h2>
           <div className="flex gap-2">
               <button 
                 onClick={() => setShowMergeModal(true)}
@@ -191,7 +191,13 @@ const PlayerManager: React.FC = () => {
       </div>
 
       <div className="space-y-3">
-          {filteredPlayers.length === 0 && <div className="text-center py-20 text-slate-500 font-bold uppercase tracking-widest text-xs">No se encontraron jugadores</div>}
+          {filteredPlayers.length === 0 && (
+              <EmptyState
+                  icon={<Users size={28}/>}
+                  title={search ? "Sin resultados" : "No hay jugadores"}
+                  body={search ? `No hay jugadores que coincidan con "${search}".` : "Crea el primer jugador del club para empezar."}
+              />
+          )}
           {filteredPlayers.map((player) => {
               const rankingScore = calculateDisplayRanking(player);
               return (

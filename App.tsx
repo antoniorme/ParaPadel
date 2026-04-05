@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { TournamentProvider } from './store/TournamentContext';
 import { LeagueProvider } from './store/LeagueContext';
 import { AuthProvider, useAuth } from './store/AuthContext';
@@ -35,6 +35,7 @@ import Notifications from './pages/Notifications';
 import NotificationSettings from './pages/NotificationSettings';
 import PendingVerification from './pages/PendingVerification';
 import LiteSetup from './pages/lite/LiteSetup'; // NEW
+import ClubCalendar from './pages/ClubCalendar';
 
 // League Pages
 import LeagueDashboard from './pages/LeagueDashboard';
@@ -47,6 +48,36 @@ import PlayerDashboard from './pages/player/PlayerDashboard';
 import PlayerTournaments from './pages/player/PlayerTournaments';
 import TournamentBrowser from './pages/player/TournamentBrowser';
 import PlayerAppProfile from './pages/player/PlayerProfile';
+
+// Handler para errores de auth que Supabase mete en el hash de la URL
+// Ej: /#error=access_denied&error_code=otp_expired
+const AuthErrorHandler: React.FC = () => {
+  const navigate = useNavigate();
+  React.useEffect(() => {
+    const hash = window.location.hash;
+
+    // Caso 1: Error en el enlace (otp_expired, etc.)
+    if (hash.includes('error=')) {
+      const params = new URLSearchParams(hash.replace('#', ''));
+      const errorCode = params.get('error_code') || params.get('error');
+      const errorDesc = params.get('error_description')?.replace(/\+/g, ' ') || 'Enlace inválido o expirado';
+      window.history.replaceState(null, '', window.location.pathname);
+      navigate(`/auth?auth_error=${encodeURIComponent(errorCode === 'otp_expired' ? 'El enlace ha expirado. Solicita uno nuevo.' : errorDesc)}`, { replace: true });
+      return;
+    }
+
+    // Caso 2: Token de recovery en URL malformada (doble-hash): /#/reset-password#access_token=...
+    // Ocurre cuando redirectTo tenía formato HashRouter (/#/reset-password) en lugar de /reset-password
+    // Reencaminamos al token al formato correcto para que Supabase JS lo parsee
+    if (hash.includes('type=recovery') && hash.includes('access_token=')) {
+      const secondHashIdx = hash.indexOf('#', 1);
+      // Si hay doble-hash, los params están tras el segundo #; si no, tras el primero
+      const tokenParams = secondHashIdx !== -1 ? hash.substring(secondHashIdx + 1) : hash.substring(1);
+      navigate(`/reset-password#${tokenParams}`, { replace: true });
+    }
+  }, [navigate]);
+  return null;
+};
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = false }: { children?: React.ReactNode, requireAdmin?: boolean, requireSuperAdmin?: boolean }) => {
@@ -85,7 +116,9 @@ const AppRoutes = () => {
   };
 
   return (
-    <Routes>
+    <>
+      <AuthErrorHandler />
+      <Routes>
         <Route path="/" element={getHomeRoute()} />
         <Route path="/auth" element={user ? getHomeRoute() : <AuthPage />} />
         <Route path="/reset-password" element={<ResetPassword />} />
@@ -143,6 +176,9 @@ const AppRoutes = () => {
                     <Route path="/league/groups/:categoryId" element={<ProtectedRoute requireAdmin><LeagueGroups /></ProtectedRoute>} />
                     <Route path="/league/active" element={<ProtectedRoute requireAdmin><LeagueActive /></ProtectedRoute>} />
                     
+                    {/* COURTS / CALENDAR */}
+                    <Route path="/courts" element={<ProtectedRoute requireAdmin><ClubCalendar /></ProtectedRoute>} />
+
                     {/* SHARED MODULES */}
                     <Route path="/players" element={<ProtectedRoute requireAdmin><PlayerManager /></ProtectedRoute>} />
                     <Route path="/players/:playerId" element={<ProtectedRoute requireAdmin><AdminPlayerProfile /></ProtectedRoute>} />
@@ -155,6 +191,7 @@ const AppRoutes = () => {
             </Layout>
         } />
     </Routes>
+    </>
   );
 }
 

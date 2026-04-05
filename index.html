@@ -14,16 +14,31 @@
 
     <title>ParaPadel</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@1,9..40,900&family=Barlow:ital,wght@0,300;0,400;0,600;0,700;0,900;1,700;1,900&family=Barlow+Semi+Condensed:ital,wght@1,700;1,900&display=swap" rel="stylesheet">
     <style>
       /* Light Mode Background */
-      body { 
-        font-family: 'Inter', sans-serif; 
-        background-color: #f8fafc; 
-        color: #0f172a; 
-        -webkit-tap-highlight-color: transparent; /* Elimina flash azul al tocar en móvil */
-        overflow-x: hidden; /* CRITICAL: Prevent horizontal scroll */
+      body {
+        font-family: 'Barlow', sans-serif;
+        background-color: #f8fafc;
+        color: #0f172a;
+        -webkit-tap-highlight-color: transparent;
+        overflow-x: hidden;
         width: 100%;
+      }
+
+      /* DM Sans para el logo (h1 italic en Landing) */
+      h1.italic {
+        font-family: 'DM Sans', sans-serif;
+      }
+
+      /* Botones — baseline global de legibilidad */
+      button { min-height: 36px; }
+      button:not([class*="p-"]):not([class*="py-"]) { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+
+      /* Barlow Semi Condensed Italic para headers de sección (h2, h3) */
+      h2.font-black, h3.font-black {
+        font-family: 'Barlow Semi Condensed', sans-serif;
+        font-style: italic;
       }
       
       /* Mejorar scroll en móvil */
@@ -47,6 +62,14 @@
 
       /* Ajuste para iOS Notch/Dynamic Island */
       .safe-pb { padding-bottom: env(safe-area-inset-bottom); }
+
+      /* Alias: scrollbar-hide = no-scrollbar */
+      .scrollbar-hide::-webkit-scrollbar { display: none; }
+      .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+      /* Modal / card scale-in animation */
+      .animate-scale-in { animation: scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+      @keyframes scaleIn { from { transform: scale(0.93); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     </style>
 <script type="importmap">
 {

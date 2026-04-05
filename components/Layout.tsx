@@ -1,11 +1,11 @@
 
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { 
-    Trophy, Users, ClipboardList, Activity, List, Menu, LogOut, 
-    UserCog, History, Settings, HelpCircle, X, Bell, Shield, 
+import {
+    Trophy, Users, ClipboardList, Activity, List, Menu, LogOut,
+    UserCog, History, Settings, HelpCircle, X, Bell, Shield,
     LayoutGrid, Home, CalendarRange, GitMerge, PanelLeftClose, PanelLeftOpen,
-    ArrowLeft
+    ArrowLeft, CalendarDays
 } from 'lucide-react';
 import { useAuth } from '../store/AuthContext';
 import { useHistory } from '../store/HistoryContext';
@@ -35,6 +35,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       { path: '/dashboard', label: 'Inicio', icon: Home, visible: true },
       { path: '/minis', label: 'Minis', icon: Trophy, visible: clubData.minis_full_enabled !== false || clubData.minis_lite_enabled === true },
       { path: '/league', label: 'Ligas', icon: CalendarRange, visible: clubData.league_enabled === true },
+      { path: '/courts', label: 'Pistas', icon: CalendarDays, visible: true },
       { path: '/players', label: 'Jugadores', icon: UserCog, visible: clubData.show_players !== false },
       { path: '/history', label: 'Historial', icon: History, visible: clubData.show_history !== false },
       { path: '/club', label: 'Mi Club', icon: Settings, visible: true },
