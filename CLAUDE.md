@@ -1,13 +1,49 @@
 # ParaPádel — Contexto para Claude Code
 
+---
+
+## KERNEL — Protocolo de proceso antes de responder
+
+Antes de responder cualquier petición del usuario, aplicar este filtro en orden:
+
+| Letra | Principio | Acción |
+|---|---|---|
+| **K** — Keep it simple | ¿El objetivo es claro y único? | Si no, pedir una sola cosa concreta |
+| **E** — Easy to verify | ¿Hay criterio de éxito verificable? | Si no, definir qué significa "hecho" |
+| **R** — Reproducible | ¿Hay referencias vagas ("moderno", "mejor práctica")? | Traducir a requisitos concretos |
+| **N** — Narrow scope | ¿Es una sola tarea? | Si son varias, separar y priorizar |
+| **E** — Explicit constraints | ¿Qué NO hay que hacer? | Identificar límites antes de empezar |
+| **L** — Logical structure | ¿Tengo: contexto + tarea + restricciones + formato? | Si falta algo, preguntar antes de ejecutar |
+
+**Regla:** Si la petición pasa el filtro → ejecutar directamente.
+Si falla en algún punto → reformular en voz alta con el usuario antes de trabajar.
+No escribir código hasta tener claridad en K, N y E como mínimo.
+
+**Formato de reformulación cuando hay dudas:**
+```
+🔍 KERNEL check:
+- Objetivo: [lo que entiendo que quieres]
+- Éxito = [criterio concreto]
+- Fuera de scope: [lo que NO haré]
+¿Es correcto? → entonces empiezo
+```
+
+---
+
 ## Qué es este proyecto
 
 **ParaPádel** es una aplicación de gestión de torneos y ligas de pádel. El objetivo es convertirse en el Playtomic de Murcia — una plataforma multi-club donde los clubs gestionan torneos y los jugadores se inscriben y siguen su progreso.
 
 **Stack:** React 18 + Vite + TypeScript + Tailwind CSS (SPA, no Next.js)  
 **Base de datos:** Supabase (PostgreSQL + Auth + RLS)  
-**Despliegue:** Vercel (producción) + Vercel Preview (staging)  
+**Despliegue:** Vercel (producción) + Vercel Preview (staging)
 **Repo:** GitHub
+
+**URLs importantes:**
+- Producción: `https://parapadel.vercel.app`
+- Staging: `https://para-padel-git-develop-antonios-projects-bf8073b2.vercel.app`
+- Supabase producción: `wvpxtyzhphjgnbivwtvj`
+- Supabase staging: `noqzurojggkhnbicchkr`
 
 ---
 

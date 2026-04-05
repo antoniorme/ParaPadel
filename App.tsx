@@ -48,6 +48,25 @@ import PlayerTournaments from './pages/player/PlayerTournaments';
 import TournamentBrowser from './pages/player/TournamentBrowser';
 import PlayerAppProfile from './pages/player/PlayerProfile';
 
+// Handler para errores de auth que Supabase mete en el hash de la URL
+// Ej: /#error=access_denied&error_code=otp_expired
+const AuthErrorHandler: React.FC = () => {
+  const navigate = useNavigate();
+  React.useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.includes('error=')) {
+      const params = new URLSearchParams(hash.replace('#', ''));
+      const errorCode = params.get('error_code') || params.get('error');
+      const errorDesc = params.get('error_description')?.replace(/\+/g, ' ') || 'Enlace inválido o expirado';
+      // Limpiar el hash de la URL
+      window.history.replaceState(null, '', window.location.pathname);
+      // Redirigir a auth con el mensaje de error
+      navigate(`/auth?auth_error=${encodeURIComponent(errorCode === 'otp_expired' ? 'El enlace ha expirado. Solicita uno nuevo.' : errorDesc)}`, { replace: true });
+    }
+  }, [navigate]);
+  return null;
+};
+
 // Protected Route Wrapper
 const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = false }: { children?: React.ReactNode, requireAdmin?: boolean, requireSuperAdmin?: boolean }) => {
   const { user, loading, role } = useAuth();
@@ -85,7 +104,9 @@ const AppRoutes = () => {
   };
 
   return (
-    <Routes>
+    <>
+      <AuthErrorHandler />
+      <Routes>
         <Route path="/" element={getHomeRoute()} />
         <Route path="/auth" element={user ? getHomeRoute() : <AuthPage />} />
         <Route path="/reset-password" element={<ResetPassword />} />
@@ -155,6 +176,7 @@ const AppRoutes = () => {
             </Layout>
         } />
     </Routes>
+    </>
   );
 }
 

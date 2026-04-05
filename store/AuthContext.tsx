@@ -153,12 +153,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(session);
         const currentUser = session?.user ?? null;
         setUser(currentUser);
-        if (currentUser && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+
+        if (event === 'PASSWORD_RECOVERY') {
+          // El usuario llegó desde un link de reset password — no redirigir, dejar que ResetPassword.tsx lo maneje
+          setLoading(false);
+          return;
+        }
+
+        if (currentUser && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'USER_UPDATED')) {
           checkUserRole(currentUser.id, currentUser.email).then(r => {
             if (mounted) { setRole(r); setLoading(false); }
           });
         } else if (!currentUser) {
           setRole(null);
+          setLoading(false);
         }
       }
     });

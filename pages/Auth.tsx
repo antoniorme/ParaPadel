@@ -46,6 +46,12 @@ const AuthPage: React.FC = () => {
     if (searchParams.get('mode') === 'register') {
       setView('register');
     }
+    // Mostrar error si viene de un magic link expirado o inválido
+    const authError = searchParams.get('auth_error');
+    if (authError) {
+      setError(decodeURIComponent(authError));
+      setView('recovery');
+    }
   }, [searchParams]);
 
   const switchView = (newView: AuthView) => {
