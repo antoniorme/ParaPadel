@@ -81,7 +81,7 @@ const History: React.FC = () => {
                           </div>
                       </div>
 
-                      {expandedId === t.id && hasData && (
+                      {expandedId === t.id && (
                           <div className="bg-slate-950 border-t border-slate-800 animate-fade-in">
                               <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <div className="bg-slate-900 p-5 rounded-2xl border border-emerald-900/30 shadow-inner relative overflow-hidden">
@@ -95,7 +95,6 @@ const History: React.FC = () => {
                                       <div className="font-black text-white text-base leading-tight">{displayWinnerCons}</div>
                                   </div>
                               </div>
-                              {/* ... more detailed history content using dark classes ... */}
                           </div>
                       )}
                   </div>

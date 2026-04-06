@@ -147,17 +147,15 @@ const PlayerProfile: React.FC = () => {
        <div className="flex items-center justify-between">
           <button onClick={() => navigate(-1)} className="p-2 bg-white border border-slate-200 rounded-full text-slate-600"><ArrowLeft size={20} /></button>
           <h2 className="text-xl font-bold text-slate-900 uppercase tracking-wide">Perfil de Jugador</h2>
-          <div className="w-10"></div> 
+          <button onClick={() => setIsEditing(true)} className="p-2 bg-white border border-slate-200 rounded-full text-slate-400 hover:text-blue-600 hover:border-blue-200 transition-colors"><Edit2 size={20} /></button>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4"><button onClick={() => setIsEditing(true)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-slate-50 rounded-lg"><Edit2 size={20} /></button></div>
-          
-          <div className="flex items-center gap-6">
-               <div className={`w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-black shadow-inner border-4 border-slate-50 ${getAvatarColor(player.name)}`}>
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <div className="flex items-center gap-4">
+               <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-black shrink-0 ${getAvatarColor(player.name)}`}>
                    {getInitials(player.name)}
                </div>
-               <div className="flex flex-col items-start">
+               <div className="flex flex-col items-start min-w-0">
                    <h1 className="text-3xl font-black text-slate-900 leading-none mb-1">{player.nickname || player.name.split(' ')[0]}</h1>
                    <div className="text-sm font-bold text-slate-400 mb-3">{player.name}</div>
                    <div className="flex flex-wrap gap-2">

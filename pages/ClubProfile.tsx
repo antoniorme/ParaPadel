@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useHistory } from '../store/HistoryContext';
 import { useAuth } from '../store/AuthContext';
 import { THEME } from '../utils/theme';
-import { Save, Building, Image as ImageIcon, Upload, MapPin, Check, Trash2, AlertTriangle } from 'lucide-react';
+import { Save, Building, Image as ImageIcon, Upload, MapPin, Check, Trash2, AlertTriangle, CalendarDays, ArrowRight } from 'lucide-react';
 import { Modal } from '../components';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
@@ -143,8 +143,35 @@ const ClubProfile: React.FC = () => {
           </form>
       </div>
 
+      {clubData.courts_enabled && (
+          <div className="bg-white rounded-2xl border border-violet-200 shadow-sm overflow-hidden">
+              <div className="h-1.5 w-full bg-violet-500"/>
+              <div className="p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                      <div className="p-2.5 bg-violet-100 rounded-xl">
+                          <CalendarDays size={20} className="text-violet-600"/>
+                      </div>
+                      <div>
+                          <h3 className="font-black text-slate-800 text-sm">Gestión de Pistas</h3>
+                          <p className="text-xs text-slate-500">Módulo activo en tu plan</p>
+                      </div>
+                      <span className="ml-auto text-[9px] font-black uppercase tracking-wider bg-violet-100 text-violet-700 px-2 py-1 rounded-full">Activo</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+                      Configura tus pistas, horarios y gestiona las reservas de tu club desde el panel de pistas.
+                  </p>
+                  <button
+                      onClick={() => navigate('/courts')}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm text-violet-700 bg-violet-50 border border-violet-200 hover:bg-violet-100 transition-colors"
+                  >
+                      Ir a configuración de pistas <ArrowRight size={16}/>
+                  </button>
+              </div>
+          </div>
+      )}
+
       <div className="pt-6 border-t border-slate-200">
-          <button 
+          <button
             onClick={() => setShowDeleteConfirm(true)}
             className="w-full py-4 rounded-xl border-2 border-rose-100 bg-rose-50 text-rose-600 font-bold text-sm flex items-center justify-center gap-2 hover:bg-rose-100 hover:border-rose-200 transition-colors"
           >
