@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useHistory } from '../store/HistoryContext';
 import { useAuth } from '../store/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -116,6 +117,7 @@ interface BlockForm {
 const ClubCalendar: React.FC = () => {
     const { clubData } = useHistory();
     const { user } = useAuth();
+    const navigate = useNavigate();
     const { success, error: showError } = useToast();
 
     const [selectedDate, setSelectedDate] = useState(new Date());
@@ -337,9 +339,15 @@ const ClubCalendar: React.FC = () => {
 
     if (!clubData.id) {
         return (
-            <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-                <CalendarDays size={48} className="mb-4 opacity-30"/>
+            <div className="flex flex-col items-center justify-center h-64 text-slate-400 gap-4">
+                <CalendarDays size={48} className="opacity-30"/>
                 <p className="font-bold">Completa la configuración de tu club primero</p>
+                <button
+                    onClick={() => navigate('/club')}
+                    className="px-5 py-2.5 bg-violet-600 text-white text-sm font-black rounded-xl hover:bg-violet-700 transition-colors"
+                >
+                    Ir a configuración del club
+                </button>
             </div>
         );
     }
