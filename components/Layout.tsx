@@ -161,8 +161,45 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               })}
           </div>
 
-          <div className="p-3 border-t border-white/5 space-y-2 mt-auto bg-inherit z-10 relative">
-              <button 
+          <div className="p-3 border-t border-white/5 space-y-1 mt-auto bg-inherit z-10 relative">
+              {/* Notifications */}
+              <button
+                onClick={() => navigate('/notifications')}
+                className={`relative flex w-full items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-xl transition-colors text-slate-400 hover:bg-white/5 hover:text-white group`}
+              >
+                  <div className="relative shrink-0">
+                      <Bell size={20}/>
+                      {unreadCount > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border border-slate-900"></span>}
+                  </div>
+                  {!isSidebarCollapsed && <span className="text-sm font-bold flex-1 text-left">Notificaciones</span>}
+                  {!isSidebarCollapsed && unreadCount > 0 && (
+                      <span className="text-[10px] font-black bg-rose-500 text-white px-1.5 py-0.5 rounded-full leading-none">{unreadCount}</span>
+                  )}
+                  {isSidebarCollapsed && (
+                      <div className="absolute left-full ml-3 px-3 py-1.5 bg-slate-800 text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-[60] pointer-events-none shadow-xl border border-slate-700">
+                          Notificaciones{unreadCount > 0 ? ` (${unreadCount})` : ''}
+                      </div>
+                  )}
+              </button>
+
+              {/* Club avatar → Mi Club */}
+              <button
+                onClick={() => navigate('/club')}
+                className={`flex w-full items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-xl transition-colors text-slate-400 hover:bg-white/5 hover:text-white group relative`}
+              >
+                  <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center text-white text-[10px] font-black shrink-0">
+                      {clubData.name.charAt(0)}
+                  </div>
+                  {!isSidebarCollapsed && <span className="text-sm font-bold flex-1 text-left truncate">{showDefaultBranding ? 'Mi Club' : clubData.name}</span>}
+                  {isSidebarCollapsed && (
+                      <div className="absolute left-full ml-3 px-3 py-1.5 bg-slate-800 text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-[60] pointer-events-none shadow-xl border border-slate-700">
+                          Mi Club
+                      </div>
+                  )}
+              </button>
+
+              {/* Collapse toggle */}
+              <button
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                 className={`flex w-full items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-xl transition-colors text-slate-500 hover:bg-white/5 hover:text-white`}
               >
@@ -170,11 +207,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                   {!isSidebarCollapsed && <span className="text-xs font-bold uppercase">Contraer</span>}
               </button>
 
-              <button 
-                onClick={handleLogout} 
+              <button
+                onClick={handleLogout}
                 className={`flex w-full items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} p-3 rounded-xl text-rose-500 hover:bg-rose-500/10 font-bold transition-colors group relative`}
               >
-                  <LogOut size={20} /> 
+                  <LogOut size={20} />
                   {!isSidebarCollapsed && "Salir"}
               </button>
           </div>
@@ -215,10 +252,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 </div>
                 
                 <div className="flex items-center gap-2">
-                    <button onClick={() => navigate('/notifications')} className={`relative p-2 rounded-full transition-colors ${isMiniContext ? 'text-slate-300 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`}>
-                        <Bell size={20} />
-                        {unreadCount > 0 && <span className="absolute top-1 right-1 w-3 h-3 bg-rose-500 rounded-full border border-white"></span>}
-                    </button>
                     <button onClick={() => setIsMenuOpen(true)} className={`p-2 rounded-full transition-colors ${isMiniContext ? 'text-slate-200' : 'text-slate-700'}`}>
                       <Menu size={24} />
                     </button>
@@ -226,25 +259,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               </header>
           </div>
 
-          {/* DESKTOP TOP BAR */}
-          <div className="hidden md:flex justify-end items-center p-6 pb-2">
-               <div className="flex items-center gap-4">
-                   <button onClick={() => navigate('/notifications')} className={`relative p-2 rounded-full hover:bg-white/10 transition-colors ${isMiniContext || isLeagueContext ? 'text-white' : 'text-slate-600'}`}>
-                       <Bell size={24}/>
-                       {unreadCount > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border border-white"></span>}
-                   </button>
-                   <div
-                       onClick={() => navigate('/club')}
-                       className={`h-8 w-8 rounded-full flex items-center justify-center text-white font-bold border-2 cursor-pointer hover:opacity-80 transition-opacity ${isMiniContext ? 'bg-indigo-600 border-slate-700' : 'bg-indigo-500 border-white'}`}
-                       title="Mi Club"
-                   >
-                       {clubData.name.charAt(0)}
-                   </div>
-               </div>
-          </div>
-
           {/* CONTENT - Added pb-32/40 to clear bottom nav */}
-          <main className={`flex-1 p-4 md:p-8 overflow-y-auto ${contextNavItems ? 'pb-32 md:pb-24' : 'pb-10'}`}>
+          <main className={`flex-1 p-4 md:p-8 md:pt-6 overflow-y-auto ${contextNavItems ? 'pb-32 md:pb-24' : 'pb-10'}`}>
             <div className="w-full max-w-[1600px] mx-auto">
               {children}
             </div>
