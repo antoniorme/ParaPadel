@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     Trophy, Users, ClipboardList, Activity, List, Menu, LogOut,
@@ -22,6 +22,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  // Auto-collapse sidebar when entering courts view (max screen real estate)
+  useEffect(() => {
+    if (location.pathname === '/courts') setIsSidebarCollapsed(true);
+  }, [location.pathname]);
 
   // CONTEXT DETECTION
   const isMiniList = location.pathname === '/minis';
@@ -228,7 +233,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                        <Bell size={24}/>
                        {unreadCount > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border border-white"></span>}
                    </button>
-                   <div className={`h-8 w-8 rounded-full flex items-center justify-center text-white font-bold border-2 ${isMiniContext ? 'bg-indigo-600 border-slate-700' : 'bg-indigo-500 border-white'}`}>
+                   <div
+                       onClick={() => navigate('/club')}
+                       className={`h-8 w-8 rounded-full flex items-center justify-center text-white font-bold border-2 cursor-pointer hover:opacity-80 transition-opacity ${isMiniContext ? 'bg-indigo-600 border-slate-700' : 'bg-indigo-500 border-white'}`}
+                       title="Mi Club"
+                   >
                        {clubData.name.charAt(0)}
                    </div>
                </div>
