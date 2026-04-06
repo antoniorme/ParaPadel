@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
-import { Search, Edit2, Trophy, Activity, Plus, Check, X, Trash2, AlertTriangle, ArrowRightCircle, ArrowLeftCircle, Shuffle, Mail, Phone, Merge, ArrowRight, ArrowLeft, Users } from 'lucide-react';
+import { Search, Edit2, Trophy, Activity, Plus, Check, X, Trash2, AlertTriangle, ArrowRightCircle, ArrowLeftCircle, Shuffle, Mail, Phone, Merge, ArrowRight, ArrowLeft, Users, Upload, FileText, AlertCircle } from 'lucide-react';
 import { Modal, EmptyState } from '../components';
 import { Player } from '../types';
 import { useNavigate } from 'react-router-dom';
@@ -31,6 +31,14 @@ const PlayerManager: React.FC = () => {
   
   const [isCreating, setIsCreating] = useState(false);
   const [newPlayer, setNewPlayer] = useState({ name: '', nickname: '', categories: [] as string[], manual_rating: 5, email: '', phone: '', preferred_position: undefined as 'right' | 'backhand' | undefined, play_both_sides: false });
+
+  // CSV IMPORT STATE
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [csvRows, setCsvRows] = useState<{ name: string; phone: string; email: string; categories: string[]; isDupe: boolean }[]>([]);
+  const [csvError, setCsvError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importDone, setImportDone] = useState(false);
+  const csvInputRef = React.useRef<HTMLInputElement>(null);
 
   const getAvatarColor = (name: string) => {
       const colors = ['bg-rose-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-indigo-500', 'bg-purple-500', 'bg-teal-500', 'bg-cyan-500'];
@@ -153,6 +161,68 @@ const PlayerManager: React.FC = () => {
       );
   };
 
+  // CSV IMPORT LOGIC
+  const VALID_CATEGORIES = new Set(['Iniciación', '5ª CAT', '4ª CAT', '3ª CAT', '2ª CAT', '1ª CAT']);
+
+  const handleCsvFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setCsvError(null); setImportDone(false);
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+          const text = ev.target?.result as string;
+          const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+          if (lines.length === 0) { setCsvError('El archivo está vacío.'); return; }
+
+          // Detect separator: ; or ,
+          const sep = lines[0].includes(';') ? ';' : ',';
+          const header = lines[0].split(sep).map(h => h.trim().toLowerCase().replace(/['"]/g, ''));
+
+          const nameIdx = header.findIndex(h => ['nombre', 'name'].includes(h));
+          if (nameIdx === -1) { setCsvError('Columna "Nombre" no encontrada. La primera fila debe tener cabeceras: Nombre, Teléfono, Email, Categoría'); return; }
+          const phoneIdx = header.findIndex(h => ['teléfono', 'telefono', 'phone', 'tel'].includes(h));
+          const emailIdx = header.findIndex(h => ['email', 'correo'].includes(h));
+          const catIdx = header.findIndex(h => ['categoría', 'categoria', 'category', 'cat'].includes(h));
+
+          const existingNames = new Set(state.players.map(p => p.name.toLowerCase().trim()));
+          const parsed = [];
+          const errors: string[] = [];
+
+          for (let i = 1; i < lines.length; i++) {
+              const cols = lines[i].split(sep).map(c => c.trim().replace(/^["']|["']$/g, ''));
+              const name = cols[nameIdx]?.trim();
+              if (!name) continue;
+              const phone = phoneIdx >= 0 ? cols[phoneIdx]?.trim() || '' : '';
+              const email = emailIdx >= 0 ? cols[emailIdx]?.trim() || '' : '';
+              const catRaw = catIdx >= 0 ? cols[catIdx]?.trim() || '' : '';
+              const categories = catRaw ? catRaw.split(/[,/]/).map(c => c.trim()).filter(c => VALID_CATEGORIES.has(c)) : [];
+              if (catRaw && categories.length === 0) errors.push(`Fila ${i+1}: categoría "${catRaw}" no reconocida (ignorada)`);
+              parsed.push({ name, phone, email, categories, isDupe: existingNames.has(name.toLowerCase()) });
+          }
+          if (parsed.length === 0) { setCsvError('No se encontraron jugadores válidos en el archivo.'); return; }
+          if (errors.length > 0) setCsvError(`Avisos: ${errors.slice(0,3).join(' | ')}${errors.length > 3 ? ` (+${errors.length-3} más)` : ''}`);
+          setCsvRows(parsed);
+          setShowImportModal(true);
+      };
+      reader.readAsText(file, 'UTF-8');
+      e.target.value = '';
+  };
+
+  const handleImport = async () => {
+      const toImport = csvRows.filter(r => !r.isDupe);
+      if (toImport.length === 0) return;
+      setImporting(true);
+      for (const row of toImport) {
+          const initialElo = calculateInitialElo(row.categories, 5);
+          await addPlayerToDB({ name: row.name, phone: row.phone || undefined, email: row.email || undefined, categories: row.categories, global_rating: initialElo, manual_rating: 5 });
+      }
+      setImporting(false);
+      setImportDone(true);
+      setCsvRows([]);
+      setAlertMessage({ type: 'success', message: `${toImport.length} jugador${toImport.length > 1 ? 'es importados' : ' importado'} correctamente.` });
+      setShowImportModal(false);
+  };
+
   // Logic for Merge Modal List
   const mergeList = state.players.filter(p => p.name.toLowerCase().includes(mergeSearch.toLowerCase()));
 
@@ -161,15 +231,22 @@ const PlayerManager: React.FC = () => {
       <div className="flex justify-between items-center">
           <h2 className="text-2xl font-black text-slate-900">Gestión Jugadores</h2>
           <div className="flex gap-2">
-              <button 
+              <button
                 onClick={() => setShowMergeModal(true)}
                 className="p-3 bg-slate-800 text-indigo-300 rounded-xl hover:bg-slate-700 transition-colors border border-indigo-900/50"
                 title="Fusionar duplicados"
               >
                   <Merge size={20}/>
               </button>
-              <button 
-                onClick={() => setIsCreating(true)} 
+              <label
+                className="p-3 bg-slate-800 text-emerald-300 rounded-xl hover:bg-slate-700 transition-colors border border-emerald-900/50 cursor-pointer"
+                title="Importar CSV"
+              >
+                  <Upload size={20}/>
+                  <input ref={csvInputRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleCsvFile}/>
+              </label>
+              <button
+                onClick={() => setIsCreating(true)}
                 style={{ backgroundColor: THEME.cta }}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-black text-sm shadow-lg active:scale-95 transition-transform hover:opacity-90"
               >
@@ -439,6 +516,53 @@ const PlayerManager: React.FC = () => {
               { label: 'Eliminar', onClick: handleDelete, variant: 'danger' },
           ]}
       />
+
+      {/* CSV IMPORT PREVIEW MODAL */}
+      <Modal
+          isOpen={showImportModal}
+          onClose={() => { setShowImportModal(false); setCsvRows([]); }}
+          title="Importar Jugadores CSV"
+          icon={<FileText size={28}/>}
+          iconColor="brand"
+          size="lg"
+          actions={[
+              { label: 'Cancelar', onClick: () => { setShowImportModal(false); setCsvRows([]); }, variant: 'secondary' },
+              { label: `Importar ${csvRows.filter(r => !r.isDupe).length} jugadores`, onClick: handleImport, variant: 'primary', loading: importing },
+          ]}
+      >
+          <div className="text-left space-y-4">
+              {csvError && (
+                  <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
+                      <AlertCircle size={14} className="shrink-0 mt-0.5"/>
+                      <span>{csvError}</span>
+                  </div>
+              )}
+              <div className="flex gap-4 text-xs font-bold">
+                  <span className="text-emerald-600">{csvRows.filter(r => !r.isDupe).length} nuevos</span>
+                  <span className="text-amber-600">{csvRows.filter(r => r.isDupe).length} duplicados (se omitirán)</span>
+              </div>
+              <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
+                  {csvRows.map((row, i) => (
+                      <div key={i} className={`flex items-center gap-3 p-2.5 rounded-xl border text-sm ${row.isDupe ? 'bg-amber-50 border-amber-100 opacity-60' : 'bg-slate-50 border-slate-100'}`}>
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${row.isDupe ? 'bg-amber-400' : 'bg-emerald-500'}`}/>
+                          <div className="flex-1 min-w-0">
+                              <div className="font-bold text-slate-800 truncate">{row.name} {row.isDupe && <span className="text-[10px] font-normal text-amber-600">(ya existe)</span>}</div>
+                              <div className="text-[10px] text-slate-400 truncate">
+                                  {[row.phone, row.email, row.categories.join(', ')].filter(Boolean).join(' · ') || 'Sin datos extra'}
+                              </div>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+              <div className="bg-slate-50 rounded-xl p-3 text-[10px] text-slate-400 leading-relaxed border border-slate-100">
+                  <strong className="text-slate-600 block mb-1">Formato esperado del CSV:</strong>
+                  Nombre;Teléfono;Email;Categoría<br/>
+                  Juan Pérez;600000001;juan@email.com;3ª CAT<br/>
+                  María García;600000002;;4ª CAT<br/>
+                  <span className="text-slate-500">Separador: ; o coma. Columna Nombre obligatoria. Categorías válidas: Iniciación, 5ª CAT, 4ª CAT, 3ª CAT, 2ª CAT, 1ª CAT</span>
+              </div>
+          </div>
+      </Modal>
 
       <Modal
           isOpen={!!alertMessage}
