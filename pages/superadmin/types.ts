@@ -9,6 +9,7 @@ export interface Club {
     minis_full_enabled?: boolean;
     show_players?: boolean;
     show_history?: boolean;
+    courts_enabled?: boolean;
     created_at: string;
 }
 

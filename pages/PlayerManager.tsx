@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext';
 import { THEME } from '../utils/theme';
-import { Search, Edit2, Eye, Trophy, Activity, Plus, Check, X, Trash2, AlertTriangle, ArrowRightCircle, ArrowLeftCircle, Shuffle, Mail, Phone, Merge, ArrowRight, ArrowLeft, Users } from 'lucide-react';
+import { Search, Edit2, Trophy, Activity, Plus, Check, X, Trash2, AlertTriangle, ArrowRightCircle, ArrowLeftCircle, Shuffle, Mail, Phone, Merge, ArrowRight, ArrowLeft, Users } from 'lucide-react';
 import { Modal, EmptyState } from '../components';
 import { Player } from '../types';
 import { useNavigate } from 'react-router-dom';
@@ -31,6 +31,13 @@ const PlayerManager: React.FC = () => {
   
   const [isCreating, setIsCreating] = useState(false);
   const [newPlayer, setNewPlayer] = useState({ name: '', nickname: '', categories: [] as string[], manual_rating: 5, email: '', phone: '', preferred_position: undefined as 'right' | 'backhand' | undefined, play_both_sides: false });
+
+  const getAvatarColor = (name: string) => {
+      const colors = ['bg-rose-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-indigo-500', 'bg-purple-500', 'bg-teal-500', 'bg-cyan-500'];
+      let hash = 0;
+      for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+      return colors[Math.abs(hash) % colors.length];
+  };
 
   const filteredPlayers = state.players.filter(p => {
       const matchesCat = filterCat === 'all' || (p.categories && p.categories.includes(filterCat));
@@ -201,17 +208,20 @@ const PlayerManager: React.FC = () => {
           {filteredPlayers.map((player) => {
               const rankingScore = calculateDisplayRanking(player);
               return (
-              <div key={player.id} className="bg-slate-900 p-5 rounded-3xl border border-slate-800 shadow-lg flex justify-between items-center group hover:border-slate-700 transition-colors">
+              <div
+                  key={player.id}
+                  onClick={() => navigate(`/players/${player.id}`)}
+                  className="bg-slate-900 p-5 rounded-3xl border border-slate-800 shadow-lg flex justify-between items-center group hover:border-[#575AF9]/50 hover:bg-slate-800/50 transition-all cursor-pointer"
+              >
                   <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-2xl bg-slate-800 text-slate-400 border border-slate-700 flex items-center justify-center font-black text-lg shadow-inner">
-                          {player.name.charAt(0).toUpperCase()}
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-black text-lg shadow-inner shrink-0 ${getAvatarColor(player.name)}`}>
+                          {player.name.trim().split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
                       </div>
                       <div>
                           <div className="font-black text-slate-100 text-lg leading-tight">
                               {formatPlayerName(player)}
                           </div>
                           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                              {/* DISPLAY ALL CATEGORIES */}
                               {player.categories && player.categories.length > 0 ? (
                                   player.categories.map((cat, i) => (
                                       <span key={i} className="text-[10px] font-black uppercase tracking-wider text-slate-400 bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-700/50">
@@ -221,17 +231,17 @@ const PlayerManager: React.FC = () => {
                               ) : (
                                   <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 bg-slate-800 px-2 py-0.5 rounded-lg">Sin Cat</span>
                               )}
-                              
                               {getPositionLabel(player.preferred_position, player.play_both_sides)}
-                              
                               <span className="text-[10px] font-black text-blue-300 flex items-center gap-1 uppercase ml-1"><Activity size={12}/> {rankingScore} pts</span>
                           </div>
                       </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                      <button onClick={() => navigate(`/players/${player.id}`)} className="p-3 text-slate-400 hover:text-white bg-slate-800 rounded-2xl border border-slate-700 transition-all"><Eye size={20} /></button>
-                      <button onClick={() => setEditingPlayer(player)} className="p-3 text-slate-400 hover:text-blue-300 bg-slate-800 rounded-2xl border border-slate-700 transition-all"><Edit2 size={20} /></button>
-                  </div>
+                  <button
+                      onClick={e => { e.stopPropagation(); setEditingPlayer(player); }}
+                      className="p-3 text-slate-400 hover:text-blue-300 bg-slate-800 rounded-2xl border border-slate-700 transition-all shrink-0"
+                  >
+                      <Edit2 size={20} />
+                  </button>
               </div>
               );
           })}

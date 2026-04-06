@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Lock, Mail, Eye, Users, Trophy, CalendarRange, Smartphone, History, Edit2, Send, Power } from 'lucide-react';
+import { Check, Lock, Mail, Eye, Users, Trophy, CalendarRange, Smartphone, History, Edit2, Send, Power, CalendarDays } from 'lucide-react';
 import { ClubWithStats } from './types';
 
 interface ClubCardProps {
@@ -79,10 +79,11 @@ const ClubCard: React.FC<ClubCardProps> = ({
                 {/* Modules */}
                 <div className="bg-slate-50 rounded-xl p-4 mb-4 border border-slate-100">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Módulos Contratados</span>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                         <ModuleToggle field="minis_full_enabled" value={club.minis_full_enabled !== false} color="blue" icon={Trophy} label="Minis"/>
                         <ModuleToggle field="minis_lite_enabled" value={!!club.minis_lite_enabled} color="emerald" icon={Smartphone} label="Lite"/>
                         <ModuleToggle field="league_enabled" value={!!club.league_enabled} color="indigo" icon={CalendarRange} label="Ligas"/>
+                        <ModuleToggle field="courts_enabled" value={!!club.courts_enabled} color="violet" icon={CalendarDays} label="Pistas"/>
                     </div>
                 </div>
 
