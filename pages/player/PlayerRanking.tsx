@@ -20,17 +20,19 @@ const PlayerRanking: React.FC = () => {
   const { clubData } = useHistory();
   const { state } = useTournament();
 
+  const [rankTab, setRankTab] = useState<'torneos' | 'club'>('torneos');
   const [players, setPlayers] = useState<Player[]>([]);
+  const [clubPlayers, setClubPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState<string>('Todos');
 
   const [myPlayerId] = useState<string>(() => localStorage.getItem('padel_sim_player_id') || '');
 
+  // Ranking de torneos (jugadores del club)
   useEffect(() => {
     const clubId = clubData?.id || state.players[0]?.user_id;
     if (!clubId) { setLoading(false); return; }
-
     supabase
       .from('players')
       .select('*')
@@ -42,20 +44,42 @@ const PlayerRanking: React.FC = () => {
       });
   }, [clubData?.id]);
 
+  // Ranking de partidos libres (cualquier jugador con club_confidence > 0)
+  useEffect(() => {
+    if (rankTab !== 'club') return;
+    supabase
+      .from('players')
+      .select('*')
+      .gt('club_confidence', 0)
+      .order('club_rating', { ascending: false })
+      .limit(100)
+      .then(({ data }) => {
+        if (data) setClubPlayers(data as Player[]);
+      });
+  }, [rankTab]);
+
+  const activePlayers = rankTab === 'club' ? clubPlayers : players;
+
   const categories = ['Todos', ...Array.from(new Set(
     players.flatMap(p => p.categories || [p.main_category]).filter(Boolean) as string[]
   ))];
 
-  const sorted = players
+  const sorted = activePlayers
     .filter(p => {
       const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
         (p.nickname || '').toLowerCase().includes(search.toLowerCase());
+      if (rankTab === 'club') return matchesSearch;
       const matchesCat = filterCat === 'Todos' || (p.categories || []).includes(filterCat) || p.main_category === filterCat;
       return matchesSearch && matchesCat;
     })
-    .sort((a, b) => calculateDisplayRanking(b) - calculateDisplayRanking(a));
+    .sort((a, b) =>
+      rankTab === 'club'
+        ? (b.club_rating ?? 1200) - (a.club_rating ?? 1200)
+        : calculateDisplayRanking(b) - calculateDisplayRanking(a)
+    );
 
   const myRank = sorted.findIndex(p => p.id === myPlayerId) + 1;
+  const myPlayer = sorted.find(p => p.id === myPlayerId);
 
   if (loading) {
     return (
@@ -70,7 +94,22 @@ const PlayerRanking: React.FC = () => {
       {/* Header */}
       <div className="mb-4">
         <h1 className="text-2xl font-black text-slate-900">Ranking</h1>
-        <p className="text-sm text-slate-400">{clubData?.name || 'Tu club'} · {players.length} jugadores</p>
+        <p className="text-sm text-slate-400">{sorted.length} jugadores</p>
+      </div>
+
+      {/* Tab toggle */}
+      <div className="flex gap-2 mb-4 p-1 bg-slate-100 rounded-2xl">
+        {([['torneos', 'Torneos'], ['club', 'Partidos Libres']] as const).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setRankTab(key)}
+            className={`flex-1 py-2 rounded-xl text-xs font-black transition-all ${
+              rankTab === key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* My position card */}
@@ -80,13 +119,15 @@ const PlayerRanking: React.FC = () => {
           <div className="text-3xl font-black text-white">#{myRank}</div>
           <div className="flex-1">
             <div className="text-xs font-bold text-white/70 uppercase tracking-widest">Tu posición</div>
-            <div className="text-sm font-bold text-white">de {players.length} jugadores</div>
+            <div className="text-sm font-bold text-white">de {sorted.length} jugadores</div>
           </div>
           <div className="text-right">
             <div className="text-2xl font-black text-white">
-              {calculateDisplayRanking(players.find(p => p.id === myPlayerId) || players[0])}
+              {rankTab === 'club'
+                ? (myPlayer?.club_rating ?? 1200)
+                : calculateDisplayRanking(myPlayer || players[0])}
             </div>
-            <div className="text-xs font-bold text-white/60">ELO</div>
+            <div className="text-xs font-bold text-white/60">{rankTab === 'club' ? 'Club' : 'ELO'}</div>
           </div>
         </div>
       )}
@@ -102,8 +143,8 @@ const PlayerRanking: React.FC = () => {
         />
       </div>
 
-      {/* Category filter */}
-      {categories.length > 1 && (
+      {/* Category filter — solo en tab torneos */}
+      {rankTab === 'torneos' && categories.length > 1 && (
         <div className="flex gap-2 overflow-x-auto pb-2 mb-3 scrollbar-hide">
           {categories.map(cat => (
             <button
@@ -132,7 +173,10 @@ const PlayerRanking: React.FC = () => {
         <div className="space-y-2">
           {sorted.map((player, idx) => {
             const isMe = player.id === myPlayerId;
-            const elo = calculateDisplayRanking(player);
+            const displayRating = rankTab === 'club'
+              ? (player.club_rating ?? 1200)
+              : calculateDisplayRanking(player);
+            const ratingLabel = rankTab === 'club' ? 'Club' : 'ELO';
             const initials = player.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
             const color = getAvatarColor(player.name);
             return (
@@ -178,12 +222,15 @@ const PlayerRanking: React.FC = () => {
                   )}
                 </div>
 
-                {/* ELO */}
+                {/* Rating */}
                 <div className="text-right shrink-0">
                   <div className={`text-base font-black tabular-nums ${isMe ? 'text-indigo-600' : 'text-slate-800'}`}>
-                    {elo}
+                    {displayRating}
                   </div>
-                  <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">ELO</div>
+                  <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">{ratingLabel}</div>
+                  {rankTab === 'club' && (player.club_confidence ?? 0) > 0 && (
+                    <div className="text-[9px] text-slate-400">{player.club_confidence} partidos</div>
+                  )}
                 </div>
               </div>
             );

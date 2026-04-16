@@ -66,6 +66,7 @@ const MatchJoin: React.FC = () => {
   const [showResultForm, setShowResultForm] = useState(false);
   const [scoreA, setScoreA] = useState('');
   const [scoreB, setScoreB] = useState('');
+  const [teamAssignments, setTeamAssignments] = useState<Record<string, 'A' | 'B'>>({});
   const [submittingResult, setSubmittingResult] = useState(false);
   const [resultError, setResultError] = useState<string | null>(null);
 
@@ -117,6 +118,15 @@ const MatchJoin: React.FC = () => {
     supabase.from('players').select('id').eq('profile_user_id', user.id).maybeSingle()
       .then(({ data }) => { if (data) setMyPlayerId(data.id); });
   }, [user]);
+
+  // ── Pre-asignar equipos al abrir el formulario de resultado ──
+  useEffect(() => {
+    if (!showResultForm || participants.length === 0) return;
+    const half = Math.ceil(participants.length / 2);
+    const init: Record<string, 'A' | 'B'> = {};
+    participants.forEach((p, i) => { init[p.id] = i < half ? 'A' : 'B'; });
+    setTeamAssignments(init);
+  }, [showResultForm]);
 
   // ── Detect host ──────────────────────────────────────────────
   useEffect(() => {
@@ -237,6 +247,14 @@ const MatchJoin: React.FC = () => {
     }
     setSubmittingResult(true);
     setResultError(null);
+
+    // 1. Guardar asignaciones de equipo
+    const teamUpdates = Object.entries(teamAssignments).map(([id, team]) =>
+      supabase.from('match_participants').update({ team }).eq('id', id)
+    );
+    await Promise.all(teamUpdates);
+
+    // 2. Insertar resultado + marcar partido como finished
     const [r1] = await Promise.all([
       supabase.from('match_results').insert({
         match_id: match.id,
@@ -251,6 +269,7 @@ const MatchJoin: React.FC = () => {
         status: 'finished',
       }).eq('id', match.id),
     ]);
+
     if (r1.error) {
       setResultError('Error al guardar el resultado.');
     } else {
@@ -652,6 +671,38 @@ const MatchJoin: React.FC = () => {
                       />
                     </div>
                   </div>
+                  {/* Team assignment */}
+                  {participants.length > 0 && (
+                    <div>
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Equipos</p>
+                      <div className="space-y-1.5">
+                        {participants.map(p => {
+                          const name = p.player?.name || p.guest_name || 'Jugador';
+                          const team = teamAssignments[p.id] || 'A';
+                          return (
+                            <div key={p.id} className="flex items-center gap-2">
+                              <span className="flex-1 text-sm font-medium text-slate-700 truncate">{name}</span>
+                              <div className="flex rounded-lg overflow-hidden border border-slate-200 text-xs font-black">
+                                <button
+                                  type="button"
+                                  onClick={() => setTeamAssignments(t => ({ ...t, [p.id]: 'A' }))}
+                                  className={`px-3 py-1.5 transition-all ${team === 'A' ? 'text-white' : 'text-slate-400 bg-white'}`}
+                                  style={team === 'A' ? { background: '#575AF9' } : {}}
+                                >A</button>
+                                <button
+                                  type="button"
+                                  onClick={() => setTeamAssignments(t => ({ ...t, [p.id]: 'B' }))}
+                                  className={`px-3 py-1.5 transition-all ${team === 'B' ? 'text-white' : 'text-slate-400 bg-white'}`}
+                                  style={team === 'B' ? { background: '#10b981' } : {}}
+                                >B</button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {resultError && <p className="text-xs text-rose-500 font-bold">{resultError}</p>}
                   <div className="flex gap-2">
                     <button

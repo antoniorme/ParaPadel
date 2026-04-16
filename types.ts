@@ -14,8 +14,10 @@ export interface Player {
   category_ratings?: Record<string, number>;
   main_category?: string;
   matches_played?: number;
-  manual_rating?: number; 
+  manual_rating?: number;
   rankingPoints?: number;
+  club_rating?: number;      // ELO de partidos libres (Fase 4)
+  club_confidence?: number;  // nº de partidos libres verificados jugados
   created_at?: string;
 }
 
@@ -97,11 +99,11 @@ export interface LeagueState {
 }
 
 // REST OF TYPES...
-export interface Match {
-  id: string; 
+export interface TournamentMatch {
+  id: string;
   tournament_id?: string;
-  round: number; 
-  phase: 'group' | 'qf' | 'sf' | 'final'; 
+  round: number;
+  phase: 'group' | 'qf' | 'sf' | 'final';
   bracket: 'main' | 'consolation' | null;
   courtId: number;
   pairAId: string;
@@ -109,7 +111,7 @@ export interface Match {
   scoreA: number | null;
   scoreB: number | null;
   isFinished: boolean;
-  elo_processed?: boolean; 
+  elo_processed?: boolean;
 }
 
 export interface Group {
@@ -233,7 +235,7 @@ export interface TournamentState {
   format: TournamentFormat; 
   players: Player[]; 
   pairs: Pair[]; 
-  matches: Match[]; 
+  matches: TournamentMatch[];
   groups: Group[]; 
   courts: { id: number; ballsGiven: boolean }[];
   loading: boolean; 
