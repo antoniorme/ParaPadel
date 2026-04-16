@@ -3,15 +3,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTournament } from '../../store/TournamentContext';
 import { useHistory } from '../../store/HistoryContext';
-import { useNotifications } from '../../store/NotificationContext';
 import { useAuth } from '../../store/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { THEME } from '../../utils/theme';
-import { Activity, TrendingUp, Award, Calendar, UserCircle, ArrowLeft, Clock, MapPin, ChevronRight } from 'lucide-react';
+import { Activity, TrendingUp, Award, Calendar, ArrowLeft, MapPin, ChevronRight } from 'lucide-react';
 import { calculateDisplayRanking } from '../../utils/Elo';
-import { Match } from '../../types';
-
-const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+import { Match, Player } from '../../types';
 
 const PlayerDashboard: React.FC = () => {
     const navigate = useNavigate();
@@ -19,13 +16,6 @@ const PlayerDashboard: React.FC = () => {
     const { pastTournaments } = useHistory();
     const { role, signOut, user } = useAuth();
 
-    // ID del jugador simulado o real
-    const [myPlayerId, setMyPlayerId] = useState<string>(() => {
-        return localStorage.getItem('padel_sim_player_id') || '';
-    });
-
-    // REDIRECCIÓN AUTOMÁTICA PARA ADMINS
-    // Excepto si están en modo preview desde SuperAdmin
     const isPreviewMode = sessionStorage.getItem('superadmin_preview') === 'player';
     useEffect(() => {
         if (!isPreviewMode && (role === 'admin' || role === 'superadmin')) {
@@ -33,23 +23,25 @@ const PlayerDashboard: React.FC = () => {
         }
     }, [role, navigate, isPreviewMode]);
 
-    useEffect(() => {
-        if (myPlayerId) {
-            localStorage.setItem('padel_sim_player_id', myPlayerId);
-        }
-    }, [myPlayerId]);
+    // Perfil del jugador cargado directamente desde Supabase
+    const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
+    const [profileLoading, setProfileLoading] = useState(true);
 
-    const currentPlayer = state.players.find(p => p.id === myPlayerId);
-
-    // Búsqueda automática de perfil de jugador vinculado al usuario de Supabase
     useEffect(() => {
-        if (!myPlayerId && state.players.length > 0) {
-            const autoPlayer = state.players.find(p => p.profile_user_id === user?.id || p.email === user?.email);
-            if (autoPlayer) {
-                setMyPlayerId(autoPlayer.id);
-            }
-        }
-    }, [myPlayerId, state.players, user]);
+        if (!user?.id) return;
+        supabase
+            .from('players')
+            .select('*')
+            .eq('profile_user_id', user.id)
+            .maybeSingle()
+            .then(({ data }) => {
+                setCurrentPlayer(data as Player | null);
+                if (data?.id) localStorage.setItem('padel_sim_player_id', data.id);
+                setProfileLoading(false);
+            });
+    }, [user?.id]);
+
+    const myPlayerId = currentPlayer?.id || '';
 
     // Próximos partidos libres
     const [upcomingMatches, setUpcomingMatches] = useState<Match[]>([]);
@@ -57,14 +49,14 @@ const PlayerDashboard: React.FC = () => {
         if (!myPlayerId) return;
         supabase
             .from('match_participants')
-            .select('match_id, match:match_id(id, scheduled_at, status, court, level, share_token, max_players, title)')
+            .select('match_id, free_matches!match_id(id, scheduled_at, status, court, level, share_token, max_players, title)')
             .eq('player_id', myPlayerId)
             .in('attendance_status', ['joined', 'confirmed'])
             .then(({ data }) => {
                 if (!data) return;
                 const now = new Date().toISOString();
                 const upcoming = data
-                    .map((row: any) => row.match)
+                    .map((row: any) => row.free_matches)
                     .filter((m: any) => m && m.scheduled_at >= now && m.status !== 'cancelled')
                     .sort((a: any, b: any) => a.scheduled_at.localeCompare(b.scheduled_at))
                     .slice(0, 3) as Match[];
@@ -93,28 +85,10 @@ const PlayerDashboard: React.FC = () => {
         return result;
     }, [currentPlayer, pastTournaments, state, myPlayerId]);
 
-    // Si aún estamos determinando el rol o redirigiendo, mostramos loading invisible
-    // Excepción: superadmin en modo preview
     if ((role === 'admin' || role === 'superadmin') && !isPreviewMode) return null;
 
-    // Si el usuario llega aquí y no tiene perfil de jugador creado aún
-    if (!currentPlayer) {
-        return (
-            <div className="p-8 min-h-screen flex flex-col justify-center items-center text-center bg-slate-50">
-                <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-500 mb-6">
-                    <UserCircle size={32}/>
-                </div>
-                <h2 className="text-xl font-black text-slate-900 mb-2">Vinculando Perfil</h2>
-                <p className="text-slate-500 text-sm mb-8 leading-relaxed max-w-xs">
-                    Estamos buscando tu ficha de jugador en el club. Si es tu primera vez, el administrador debe registrarte con tu email: <br/>
-                    <span className="font-bold text-slate-800">{user?.email}</span>
-                </p>
-                <div className="w-full max-w-xs space-y-3">
-                    <button onClick={() => window.location.reload()} className="w-full py-3 bg-white border border-slate-200 rounded-xl font-bold text-xs text-slate-600">REINTENTAR</button>
-                    <button onClick={() => signOut()} className="w-full py-3 text-rose-500 font-bold text-xs">CERRAR SESIÓN</button>
-                </div>
-            </div>
-        );
+    if (profileLoading) {
+        return <div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"/></div>;
     }
 
     return (
