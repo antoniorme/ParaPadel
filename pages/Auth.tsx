@@ -119,16 +119,25 @@ const AuthPage: React.FC = () => {
   };
 
   const ensurePlayerRecord = async (userId: string, userEmail: string) => {
-      // Los jugadores son entidades independientes (multi-club).
-      // profile_user_id = su propio auth id. user_id = club que los gestiona (null aquí).
-      const { data } = await supabase.from('players').select('id').eq('profile_user_id', userId).maybeSingle();
-      if (!data) {
-          await supabase.from('players').insert([{
-              profile_user_id: userId,
-              email: userEmail,
-              name: userEmail.split('@')[0],
-          }]);
+      // 1. Ya vinculado → nada que hacer
+      const { data: existing } = await supabase
+          .from('players').select('id').eq('profile_user_id', userId).maybeSingle();
+      if (existing) return;
+
+      // 2. El admin lo añadió con este email pero sin uid → vincular
+      const { data: byEmail } = await supabase
+          .from('players').select('id').eq('email', userEmail).is('profile_user_id', null).maybeSingle();
+      if (byEmail) {
+          await supabase.from('players').update({ profile_user_id: userId }).eq('id', byEmail.id);
+          return;
       }
+
+      // 3. Primera vez en el sistema → crear registro nuevo
+      await supabase.from('players').insert([{
+          profile_user_id: userId,
+          email: userEmail,
+          name: userEmail.split('@')[0],
+      }]);
   };
 
   const onCaptchaVerify = (token: string) => {

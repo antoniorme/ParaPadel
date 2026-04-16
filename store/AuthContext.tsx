@@ -83,7 +83,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (userEmail) {
         const { data: emailMatch } = await supabase
           .from('players').select('id').eq('email', userEmail).is('profile_user_id', null).maybeSingle();
-        if (emailMatch) return 'player';
+        if (emailMatch) {
+          // Primera vez que este jugador inicia sesión — vincular su auth UID
+          await supabase.from('players').update({ profile_user_id: uid }).eq('id', emailMatch.id);
+          return 'player';
+        }
       }
     } catch (e) {
     }
