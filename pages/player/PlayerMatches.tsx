@@ -38,17 +38,18 @@ interface ProcessedTournament {
   eloChangeTotal: number;
 }
 
-interface PartidoLibre {
+interface FreeMatchDisplay {
   id: string;
-  date: string;
+  scheduled_at: string;
   court?: string;
-  player1_a_name?: string;
-  player2_a_name?: string;
-  player1_b_name?: string;
-  player2_b_name?: string;
+  level?: string;
+  share_token: string;
+  result_status: string;
+  myTeam: 'A' | 'B' | null;
+  teamA: string[];  // player names on team A
+  teamB: string[];  // player names on team B
   score_a: number;
   score_b: number;
-  is_finished: boolean;
 }
 
 const PHASE_LABELS: Record<string, string> = { group: 'Grupos', qf: 'QF', sf: 'SF', final: 'Final' };
@@ -62,43 +63,64 @@ const PlayerMatches: React.FC = () => {
   const currentPlayer = state.players.find(p => p.id === myPlayerId);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [partidos, setPartidos] = useState<PartidoLibre[]>([]);
+  const [partidos, setPartidos] = useState<FreeMatchDisplay[]>([]);
   const [filter, setFilter] = useState<MatchFilter>('all');
 
-  // Load friendly matches
+  // Load free matches from new tables
   useEffect(() => {
-    if (!clubData?.id) return;
+    if (!myPlayerId) return;
     supabase
-      .from('partidos')
+      .from('match_participants')
       .select(`
-        id, date, court, score_a, score_b, is_finished,
-        p1a:player1_a (name), p2a:player2_a (name),
-        p1b:player1_b (name), p2b:player2_b (name)
+        player_id,
+        free_matches!match_id (
+          id, scheduled_at, court, level, share_token, result_status,
+          match_participants!match_id (
+            player_id, team, attendance_status, participant_type, guest_name,
+            players!player_id (id, name)
+          ),
+          match_results!match_id (team_a_score, team_b_score)
+        )
       `)
-      .eq('club_id', clubData.id)
-      .eq('is_finished', true)
-      .order('date', { ascending: false })
-      .limit(20)
+      .eq('player_id', myPlayerId)
+      .in('attendance_status', ['joined', 'confirmed'])
       .then(({ data }) => {
         if (!data) return;
-        const myRows = data.filter((d: any) =>
-          [d.p1a?.id, d.p2a?.id, d.p1b?.id, d.p2b?.id].includes(myPlayerId)
-        );
-        setPartidos(myRows.map((d: any) => ({
-          id: d.id,
-          date: d.date,
-          court: d.court,
-          player1_a_name: d.p1a?.name,
-          player2_a_name: d.p2a?.name,
-          player1_b_name: d.p1b?.name,
-          player2_b_name: d.p2b?.name,
-          score_a: d.score_a ?? 0,
-          score_b: d.score_b ?? 0,
-          is_finished: d.is_finished,
-        })));
+        const seen = new Set<string>();
+        const rows: FreeMatchDisplay[] = [];
+        for (const row of data as any[]) {
+          const fm = row.free_matches;
+          if (!fm || !['final', 'pending_confirmation'].includes(fm.result_status) || seen.has(fm.id)) continue;
+          seen.add(fm.id);
+          const result = fm.match_results?.[0];
+          if (!result) continue;
+          const allParts = (fm.match_participants || []).filter(
+            (p: any) => p.attendance_status === 'joined' || p.attendance_status === 'confirmed'
+          );
+          const myPart = allParts.find((p: any) => p.player_id === myPlayerId);
+          const myTeam = myPart?.team ?? null;
+          const getName = (p: any) => p.players?.name || p.guest_name || '?';
+          const teamA = allParts.filter((p: any) => p.team === 'A').map(getName);
+          const teamB = allParts.filter((p: any) => p.team === 'B').map(getName);
+          rows.push({
+            id: fm.id,
+            scheduled_at: fm.scheduled_at,
+            court: fm.court,
+            level: fm.level,
+            share_token: fm.share_token,
+            result_status: fm.result_status,
+            myTeam,
+            teamA,
+            teamB,
+            score_a: result.team_a_score,
+            score_b: result.team_b_score,
+          });
+        }
+        rows.sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at));
+        setPartidos(rows.slice(0, 20));
       })
       .catch(() => {}); // table may not exist yet
-  }, [clubData?.id, myPlayerId]);
+  }, [myPlayerId]);
 
   const historyData = useMemo(() => {
     if (!currentPlayer) return { tournaments: [], stats: { matches: 0, wins: 0, winRate: 0, titles: 0 } };
@@ -204,14 +226,11 @@ const PlayerMatches: React.FC = () => {
   const filteredPartidos = useMemo(() => {
     if (filter === 'all') return partidos;
     return partidos.filter(p => {
-      const myInA = [p.player1_a_name, p.player2_a_name].some(
-        n => n?.toLowerCase().includes(currentPlayer.name.split(' ')[0].toLowerCase())
-      );
-      const myScore = myInA ? p.score_a : p.score_b;
-      const oppScore = myInA ? p.score_b : p.score_a;
+      const myScore = p.myTeam === 'A' ? p.score_a : p.score_b;
+      const oppScore = p.myTeam === 'A' ? p.score_b : p.score_a;
       return filter === 'win' ? myScore > oppScore : myScore <= oppScore;
     });
-  }, [partidos, filter, currentPlayer]);
+  }, [partidos, filter]);
 
   const FILTERS: { key: MatchFilter; label: string; count: number }[] = [
     { key: 'all',  label: 'Todos',     count: totalMatches },
@@ -270,28 +289,34 @@ const PlayerMatches: React.FC = () => {
           <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Partidos Libres</div>
           <div className="space-y-2">
             {filteredPartidos.map(p => {
-              const myInA = [p.player1_a_name, p.player2_a_name].some(n => n?.toLowerCase().includes(currentPlayer.name.split(' ')[0].toLowerCase()));
-              const myScore = myInA ? p.score_a : p.score_b;
-              const oppScore = myInA ? p.score_b : p.score_a;
+              const myScore = p.myTeam === 'A' ? p.score_a : p.score_b;
+              const oppScore = p.myTeam === 'A' ? p.score_b : p.score_a;
               const won = myScore > oppScore;
-              const myPair = myInA
-                ? `${p.player1_a_name ?? '—'} & ${p.player2_a_name ?? '—'}`
-                : `${p.player1_b_name ?? '—'} & ${p.player2_b_name ?? '—'}`;
-              const oppPair = myInA
-                ? `${p.player1_b_name ?? '—'} & ${p.player2_b_name ?? '—'}`
-                : `${p.player1_a_name ?? '—'} & ${p.player2_a_name ?? '—'}`;
+              const myTeamNames = (p.myTeam === 'A' ? p.teamA : p.teamB).join(' & ') || '—';
+              const oppTeamNames = (p.myTeam === 'A' ? p.teamB : p.teamA).join(' & ') || '—';
               return (
-                <div key={p.id} className="bg-white rounded-xl p-3 border border-slate-100 flex items-center gap-3">
+                <div
+                  key={p.id}
+                  className="bg-white rounded-xl p-3 border border-slate-100 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-all"
+                  onClick={() => navigate(`/m/${p.share_token}`)}
+                >
                   <div className={`w-1.5 rounded-full self-stretch ${won ? 'bg-emerald-400' : 'bg-rose-400'}`} />
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-bold text-slate-400 mb-0.5">
-                      {new Date(p.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                      {new Date(p.scheduled_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
                       {p.court ? ` · ${p.court}` : ''}
                     </div>
-                    <div className="text-sm font-bold text-slate-700 truncate">vs {oppPair}</div>
+                    <div className="text-sm font-bold text-slate-700 truncate">
+                      {myTeamNames} <span className="text-slate-400 font-normal">vs</span> {oppTeamNames}
+                    </div>
                   </div>
-                  <div className={`text-lg font-black tabular-nums ${won ? 'text-emerald-600' : 'text-rose-500'}`}>
-                    {myScore}–{oppScore}
+                  <div className="text-right shrink-0">
+                    <div className={`text-lg font-black tabular-nums ${won ? 'text-emerald-600' : 'text-rose-500'}`}>
+                      {myScore}–{oppScore}
+                    </div>
+                    {p.result_status === 'pending_confirmation' && (
+                      <div className="text-[10px] font-bold text-amber-500 mt-0.5">Pendiente</div>
+                    )}
                   </div>
                 </div>
               );

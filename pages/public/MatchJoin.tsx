@@ -7,7 +7,7 @@ import { Match, MatchParticipant } from '../../types';
 import {
   MapPin, Users, BarChart2, Share2,
   Loader2, CheckCircle2, ArrowLeft, User, Phone, MessageCircle,
-  LogIn, UserCheck, PlusCircle, X
+  LogIn, UserCheck, PlusCircle, X, Flag, ClipboardList
 } from 'lucide-react';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -61,6 +61,20 @@ const MatchJoin: React.FC = () => {
   // Reclamación de invitado
   const [claiming, setClaiming] = useState<string | null>(null);
 
+  // Resultado
+  const [result, setResult] = useState<any | null>(null);
+  const [showResultForm, setShowResultForm] = useState(false);
+  const [scoreA, setScoreA] = useState('');
+  const [scoreB, setScoreB] = useState('');
+  const [submittingResult, setSubmittingResult] = useState(false);
+  const [resultError, setResultError] = useState<string | null>(null);
+
+  // Disputa
+  const [showDisputeForm, setShowDisputeForm] = useState(false);
+  const [disputeReason, setDisputeReason] = useState('');
+  const [submittingDispute, setSubmittingDispute] = useState(false);
+  const [myDispute, setMyDispute] = useState(false);
+
   // ── Fetch match ─────────────────────────────────────────────
   const fetchMatch = useCallback(async () => {
     if (!shareToken) { setNotFound(true); setLoading(false); return; }
@@ -71,8 +85,14 @@ const MatchJoin: React.FC = () => {
         *,
         match_participants (
           id, slot_index, team, attendance_status, participant_type,
-          user_id, player_id, guest_name,
+          user_id, player_id, guest_name, claimed_user_id,
           player:player_id ( id, name, nickname )
+        ),
+        match_results!match_id (
+          id, team_a_score, team_b_score, status, submitted_at,
+          match_result_disputes!match_result_id (
+            id, raised_by_user_id, reason, status
+          )
         )
       `)
       .eq('share_token', shareToken)
@@ -85,6 +105,7 @@ const MatchJoin: React.FC = () => {
     setParticipants(parts.filter(p =>
       p.attendance_status === 'joined' || p.attendance_status === 'confirmed'
     ));
+    setResult((data as any).match_results?.[0] || null);
     setLoading(false);
   }, [shareToken]);
 
@@ -106,6 +127,24 @@ const MatchJoin: React.FC = () => {
       );
     }
   }, [user, match]);
+
+  // ── Auto-final: si han pasado 24h sin disputa ────────────────
+  useEffect(() => {
+    if (!result || result.status !== 'pending_confirmation' || !match) return;
+    const elapsed = (Date.now() - new Date(result.submitted_at).getTime()) / (1000 * 60 * 60);
+    if (elapsed < 24) return;
+    Promise.all([
+      supabase.from('match_results').update({ status: 'final' }).eq('id', result.id),
+      supabase.from('free_matches').update({ result_status: 'final', status: 'finished' }).eq('id', match.id),
+    ]).then(() => fetchMatch());
+  }, [result, match]);
+
+  // ── ¿Ya disputé este resultado? ──────────────────────────────
+  useEffect(() => {
+    if (!result || !user) return;
+    const disputes: any[] = result.match_result_disputes || [];
+    setMyDispute(disputes.some((d: any) => d.raised_by_user_id === user.id));
+  }, [result, user]);
 
   // ── Check if already joined ──────────────────────────────────
   useEffect(() => {
@@ -184,6 +223,61 @@ const MatchJoin: React.FC = () => {
       await fetchMatch();
     }
     setJoining(false);
+  };
+
+  // ── Submit result (host) ─────────────────────────────────────
+  const handleSubmitResult = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!match || !user) return;
+    const a = parseInt(scoreA);
+    const b = parseInt(scoreB);
+    if (isNaN(a) || isNaN(b) || a < 0 || b < 0) {
+      setResultError('Introduce un marcador válido.');
+      return;
+    }
+    setSubmittingResult(true);
+    setResultError(null);
+    const [r1] = await Promise.all([
+      supabase.from('match_results').insert({
+        match_id: match.id,
+        submitted_by_user_id: user.id,
+        team_a_score: a,
+        team_b_score: b,
+        status: 'pending_confirmation',
+        rating_impact_mode: 'full',
+      }),
+      supabase.from('free_matches').update({
+        result_status: 'pending_confirmation',
+        status: 'finished',
+      }).eq('id', match.id),
+    ]);
+    if (r1.error) {
+      setResultError('Error al guardar el resultado.');
+    } else {
+      setShowResultForm(false);
+      setScoreA('');
+      setScoreB('');
+      await fetchMatch();
+    }
+    setSubmittingResult(false);
+  };
+
+  // ── Dispute result (registered participant) ──────────────────
+  const handleDispute = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!result || !user) return;
+    setSubmittingDispute(true);
+    const { error } = await supabase.from('match_result_disputes').insert({
+      match_result_id: result.id,
+      raised_by_user_id: user.id,
+      reason: disputeReason.trim() || null,
+      status: 'open',
+    });
+    if (!error) {
+      setShowDisputeForm(false);
+      setMyDispute(true);
+    }
+    setSubmittingDispute(false);
   };
 
   // ── Add placeholder (host only) ──────────────────────────────
@@ -435,6 +529,151 @@ const MatchJoin: React.FC = () => {
               </p>
             )}
           </div>
+
+          {/* ── Resultado ────────────────────────────────────── */}
+          {result && (() => {
+            const isParticipant = participants.some(p =>
+              p.participant_type === 'registered_player' &&
+              ((myPlayerId && p.player_id === myPlayerId) ||
+               (user && (p.user_id === user.id || (p as any).claimed_user_id === user.id)))
+            );
+            const statusMeta = result.status === 'final'
+              ? { label: 'Confirmado', cls: 'bg-emerald-50 text-emerald-600' }
+              : result.status === 'disputed'
+              ? { label: 'Disputado', cls: 'bg-rose-50 text-rose-500' }
+              : { label: 'Pendiente 24h', cls: 'bg-amber-50 text-amber-600' };
+
+            return (
+              <div className="px-6 pb-4">
+                <div className="border border-slate-100 rounded-2xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                      <ClipboardList size={13} /> Resultado
+                    </span>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${statusMeta.cls}`}>
+                      {statusMeta.label}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-center gap-8 py-2">
+                    <div className="text-center">
+                      <div className="text-[10px] text-slate-400 font-bold mb-1">Equipo A</div>
+                      <div className="text-5xl font-black text-slate-900">{result.team_a_score}</div>
+                    </div>
+                    <div className="text-slate-200 font-black text-3xl">—</div>
+                    <div className="text-center">
+                      <div className="text-[10px] text-slate-400 font-bold mb-1">Equipo B</div>
+                      <div className="text-5xl font-black text-slate-900">{result.team_b_score}</div>
+                    </div>
+                  </div>
+
+                  {/* Dispute */}
+                  {result.status === 'pending_confirmation' && isParticipant && !myDispute && !showDisputeForm && (
+                    <button
+                      onClick={() => setShowDisputeForm(true)}
+                      className="mt-3 w-full py-2 rounded-xl text-xs font-bold text-rose-500 bg-rose-50 hover:bg-rose-100 flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      <Flag size={13} /> Disputar resultado
+                    </button>
+                  )}
+
+                  {showDisputeForm && (
+                    <form onSubmit={handleDispute} className="mt-3 space-y-2">
+                      <textarea
+                        value={disputeReason}
+                        onChange={e => setDisputeReason(e.target.value)}
+                        placeholder="Motivo de la disputa (opcional)"
+                        rows={2}
+                        className="w-full text-xs rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-rose-300 resize-none"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowDisputeForm(false)}
+                          className="flex-1 py-2 rounded-xl text-xs font-bold text-slate-500 bg-slate-100"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={submittingDispute}
+                          className="flex-1 py-2 rounded-xl text-xs font-black text-white bg-rose-500 disabled:opacity-60 flex items-center justify-center"
+                        >
+                          {submittingDispute ? <Loader2 size={13} className="animate-spin" /> : 'Enviar disputa'}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {myDispute && (
+                    <p className="mt-3 text-center text-xs font-bold text-rose-500">
+                      Disputa enviada — el administrador la revisará
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ── Registrar resultado (host, sin resultado aún) ─── */}
+          {!result && isHost && participants.length > 0 && !isFinished && (
+            <div className="px-6 pb-4">
+              {!showResultForm ? (
+                <button
+                  onClick={() => setShowResultForm(true)}
+                  className="w-full py-3 rounded-2xl text-sm font-bold text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center gap-2 transition-all"
+                >
+                  <ClipboardList size={16} /> Registrar resultado
+                </button>
+              ) : (
+                <form onSubmit={handleSubmitResult} className="space-y-3">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Marcador final</p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <div className="text-[10px] text-slate-400 font-bold mb-1 text-center">Equipo A</div>
+                      <input
+                        type="number" min="0" max="99"
+                        value={scoreA}
+                        onChange={e => setScoreA(e.target.value)}
+                        placeholder="0"
+                        required
+                        className="w-full text-center text-2xl font-black rounded-xl border border-slate-200 py-3 outline-none focus:border-[#575AF9]"
+                      />
+                    </div>
+                    <div className="text-slate-300 font-black text-xl pt-4">–</div>
+                    <div className="flex-1">
+                      <div className="text-[10px] text-slate-400 font-bold mb-1 text-center">Equipo B</div>
+                      <input
+                        type="number" min="0" max="99"
+                        value={scoreB}
+                        onChange={e => setScoreB(e.target.value)}
+                        placeholder="0"
+                        required
+                        className="w-full text-center text-2xl font-black rounded-xl border border-slate-200 py-3 outline-none focus:border-[#575AF9]"
+                      />
+                    </div>
+                  </div>
+                  {resultError && <p className="text-xs text-rose-500 font-bold">{resultError}</p>}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setShowResultForm(false); setResultError(null); }}
+                      className="flex-1 py-3 rounded-xl font-bold text-slate-500 bg-slate-100 text-sm"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={submittingResult}
+                      className="flex-1 py-3 rounded-xl font-black text-white text-sm flex items-center justify-center gap-1 disabled:opacity-60"
+                      style={{ background: '#575AF9' }}
+                    >
+                      {submittingResult ? <Loader2 size={16} className="animate-spin" /> : 'Guardar'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
 
           {/* Action zone */}
           <div className="px-6 pb-6 space-y-3">
