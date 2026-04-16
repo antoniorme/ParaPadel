@@ -15,19 +15,22 @@ const HCAPTCHA_SITE_TOKEN = import.meta.env.VITE_HCAPTCHA_SITE_TOKEN ?? '';
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
-  const { loginWithDevBypass, isOfflineMode } = useAuth();
+  const { loginWithDevBypass, isOfflineMode, role, checkUserRole } = useAuth();
   const [searchParams] = useSearchParams();
   
   const [view, setView] = useState<AuthView>('login');
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState(''); // NEW: Confirm Password
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Estado post-login: esperar a que AuthContext resuelva el rol
+  const [waitingForRole, setWaitingForRole] = useState(false);
   
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
@@ -41,6 +44,19 @@ const AuthPage: React.FC = () => {
           setShowDevTools(true);
       }
   }, [isOfflineMode]);
+
+  // Una vez que AuthContext resuelve el rol post-login, redirigir
+  useEffect(() => {
+    if (!waitingForRole) return;
+    if (role === 'admin' || role === 'superadmin') {
+      navigate('/dashboard');
+    } else if (role === 'player') {
+      navigate('/p/dashboard');
+    } else if (role === 'pending') {
+      navigate('/pending');
+    }
+    // Si role sigue null, el timeout lo maneja abajo
+  }, [role, waitingForRole, navigate]);
 
   useEffect(() => {
     if (searchParams.get('mode') === 'register') {
@@ -147,13 +163,25 @@ const AuthPage: React.FC = () => {
 
       try {
           if (view === 'login') {
-              const { error } = await supabase.auth.signInWithPassword({
+              const { data: authData, error } = await supabase.auth.signInWithPassword({
                   email,
                   password,
                   options: { captchaToken: captchaToken || undefined }
               });
               if (error) throw error;
-              navigate('/dashboard');
+              // Esperar a que AuthContext resuelva el rol antes de navegar
+              if (authData.user) {
+                  setWaitingForRole(true);
+                  // Timeout de seguridad: si en 8s no hay rol, mostrar error de diagnóstico
+                  setTimeout(() => {
+                      setWaitingForRole(false);
+                      checkUserRole(authData.user!.id, authData.user!.email).then(r => {
+                          if (!r) {
+                              setError(`Login correcto pero sin perfil vinculado (uid: ${authData.user!.id.slice(0,8)}…). Contacta al administrador.`);
+                          }
+                      });
+                  }, 8000);
+              }
           } else {
               if (password !== confirmPassword) {
                   throw new Error("Las contraseñas no coinciden");
@@ -250,6 +278,16 @@ const AuthPage: React.FC = () => {
       );
   }
 
+
+  // --- WAITING FOR ROLE ---
+  if (waitingForRole) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
+        <Loader2 size={36} className="animate-spin text-indigo-500" />
+        <p className="text-sm font-bold text-slate-500">Iniciando sesión…</p>
+      </div>
+    );
+  }
 
   // --- LOGIN / REGISTER VIEW ---
   return (
