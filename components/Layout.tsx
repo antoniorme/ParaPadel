@@ -5,7 +5,7 @@ import {
     Trophy, Users, ClipboardList, Activity, List, Menu, LogOut,
     UserCog, History, Settings, HelpCircle, X, Bell, Shield,
     LayoutGrid, Home, CalendarRange, GitMerge, PanelLeftClose, PanelLeftOpen,
-    ArrowLeft, CalendarDays
+    ArrowLeft, CalendarDays, Swords
 } from 'lucide-react';
 import { useAuth } from '../store/AuthContext';
 import { useHistory } from '../store/HistoryContext';
@@ -40,6 +40,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       { path: '/dashboard', label: 'Inicio', icon: Home, visible: true },
       { path: '/minis', label: 'Minis', icon: Trophy, visible: clubData.minis_full_enabled !== false || clubData.minis_lite_enabled === true, badge: (clubData.minis_lite_enabled === true && !clubData.minis_full_enabled) ? 'LITE' : undefined },
       { path: '/league', label: 'Ligas', icon: CalendarRange, visible: clubData.league_enabled === true },
+      { path: '/partidos', label: 'Partidos', icon: Swords, visible: true },
       { path: '/courts', label: 'Pistas', icon: CalendarDays, visible: clubData.courts_enabled === true || role === 'superadmin' },
       { path: '/players', label: 'Jugadores', icon: UserCog, visible: clubData.show_players !== false || clubData.minis_lite_enabled === true },
       { path: '/history', label: 'Historial', icon: History, visible: clubData.show_history !== false },

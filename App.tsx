@@ -46,8 +46,12 @@ import LeagueActive from './pages/LeagueActive';
 // Player Pages
 import PlayerDashboard from './pages/player/PlayerDashboard';
 import PlayerTournaments from './pages/player/PlayerTournaments';
+import PlayerMatches from './pages/player/PlayerMatches';
+import PlayerRanking from './pages/player/PlayerRanking';
 import TournamentBrowser from './pages/player/TournamentBrowser';
 import PlayerAppProfile from './pages/player/PlayerProfile';
+import PlayerPublicProfile from './pages/public/PlayerPublicProfile';
+import MatchManager from './pages/MatchManager';
 
 // Handler para errores de auth que Supabase mete en el hash de la URL
 // Ej: /#error=access_denied&error_code=otp_expired
@@ -128,6 +132,9 @@ const AppRoutes = () => {
         <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
         <Route path="/notifications/settings" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
 
+        {/* PUBLIC PLAYER PROFILE — no auth required */}
+        <Route path="/jugador/:playerId" element={<PlayerPublicProfile />} />
+
         {/* PLAYER APP ROUTES */}
         <Route path="/p/*" element={
             <ProtectedRoute>
@@ -135,6 +142,8 @@ const AppRoutes = () => {
                     <Routes>
                         <Route index element={<Navigate to="dashboard" replace />} />
                         <Route path="dashboard" element={<PlayerDashboard />} />
+                        <Route path="matches" element={<PlayerMatches />} />
+                        <Route path="ranking" element={<PlayerRanking />} />
                         <Route path="explore" element={<TournamentBrowser />} />
                         <Route path="tournaments" element={<PlayerTournaments />} />
                         <Route path="profile" element={<PlayerAppProfile />} />
@@ -178,6 +187,9 @@ const AppRoutes = () => {
                     
                     {/* COURTS / CALENDAR */}
                     <Route path="/courts" element={<ProtectedRoute requireAdmin><ClubCalendar /></ProtectedRoute>} />
+
+                    {/* PARTIDOS — módulo independiente */}
+                    <Route path="/partidos" element={<ProtectedRoute requireAdmin><MatchManager /></ProtectedRoute>} />
 
                     {/* SHARED MODULES */}
                     <Route path="/players" element={<ProtectedRoute requireAdmin><PlayerManager /></ProtectedRoute>} />

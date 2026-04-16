@@ -113,8 +113,26 @@ export interface Match {
 }
 
 export interface Group {
-  id: string; 
+  id: string;
   pairIds: string[];
+}
+
+export interface Partido {
+  id: string;
+  club_id: string;
+  date: string;
+  start_time?: string;
+  court?: string;
+  player1_a?: string;
+  player2_a?: string;
+  player1_b?: string;
+  player2_b?: string;
+  score_a: number;
+  score_b: number;
+  is_finished: boolean;
+  elo_processed: boolean;
+  notes?: string;
+  created_at?: string;
 }
 
 export type TournamentFormat = '16_mini' | '10_mini' | '12_mini' | '8_mini';

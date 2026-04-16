@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Trophy, User, Compass, Dribbble, Bell } from 'lucide-react';
+import { Home, Activity, Award, User, Bell } from 'lucide-react';
 import { THEME } from '../utils/theme';
 import { useNotifications } from '../store/NotificationContext';
 
@@ -11,10 +11,10 @@ export const PlayerLayout: React.FC<{ children: React.ReactNode }> = ({ children
   const { unreadCount } = useNotifications();
 
   const navItems = [
-    { path: '/p/dashboard', label: 'Inicio', icon: Home },
-    { path: '/p/explore', label: 'Explorar', icon: Compass },
-    { path: '/p/tournaments', label: 'Mis Partidos', icon: Dribbble },
-    { path: '/p/profile', label: 'Perfil', icon: User },
+    { path: '/p/dashboard', label: 'Inicio',    icon: Home },
+    { path: '/p/matches',   label: 'Partidos',  icon: Activity },
+    { path: '/p/ranking',   label: 'Ranking',   icon: Award },
+    { path: '/p/profile',   label: 'Perfil',    icon: User },
   ];
 
   return (
