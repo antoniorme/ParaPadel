@@ -51,6 +51,8 @@ import PlayerRanking from './pages/player/PlayerRanking';
 import TournamentBrowser from './pages/player/TournamentBrowser';
 import PlayerAppProfile from './pages/player/PlayerProfile';
 import PlayerPublicProfile from './pages/public/PlayerPublicProfile';
+import MatchJoin from './pages/public/MatchJoin';
+import CreateMatch from './pages/player/CreateMatch';
 import MatchManager from './pages/MatchManager';
 
 // Handler para errores de auth que Supabase mete en el hash de la URL
@@ -134,6 +136,8 @@ const AppRoutes = () => {
 
         {/* PUBLIC PLAYER PROFILE — no auth required */}
         <Route path="/jugador/:playerId" element={<PlayerPublicProfile />} />
+        {/* Ficha pública de partido — no requiere auth */}
+        <Route path="/m/:shareToken" element={<MatchJoin />} />
 
         {/* PLAYER APP ROUTES */}
         <Route path="/p/*" element={
@@ -147,6 +151,7 @@ const AppRoutes = () => {
                         <Route path="explore" element={<TournamentBrowser />} />
                         <Route path="tournaments" element={<PlayerTournaments />} />
                         <Route path="profile" element={<PlayerAppProfile />} />
+                        <Route path="matches/create" element={<CreateMatch />} />
                         <Route path="*" element={<Navigate to="dashboard" replace />} />
                     </Routes>
                 </PlayerLayout>

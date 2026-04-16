@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Activity, Award, User, Bell } from 'lucide-react';
+import { Home, Activity, Award, User, Bell, Plus } from 'lucide-react';
 import { THEME } from '../utils/theme';
 import { useNotifications } from '../store/NotificationContext';
 
@@ -47,37 +47,51 @@ export const PlayerLayout: React.FC<{ children: React.ReactNode }> = ({ children
           </main>
 
           {/* Bottom Navigation */}
-          <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-100 px-4 py-2 z-30 sm:rounded-b-[2rem]">
+          <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-100 px-2 py-2 z-30 sm:rounded-b-[2rem]">
             <nav className="flex justify-around items-center">
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;
-                
+
                 return (
                   <Link
                     key={item.path}
                     to={item.path}
                     className="flex flex-col items-center justify-center py-2 px-2 w-full transition-colors rounded-xl group"
                   >
-                    <div 
-                        className={`p-1.5 rounded-xl mb-1 transition-all duration-300 ${isActive ? 'translate-y-[-2px]' : 'group-hover:bg-slate-50'}`}
+                    <div
+                      className={`p-1.5 rounded-xl mb-1 transition-all duration-300 ${isActive ? 'translate-y-[-2px]' : 'group-hover:bg-slate-50'}`}
                     >
-                      <Icon 
-                        size={24} 
-                        strokeWidth={isActive ? 2.5 : 2} 
+                      <Icon
+                        size={24}
+                        strokeWidth={isActive ? 2.5 : 2}
                         fill={isActive ? `${THEME.cta}20` : 'none'}
                         style={{ color: isActive ? THEME.cta : '#94a3b8' }}
                       />
                     </div>
-                    <span 
-                        className={`text-[10px] font-bold transition-colors ${isActive ? '' : 'text-slate-400'}`}
-                        style={{ color: isActive ? THEME.cta : undefined }}
+                    <span
+                      className={`text-[10px] font-bold transition-colors ${isActive ? '' : 'text-slate-400'}`}
+                      style={{ color: isActive ? THEME.cta : undefined }}
                     >
-                        {item.label}
+                      {item.label}
                     </span>
                   </Link>
                 );
               })}
+
+              {/* Botón crear partido */}
+              <button
+                onClick={() => navigate('/p/matches/create')}
+                className="flex flex-col items-center justify-center py-2 px-2 w-full group"
+              >
+                <div
+                  className="w-10 h-10 rounded-2xl flex items-center justify-center mb-0.5 shadow-md transition-all group-active:scale-90"
+                  style={{ background: THEME.cta }}
+                >
+                  <Plus size={22} strokeWidth={2.5} color="white" />
+                </div>
+                <span className="text-[10px] font-bold text-slate-400">Crear</span>
+              </button>
             </nav>
           </div>
       </div>

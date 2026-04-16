@@ -5,9 +5,11 @@ import { useTournament } from '../../store/TournamentContext';
 import { useHistory } from '../../store/HistoryContext';
 import { useNotifications } from '../../store/NotificationContext';
 import { useAuth } from '../../store/AuthContext';
+import { supabase } from '../../lib/supabase';
 import { THEME } from '../../utils/theme';
-import { Activity, TrendingUp, Award, Calendar, UserCircle, ShieldAlert, Terminal, ArrowLeft } from 'lucide-react';
+import { Activity, TrendingUp, Award, Calendar, UserCircle, ArrowLeft, Clock, MapPin, ChevronRight } from 'lucide-react';
 import { calculateDisplayRanking } from '../../utils/Elo';
+import { Match } from '../../types';
 
 const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
@@ -48,6 +50,27 @@ const PlayerDashboard: React.FC = () => {
             }
         }
     }, [myPlayerId, state.players, user]);
+
+    // Próximos partidos libres
+    const [upcomingMatches, setUpcomingMatches] = useState<Match[]>([]);
+    useEffect(() => {
+        if (!myPlayerId) return;
+        supabase
+            .from('match_participants')
+            .select('match_id, match:match_id(id, scheduled_at, status, court, level, share_token, max_players, title)')
+            .eq('player_id', myPlayerId)
+            .in('attendance_status', ['joined', 'confirmed'])
+            .then(({ data }) => {
+                if (!data) return;
+                const now = new Date().toISOString();
+                const upcoming = data
+                    .map((row: any) => row.match)
+                    .filter((m: any) => m && m.scheduled_at >= now && m.status !== 'cancelled')
+                    .sort((a: any, b: any) => a.scheduled_at.localeCompare(b.scheduled_at))
+                    .slice(0, 3) as Match[];
+                setUpcomingMatches(upcoming);
+            });
+    }, [myPlayerId]);
 
     const stats = useMemo(() => {
         if (!currentPlayer) return null;
@@ -135,6 +158,65 @@ const PlayerDashboard: React.FC = () => {
             <div className="grid grid-cols-2 gap-4">
                 <button onClick={() => navigate('/p/tournaments')} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col items-center gap-3 active:scale-95 transition-all"><div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><Calendar size={24} /></div><span className="text-xs font-black text-slate-700 uppercase tracking-wider">Torneos</span></button>
                 <button onClick={() => navigate('/p/profile')} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col items-center gap-3 active:scale-95 transition-all"><div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center"><Award size={24} /></div><span className="text-xs font-black text-slate-700 uppercase tracking-wider">Historial</span></button>
+            </div>
+
+            {/* Próximos partidos */}
+            <div>
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-black text-slate-700 uppercase tracking-wider">Mis Próximos Partidos</h3>
+                    <button
+                        onClick={() => navigate('/p/matches/create')}
+                        className="text-xs font-bold px-3 py-1.5 rounded-full text-white"
+                        style={{ background: THEME.cta }}
+                    >
+                        + Crear
+                    </button>
+                </div>
+
+                {upcomingMatches.length === 0 ? (
+                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 text-center">
+                        <div className="text-3xl mb-2">🎾</div>
+                        <p className="text-sm font-bold text-slate-500 mb-1">Sin partidos próximos</p>
+                        <p className="text-xs text-slate-400">Crea uno y compártelo por WhatsApp</p>
+                        <button
+                            onClick={() => navigate('/p/matches/create')}
+                            className="mt-4 px-5 py-2 rounded-full text-xs font-black text-white"
+                            style={{ background: THEME.cta }}
+                        >
+                            Crear partido
+                        </button>
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        {upcomingMatches.map((m) => {
+                            const d = new Date(m.scheduled_at);
+                            const timeStr = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                            const dateStr = d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+                            return (
+                                <button
+                                    key={m.id}
+                                    onClick={() => navigate(`/m/${m.share_token}`)}
+                                    className="w-full bg-white rounded-2xl border border-slate-100 shadow-sm px-4 py-3 flex items-center gap-3 active:scale-98 transition-all text-left"
+                                >
+                                    <div
+                                        className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-black shrink-0"
+                                        style={{ background: THEME.cta }}
+                                    >
+                                        {timeStr.slice(0, 5)}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-black text-slate-900 capitalize">{dateStr}</p>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            {m.court && <span className="text-xs text-slate-400 truncate flex items-center gap-1"><MapPin size={10}/>{m.court}</span>}
+                                            {m.level && <span className="text-xs text-slate-400 truncate">{m.level}</span>}
+                                        </div>
+                                    </div>
+                                    <ChevronRight size={16} className="text-slate-300 shrink-0" />
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
         </div>
     );
