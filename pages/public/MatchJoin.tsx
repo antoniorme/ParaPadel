@@ -5,9 +5,9 @@ import { useAuth } from '../../store/AuthContext';
 import { generateWhatsAppText, openWhatsApp } from '../../utils/whatsapp';
 import { Match, MatchParticipant } from '../../types';
 import {
-  Calendar, Clock, MapPin, Users, BarChart2, Share2,
+  MapPin, Users, BarChart2, Share2,
   Loader2, CheckCircle2, ArrowLeft, User, Phone, MessageCircle,
-  Lock, LogIn
+  LogIn, UserCheck, PlusCircle, X
 } from 'lucide-react';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -52,6 +52,15 @@ const MatchJoin: React.FC = () => {
   const [guestPhone, setGuestPhone] = useState('');
   const [joinError, setJoinError] = useState<string | null>(null);
 
+  // Host: añadir placeholder
+  const [isHost, setIsHost] = useState(false);
+  const [addingSlot, setAddingSlot] = useState<number | null>(null);
+  const [placeholderName, setPlaceholderName] = useState('');
+  const [savingPlaceholder, setSavingPlaceholder] = useState(false);
+
+  // Reclamación de invitado
+  const [claiming, setClaiming] = useState<string | null>(null);
+
   // ── Fetch match ─────────────────────────────────────────────
   const fetchMatch = useCallback(async () => {
     if (!shareToken) { setNotFound(true); setLoading(false); return; }
@@ -87,6 +96,16 @@ const MatchJoin: React.FC = () => {
     supabase.from('players').select('id').eq('profile_user_id', user.id).maybeSingle()
       .then(({ data }) => { if (data) setMyPlayerId(data.id); });
   }, [user]);
+
+  // ── Detect host ──────────────────────────────────────────────
+  useEffect(() => {
+    if (user && match) {
+      setIsHost(
+        user.id === match.created_by_user_id ||
+        user.id === (match as any).host_user_id
+      );
+    }
+  }, [user, match]);
 
   // ── Check if already joined ──────────────────────────────────
   useEffect(() => {
@@ -165,6 +184,50 @@ const MatchJoin: React.FC = () => {
       await fetchMatch();
     }
     setJoining(false);
+  };
+
+  // ── Add placeholder (host only) ──────────────────────────────
+  const handleAddPlaceholder = async (slotIndex: number) => {
+    if (!match || !placeholderName.trim()) return;
+    setSavingPlaceholder(true);
+    const { error } = await supabase.from('match_participants').insert({
+      match_id: match.id,
+      participant_type: 'placeholder_guest',
+      user_id: null,
+      player_id: null,
+      guest_name: placeholderName.trim(),
+      slot_index: slotIndex,
+      joined_via: 'manual',
+      attendance_status: 'joined',
+      is_rating_eligible: false,
+    });
+    if (!error) {
+      setAddingSlot(null);
+      setPlaceholderName('');
+      await fetchMatch();
+    }
+    setSavingPlaceholder(false);
+  };
+
+  // ── Claim guest entry ────────────────────────────────────────
+  const handleClaim = async (participantId: string) => {
+    if (!user) return;
+    setClaiming(participantId);
+    const { error } = await supabase
+      .from('match_participants')
+      .update({
+        claimed_user_id: user.id,
+        user_id: user.id,
+        player_id: myPlayerId || null,
+        participant_type: 'registered_player',
+        is_rating_eligible: true,
+      })
+      .eq('id', participantId);
+    if (!error) {
+      setAlreadyJoined(true);
+      await fetchMatch();
+    }
+    setClaiming(null);
   };
 
   // ── Share ────────────────────────────────────────────────────
@@ -268,27 +331,98 @@ const MatchJoin: React.FC = () => {
             <div className="space-y-2">
               {Array.from({ length: match.max_players }).map((_, i) => {
                 const p = participants[i];
+                const slotIndex = i + 1;
+                const isMe = p && (
+                  (myPlayerId && p.player_id === myPlayerId) ||
+                  (user && (p.user_id === user.id || p.claimed_user_id === user.id))
+                );
+                const isClaimable = p &&
+                  p.participant_type === 'claimable_guest' &&
+                  !p.claimed_user_id &&
+                  user &&
+                  !alreadyJoined && !joined;
+
+                // Inline form for host adding placeholder
+                if (addingSlot === slotIndex) {
+                  return (
+                    <div key={i} className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2">
+                      <input
+                        autoFocus
+                        type="text"
+                        value={placeholderName}
+                        onChange={e => setPlaceholderName(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleAddPlaceholder(slotIndex)}
+                        placeholder="Nombre del jugador"
+                        className="flex-1 text-sm bg-transparent outline-none text-slate-900 font-medium"
+                      />
+                      <button
+                        onClick={() => handleAddPlaceholder(slotIndex)}
+                        disabled={savingPlaceholder || !placeholderName.trim()}
+                        className="text-[11px] font-black text-white px-2 py-1 rounded-lg disabled:opacity-40"
+                        style={{ background: '#575AF9' }}
+                      >
+                        {savingPlaceholder ? <Loader2 size={12} className="animate-spin" /> : 'OK'}
+                      </button>
+                      <button onClick={() => setAddingSlot(null)} className="text-slate-400 hover:text-slate-600">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  );
+                }
+
                 return (
-                  <div key={i} className="flex items-center gap-3">
+                  <div key={i} className="flex items-center gap-3 min-h-[36px]">
                     <div
-                      className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${
+                      className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shrink-0 ${
                         p ? 'text-white' : 'bg-slate-100 text-slate-300'
                       }`}
-                      style={p ? { background: '#575AF9' } : {}}
+                      style={p ? { background: p.participant_type === 'placeholder_guest' ? '#94a3b8' : '#575AF9' } : {}}
                     >
-                      {p ? (p.player?.name || p.guest_name || '?')[0].toUpperCase() : (i + 1)}
+                      {p ? (p.player?.name || p.guest_name || '?')[0].toUpperCase() : slotIndex}
                     </div>
-                    <span
-                      className={`text-sm font-bold ${p ? 'text-slate-900' : 'text-slate-300 italic'}`}
-                    >
-                      {p
-                        ? (p.player?.name || p.guest_name || 'Jugador')
-                        : 'Libre'}
+                    <span className={`text-sm font-bold flex-1 ${p ? 'text-slate-900' : 'text-slate-300 italic'}`}>
+                      {p ? (p.player?.name || p.guest_name || 'Jugador') : 'Libre'}
                     </span>
-                    {p?.participant_type === 'claimable_guest' && (
-                      <span className="ml-auto text-[10px] font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full">
+
+                    {/* Badges */}
+                    {isMe && (
+                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                        Tú
+                      </span>
+                    )}
+                    {p?.participant_type === 'claimable_guest' && !p.claimed_user_id && !isMe && (
+                      <span className="text-[10px] font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full">
                         Invitado
                       </span>
+                    )}
+                    {p?.participant_type === 'placeholder_guest' && !isMe && (
+                      <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                        Reservado
+                      </span>
+                    )}
+
+                    {/* Claim button */}
+                    {isClaimable && (
+                      <button
+                        onClick={() => handleClaim(p.id)}
+                        disabled={!!claiming}
+                        className="flex items-center gap-1 text-[11px] font-black text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition-all disabled:opacity-60"
+                      >
+                        {claiming === p.id
+                          ? <Loader2 size={11} className="animate-spin" />
+                          : <><UserCheck size={11} /> Soy yo</>
+                        }
+                      </button>
+                    )}
+
+                    {/* Add placeholder button (host, empty slot, match open) */}
+                    {!p && isHost && !isFull && !isFinished && (
+                      <button
+                        onClick={() => { setAddingSlot(slotIndex); setPlaceholderName(''); }}
+                        className="flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-slate-600 transition-all"
+                      >
+                        <PlusCircle size={14} /> Añadir
+                      </button>
                     )}
                   </div>
                 );
