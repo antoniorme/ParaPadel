@@ -89,7 +89,12 @@ const AuthPage: React.FC = () => {
           if (error) throw error;
           setSuccessMsg("Si el email existe, recibirás un enlace para entrar.");
       } catch (err: any) {
-          setError(err.message || "Error al solicitar recuperación.");
+          const msg = err.message || "Error al solicitar recuperación.";
+          if (msg.toLowerCase().includes('captcha')) {
+              setError("Completa el captcha antes de continuar.");
+          } else {
+              setError(msg);
+          }
           if(captchaRef.current) captchaRef.current.resetCaptcha();
           setCaptchaToken(null);
       } finally {
@@ -165,7 +170,13 @@ const AuthPage: React.FC = () => {
               }
           }
       } catch (err: any) {
-          setError(err.message || "Error de autenticación");
+          const msg = err.message || "Error de autenticación";
+          // Supabase devuelve este error cuando falta el token de captcha
+          if (msg.toLowerCase().includes('captcha')) {
+              setError("Completa el captcha antes de continuar.");
+          } else {
+              setError(msg);
+          }
           if(captchaRef.current) captchaRef.current.resetCaptcha();
           setCaptchaToken(null);
       } finally {
