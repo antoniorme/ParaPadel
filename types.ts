@@ -117,6 +117,83 @@ export interface Group {
   pairIds: string[];
 }
 
+// ── MATCHES (sistema unificado de partidos libres) ────────────────────────────
+
+export type MatchStatus = 'draft' | 'open' | 'full' | 'in_progress' | 'finished' | 'cancelled';
+export type MatchResultStatus = 'not_submitted' | 'pending_confirmation' | 'disputed' | 'final';
+export type ParticipantType = 'registered_player' | 'claimable_guest' | 'placeholder_guest';
+export type AttendanceStatus = 'joined' | 'confirmed' | 'declined' | 'cancelled' | 'removed' | 'no_show';
+export type JoinedVia = 'link' | 'manual' | 'invite';
+export type RatingImpactMode = 'full' | 'partial' | 'none';
+
+export interface Match {
+  id: string;
+  club_id: string;
+  created_by_user_id?: string;
+  host_user_id?: string;
+  title?: string;
+  sport: string;
+  format: string;
+  scheduled_at: string;          // ISO timestamptz
+  duration_minutes?: number;
+  court?: string;
+  max_players: number;
+  status: MatchStatus;
+  visibility: string;
+  share_token: string;
+  result_status: MatchResultStatus;
+  slots_are_equivalent: boolean;
+  level?: string;
+  notes?: string;
+  elo_processed: boolean;
+  created_at?: string;
+  updated_at?: string;
+  // Joins opcionales
+  match_participants?: MatchParticipant[];
+  match_results?: MatchResult[];
+}
+
+export interface MatchParticipant {
+  id: string;
+  match_id: string;
+  participant_type: ParticipantType;
+  user_id?: string;
+  player_id?: string;
+  guest_name?: string;
+  guest_phone?: string;
+  slot_index?: number;
+  team?: 'A' | 'B';
+  joined_via: JoinedVia;
+  attendance_status: AttendanceStatus;
+  claimed_user_id?: string;
+  is_rating_eligible: boolean;
+  created_at?: string;
+  // Join opcional con tabla players
+  player?: Player;
+}
+
+export interface MatchResult {
+  id: string;
+  match_id: string;
+  submitted_by_user_id?: string;
+  team_a_score: number;
+  team_b_score: number;
+  submitted_at?: string;
+  status: 'pending_confirmation' | 'disputed' | 'final';
+  rating_impact_mode: RatingImpactMode;
+}
+
+export interface MatchResultDispute {
+  id: string;
+  match_result_id: string;
+  raised_by_user_id?: string;
+  reason?: string;
+  status: 'open' | 'resolved';
+  resolved_by_user_id?: string;
+  created_at?: string;
+}
+
+/** @deprecated Usar Match + MatchParticipant en su lugar */
 export interface Partido {
   id: string;
   club_id: string;
