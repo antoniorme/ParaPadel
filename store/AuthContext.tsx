@@ -8,6 +8,7 @@ interface AuthContextType {
   session: Session | null;
   user: User | null;
   loading: boolean;
+  determiningRole: boolean;
   role: UserRole;
   signOut: () => Promise<void>;
   isOfflineMode: boolean;
@@ -20,6 +21,7 @@ const AuthContext = createContext<AuthContextType>({
   session: null,
   user: null,
   loading: true,
+  determiningRole: false,
   role: null,
   signOut: async () => {},
   isOfflineMode: false,
@@ -41,6 +43,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cached = localStorage.getItem(ROLE_STORAGE_KEY);
     return (cached as UserRole) || null;
   });
+  const [determiningRole, setDeterminingRole] = useState(false);
 
   const setRole = (r: UserRole) => {
     setRoleState(r);
@@ -135,10 +138,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (hasCachedRole) { setLoading(false); clearTimeout(timeoutId); }
 
           if (session?.user) {
+            setDeterminingRole(true);
             checkUserRole(session.user.id, session.user.email).then(serverRole => {
               if (mounted) {
                 if (serverRole !== role) setRole(serverRole);
                 if (!hasCachedRole) { setLoading(false); clearTimeout(timeoutId); }
+                setDeterminingRole(false);
               }
             });
           } else {
@@ -165,8 +170,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         if (currentUser && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'USER_UPDATED')) {
+          setDeterminingRole(true);
           checkUserRole(currentUser.id, currentUser.email).then(r => {
-            if (mounted) { setRole(r); setLoading(false); }
+            if (mounted) { setRole(r); setLoading(false); setDeterminingRole(false); }
           });
         } else if (!currentUser) {
           setRole(null);
@@ -191,7 +197,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, role, signOut, isOfflineMode, isOnline, checkUserRole, loginWithDevBypass }}>
+    <AuthContext.Provider value={{ session, user, loading, determiningRole, role, signOut, isOfflineMode, isOnline, checkUserRole, loginWithDevBypass }}>
       {children}
     </AuthContext.Provider>
   );

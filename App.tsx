@@ -106,10 +106,10 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
 };
 
 const AppRoutes = () => {
-  const { user, role, loading } = useAuth();
-  
-  if (loading) {
-    return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400 font-bold animate-pulse">Cargando Aplicación...</div>;
+  const { user, role, loading, determiningRole } = useAuth();
+
+  if (loading || (user && determiningRole && role === null)) {
+    return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400 font-bold animate-pulse">Cargando...</div>;
   }
 
   const getHomeRoute = () => {
