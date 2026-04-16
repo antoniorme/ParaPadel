@@ -7,7 +7,8 @@ import { useAuth } from '../store/AuthContext';
 
 const Landing: React.FC = () => {
   const navigate = useNavigate();
-  const { loginWithDevBypass } = useAuth();
+  const { loginWithDevBypass, authDiag, user } = useAuth();
+  const [showDiag, setShowDiag] = React.useState(false);
 
   const devLogin = (role: 'player' | 'admin' | 'superadmin', path: string) => {
     loginWithDevBypass(role);
@@ -70,6 +71,23 @@ const Landing: React.FC = () => {
             </div>
           )}
       </div>
+
+      {/* Panel de diagnóstico — visible cuando hay usuario pero sin rol */}
+      {user && authDiag.length > 0 && (
+        <div className="absolute bottom-16 left-4 right-4">
+          <button
+            onClick={() => setShowDiag(v => !v)}
+            className="text-[10px] font-bold uppercase text-slate-600 flex items-center justify-center gap-1 mx-auto"
+          >
+            🔍 {showDiag ? 'Ocultar' : 'Ver'} diagnóstico de acceso
+          </button>
+          {showDiag && (
+            <div className="mt-2 bg-slate-950 text-emerald-400 p-3 rounded-lg font-mono text-[10px] whitespace-pre-wrap leading-relaxed overflow-x-auto text-left">
+              {authDiag.join('\n')}
+            </div>
+          )}
+        </div>
+      )}
 
       <footer className="absolute bottom-6 text-xs text-slate-600">
         © {new Date().getFullYear()} ParaPádel App v2.0

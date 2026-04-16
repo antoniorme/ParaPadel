@@ -15,7 +15,7 @@ const HCAPTCHA_SITE_TOKEN = import.meta.env.VITE_HCAPTCHA_SITE_TOKEN ?? '';
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
-  const { loginWithDevBypass, isOfflineMode, role, checkUserRole } = useAuth();
+  const { loginWithDevBypass, isOfflineMode, role, checkUserRole, authDiag } = useAuth();
   const [searchParams] = useSearchParams();
   
   const [view, setView] = useState<AuthView>('login');
@@ -150,13 +150,15 @@ const AuthPage: React.FC = () => {
   };
 
   const getDiagnosticInfo = () => {
-      return JSON.stringify({
+      const base = {
           url: window.location.href,
           isLocal: IS_LOCAL,
           hasCaptcha: !!HCAPTCHA_SITE_TOKEN,
           mode: isOfflineMode ? 'OFFLINE' : 'ONLINE',
-          view
-      }, null, 2);
+          view,
+      };
+      const diagStr = authDiag.length ? '\n\n--- checkUserRole ---\n' + authDiag.join('\n') : '';
+      return JSON.stringify(base, null, 2) + diagStr;
   };
 
   const handleAuth = async (e: React.FormEvent) => {

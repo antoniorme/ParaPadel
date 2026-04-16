@@ -13,6 +13,7 @@ interface AuthContextType {
   needsOnboarding: boolean;
   setNeedsOnboarding: (v: boolean) => void;
   refreshRole: () => Promise<void>;
+  authDiag: string[];
   signOut: () => Promise<void>;
   isOfflineMode: boolean;
   isOnline: boolean;
@@ -29,6 +30,7 @@ const AuthContext = createContext<AuthContextType>({
   needsOnboarding: false,
   setNeedsOnboarding: () => {},
   refreshRole: async () => {},
+  authDiag: [],
   signOut: async () => {},
   isOfflineMode: false,
   isOnline: true,
@@ -85,49 +87,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  // Diagnóstico visible en pantalla (temporal, ayuda a depurar)
+  const [authDiag, setAuthDiag] = useState<string[]>([]);
+  const diag = (msg: string) => setAuthDiag(prev => [...prev.slice(-9), msg]);
+
   // El rol viene SIEMPRE de Supabase — sin emails hardcodeados
   const checkUserRole = async (uid: string, userEmail?: string): Promise<UserRole> => {
+    setAuthDiag([]);
+    diag(`uid: ${uid.slice(0, 8)}… email: ${userEmail}`);
     try {
-      const { data: superAdmin } = await supabase
+      const { data: superAdmin, error: e1 } = await supabase
         .from('superadmins').select('id').eq('email', userEmail).maybeSingle();
+      diag(`superadmin: ${superAdmin ? '✅' : `❌ ${e1?.message || 'no encontrado'}`}`);
       if (superAdmin) return 'superadmin';
 
-      const { data: club } = await supabase
+      const { data: club, error: e2 } = await supabase
         .from('clubs').select('id').eq('owner_id', uid).maybeSingle();
+      diag(`club admin: ${club ? '✅' : `❌ ${e2?.message || 'no encontrado'}`}`);
       if (club) return 'admin';
 
-      // Fallback: tiene torneos a su nombre pero aún no tiene club creado
-      const { data: ownedTournaments } = await supabase
+      const { data: ownedTournaments, error: e3 } = await supabase
         .from('tournaments').select('id').eq('user_id', uid).limit(1).maybeSingle();
+      diag(`tournaments: ${ownedTournaments ? '✅' : `❌ ${e3?.message || 'no encontrado'}`}`);
       if (ownedTournaments) return 'admin';
 
-      // Jugador — tiene perfil propio vinculado a su auth id
-      const { data: playerProfile } = await supabase
+      const { data: playerProfile, error: e4 } = await supabase
         .from('players').select('id').eq('profile_user_id', uid).maybeSingle();
+      diag(`player by uid: ${playerProfile ? '✅' : `❌ ${e4?.message || 'no encontrado'}`}`);
       if (playerProfile) return 'player';
 
       if (userEmail) {
-        const { data: emailMatch } = await supabase
+        const { data: emailMatch, error: e5 } = await supabase
           .from('players').select('id').eq('email', userEmail).is('profile_user_id', null).maybeSingle();
+        diag(`player by email: ${emailMatch ? '✅' : `❌ ${e5?.message || 'no encontrado'}`}`);
         if (emailMatch) {
-          // Primera vez que este jugador inicia sesión — vincular su auth UID
           await supabase.from('players').update({ profile_user_id: uid }).eq('id', emailMatch.id);
           return 'player';
         }
       }
 
-      // Ningún registro encontrado — usuario nuevo. Crear player y marcar onboarding pendiente.
       const { error: insertErr } = await supabase.from('players').insert({
         profile_user_id: uid,
         email: userEmail || '',
         name: userEmail?.split('@')[0] || 'Jugador',
       });
+      diag(`auto-create player: ${insertErr ? `❌ ${insertErr.message}` : '✅'}`);
       if (!insertErr) {
         localStorage.setItem('padelpro_needs_onboarding', 'true');
         return 'player';
       }
-    } catch (e) {
+    } catch (e: any) {
+      diag(`EXCEPCIÓN: ${e?.message || String(e)}`);
     }
+    diag('→ resultado: null (sin rol)');
     return null;
   };
 
@@ -234,6 +246,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider value={{
       session, user, loading, determiningRole, role,
       needsOnboarding, setNeedsOnboarding: setNeedsOnboardingSync, refreshRole,
+      authDiag,
       signOut, isOfflineMode, isOnline, checkUserRole, loginWithDevBypass,
     }}>
       {children}
