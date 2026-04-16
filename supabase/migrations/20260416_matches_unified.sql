@@ -153,7 +153,7 @@ CREATE POLICY "admin_resolve_dispute" ON match_result_disputes
   FOR UPDATE USING (
     match_result_id IN (
       SELECT mr.id FROM match_results mr
-      JOIN matches m ON mr.match_id = m.id
+      JOIN free_matches m ON mr.match_id = m.id
       WHERE m.club_id = (SELECT id FROM clubs WHERE owner_id = auth.uid())
     )
   );
