@@ -78,7 +78,7 @@ const MatchManager: React.FC = () => {
     setLoading(true);
 
     const { data, error } = await supabase
-      .from('matches')
+      .from('free_matches')
       .select(`
         *,
         match_participants (
@@ -124,7 +124,7 @@ const MatchManager: React.FC = () => {
 
     // 1. Crear el partido
     const { data: matchData, error: matchErr } = await supabase
-      .from('matches')
+      .from('free_matches')
       .insert({
         club_id: clubId,
         scheduled_at: scheduledAt,
@@ -193,7 +193,7 @@ const MatchManager: React.FC = () => {
 
     // 2. Actualizar estado del partido
     await supabase
-      .from('matches')
+      .from('free_matches')
       .update({ status: 'finished', result_status: 'final' })
       .eq('id', scoreMatch.id);
 
@@ -217,7 +217,7 @@ const MatchManager: React.FC = () => {
           supabase.from('players').update({ global_rating: Math.max(100, Math.round(current + d)) }).eq('id', id)
         ));
 
-        await supabase.from('matches').update({ elo_processed: true }).eq('id', scoreMatch.id);
+        await supabase.from('free_matches').update({ elo_processed: true }).eq('id', scoreMatch.id);
       }
     }
 
@@ -233,7 +233,7 @@ const MatchManager: React.FC = () => {
   const handleDelete = async () => {
     if (!deleteId) return;
     setDeleting(true);
-    const { error } = await supabase.from('matches').delete().eq('id', deleteId);
+    const { error } = await supabase.from('free_matches').delete().eq('id', deleteId);
     setDeleting(false);
     if (error) { toastError('Error al eliminar'); return; }
     success('Partido eliminado');

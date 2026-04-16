@@ -118,6 +118,8 @@ export interface Group {
 }
 
 // ── MATCHES (sistema unificado de partidos libres) ────────────────────────────
+// Nota: la tabla en Supabase se llama `free_matches` (evita conflicto con la
+// tabla `matches` del módulo de torneos que tiene tournament_id + pair_a_id)
 
 export type MatchStatus = 'draft' | 'open' | 'full' | 'in_progress' | 'finished' | 'cancelled';
 export type MatchResultStatus = 'not_submitted' | 'pending_confirmation' | 'disputed' | 'final';

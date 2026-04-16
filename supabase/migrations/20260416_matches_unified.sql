@@ -6,7 +6,7 @@
 
 -- ── 1. TABLA MATCHES ─────────────────────────────────────────
 
-CREATE TABLE IF NOT EXISTS matches (
+CREATE TABLE IF NOT EXISTS free_matches (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   club_id               uuid REFERENCES clubs(id) ON DELETE CASCADE,
   created_by_user_id    uuid REFERENCES auth.users(id),
@@ -32,16 +32,16 @@ CREATE TABLE IF NOT EXISTS matches (
   updated_at            timestamptz DEFAULT now()
 );
 
-ALTER TABLE matches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE free_matches ENABLE ROW LEVEL SECURITY;
 
 -- Admin del club puede todo
-CREATE POLICY "admin_matches" ON matches
+CREATE POLICY "admin_matches" ON free_matches
   FOR ALL USING (
     club_id = (SELECT id FROM clubs WHERE owner_id = auth.uid())
   );
 
 -- Jugador del club puede ver
-CREATE POLICY "player_view_matches" ON matches
+CREATE POLICY "player_view_matches" ON free_matches
   FOR SELECT USING (
     club_id IN (
       SELECT user_id FROM players WHERE profile_user_id = auth.uid()
@@ -49,7 +49,7 @@ CREATE POLICY "player_view_matches" ON matches
   );
 
 -- Acceso público por share_token (para la ficha pública del partido)
-CREATE POLICY "public_match_by_token" ON matches
+CREATE POLICY "public_match_by_token" ON free_matches
   FOR SELECT USING (true);
 
 
@@ -57,7 +57,7 @@ CREATE POLICY "public_match_by_token" ON matches
 
 CREATE TABLE IF NOT EXISTS match_participants (
   id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  match_id            uuid NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+  match_id            uuid NOT NULL REFERENCES free_matches(id) ON DELETE CASCADE,
   participant_type    text NOT NULL DEFAULT 'registered_player',
     -- registered_player | claimable_guest | placeholder_guest
   user_id             uuid REFERENCES auth.users(id),
@@ -85,7 +85,7 @@ CREATE POLICY "view_participants" ON match_participants
 CREATE POLICY "admin_manage_participants" ON match_participants
   FOR ALL USING (
     match_id IN (
-      SELECT id FROM matches
+      SELECT id FROM free_matches
       WHERE club_id = (SELECT id FROM clubs WHERE owner_id = auth.uid())
     )
   );
@@ -103,7 +103,7 @@ CREATE POLICY "player_self_manage" ON match_participants
 
 CREATE TABLE IF NOT EXISTS match_results (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  match_id              uuid NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+  match_id              uuid NOT NULL REFERENCES free_matches(id) ON DELETE CASCADE,
   submitted_by_user_id  uuid REFERENCES auth.users(id),
   team_a_score          int NOT NULL,
   team_b_score          int NOT NULL,
@@ -122,7 +122,7 @@ CREATE POLICY "view_results" ON match_results
 CREATE POLICY "admin_manage_results" ON match_results
   FOR ALL USING (
     match_id IN (
-      SELECT id FROM matches
+      SELECT id FROM free_matches
       WHERE club_id = (SELECT id FROM clubs WHERE owner_id = auth.uid())
     )
   );
@@ -171,7 +171,7 @@ BEGIN
   ) THEN
 
     -- 5a. Migrar cabecera del partido
-    INSERT INTO matches (
+    INSERT INTO free_matches (
       id, club_id,
       scheduled_at,
       court,
@@ -234,16 +234,16 @@ END $$;
 
 -- ── 6. ELIMINAR TABLA PARTIDOS ────────────────────────────────
 -- Solo ejecutar DESPUÉS de verificar que los datos se migraron bien.
--- Comprobar: SELECT count(*) FROM matches; SELECT count(*) FROM match_participants;
+-- Comprobar: SELECT count(*) FROM free_matches; SELECT count(*) FROM match_participants;
 -- DROP TABLE IF EXISTS partidos CASCADE;
 -- (comentado intencionalmente — ejecutar manualmente tras verificar)
 
 
 -- ── 7. ÍNDICES DE RENDIMIENTO ─────────────────────────────────
 
-CREATE INDEX IF NOT EXISTS idx_matches_club_id ON matches(club_id);
-CREATE INDEX IF NOT EXISTS idx_matches_share_token ON matches(share_token);
-CREATE INDEX IF NOT EXISTS idx_matches_status ON matches(status);
+CREATE INDEX IF NOT EXISTS idx_free_matches_club_id ON free_matches(club_id);
+CREATE INDEX IF NOT EXISTS idx_free_matches_share_token ON free_matches(share_token);
+CREATE INDEX IF NOT EXISTS idx_free_matches_status ON free_matches(status);
 CREATE INDEX IF NOT EXISTS idx_match_participants_match_id ON match_participants(match_id);
 CREATE INDEX IF NOT EXISTS idx_match_participants_player_id ON match_participants(player_id);
 CREATE INDEX IF NOT EXISTS idx_match_results_match_id ON match_results(match_id);
