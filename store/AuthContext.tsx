@@ -10,6 +10,9 @@ interface AuthContextType {
   loading: boolean;
   determiningRole: boolean;
   role: UserRole;
+  needsOnboarding: boolean;
+  setNeedsOnboarding: (v: boolean) => void;
+  refreshRole: () => Promise<void>;
   signOut: () => Promise<void>;
   isOfflineMode: boolean;
   isOnline: boolean;
@@ -23,6 +26,9 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   determiningRole: false,
   role: null,
+  needsOnboarding: false,
+  setNeedsOnboarding: () => {},
+  refreshRole: async () => {},
   signOut: async () => {},
   isOfflineMode: false,
   isOnline: true,
@@ -44,11 +50,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return (cached as UserRole) || null;
   });
   const [determiningRole, setDeterminingRole] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(
+    () => localStorage.getItem('padelpro_needs_onboarding') === 'true'
+  );
 
   const setRole = (r: UserRole) => {
     setRoleState(r);
     if (r) localStorage.setItem(ROLE_STORAGE_KEY, r);
     else localStorage.removeItem(ROLE_STORAGE_KEY);
+  };
+
+  const setNeedsOnboardingSync = (v: boolean) => {
+    setNeedsOnboarding(v);
+    if (v) localStorage.setItem('padelpro_needs_onboarding', 'true');
+    else localStorage.removeItem('padelpro_needs_onboarding');
+  };
+
+  const refreshRole = async () => {
+    if (!user) return;
+    setDeterminingRole(true);
+    const r = await checkUserRole(user.id, user.email ?? undefined);
+    setRole(r);
+    setDeterminingRole(false);
   };
 
   useEffect(() => {
@@ -91,6 +114,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await supabase.from('players').update({ profile_user_id: uid }).eq('id', emailMatch.id);
           return 'player';
         }
+      }
+
+      // Ningún registro encontrado — usuario nuevo. Crear player y marcar onboarding pendiente.
+      const { error: insertErr } = await supabase.from('players').insert({
+        profile_user_id: uid,
+        email: userEmail || '',
+        name: userEmail?.split('@')[0] || 'Jugador',
+      });
+      if (!insertErr) {
+        localStorage.setItem('padelpro_needs_onboarding', 'true');
+        return 'player';
       }
     } catch (e) {
     }
@@ -197,7 +231,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, determiningRole, role, signOut, isOfflineMode, isOnline, checkUserRole, loginWithDevBypass }}>
+    <AuthContext.Provider value={{
+      session, user, loading, determiningRole, role,
+      needsOnboarding, setNeedsOnboarding: setNeedsOnboardingSync, refreshRole,
+      signOut, isOfflineMode, isOnline, checkUserRole, loginWithDevBypass,
+    }}>
       {children}
     </AuthContext.Provider>
   );

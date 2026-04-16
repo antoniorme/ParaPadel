@@ -53,6 +53,7 @@ import PlayerAppProfile from './pages/player/PlayerProfile';
 import PlayerPublicProfile from './pages/public/PlayerPublicProfile';
 import MatchJoin from './pages/public/MatchJoin';
 import CreateMatch from './pages/player/CreateMatch';
+import PlayerOnboarding from './pages/player/PlayerOnboarding';
 import MatchManager from './pages/MatchManager';
 
 // Handler para errores de auth que Supabase mete en el hash de la URL
@@ -106,10 +107,15 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireSuperAdmin = fa
 };
 
 const AppRoutes = () => {
-  const { user, role, loading, determiningRole } = useAuth();
+  const { user, role, loading, determiningRole, needsOnboarding } = useAuth();
 
   if (loading || (user && determiningRole && role === null)) {
     return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400 font-bold animate-pulse">Cargando...</div>;
+  }
+
+  // Jugador nuevo que necesita completar su perfil
+  if (user && role === 'player' && needsOnboarding) {
+    return <PlayerOnboarding />;
   }
 
   const getHomeRoute = () => {
