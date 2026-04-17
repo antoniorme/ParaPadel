@@ -4,11 +4,13 @@ import { TournamentState, TournamentAction, Player, Pair, TournamentFormat, Gene
 import { useAuth } from './AuthContext';
 import { useTournamentDB } from './useTournamentDB';
 import * as Logic from '../utils/TournamentLogic';
+import { PADEL_CATEGORIES } from '../utils/categories';
 
 const STORAGE_KEY = 'padelpro_local_db_v3';
 const PENDING_SCORES_KEY = 'padelpro_pending_scores';
 
-export const TOURNAMENT_CATEGORIES = ['Iniciación', '5ª CAT', '4ª CAT', '3ª CAT', '2ª CAT', '1ª CAT'];
+// Re-export desde utils/categories para backwards compatibility
+export const TOURNAMENT_CATEGORIES = [...PADEL_CATEGORIES].reverse(); // Iniciación → 1ª CAT (orden original)
 
 export const initialState: TournamentState = {
   status: 'finished',

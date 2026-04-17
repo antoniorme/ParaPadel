@@ -3,10 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../store/AuthContext';
 import { Loader2, ChevronRight, User, Building2, Check } from 'lucide-react';
+import { PADEL_CATEGORIES, CATEGORY_DESCRIPTION } from '../../utils/categories';
 
 type Step = 'choice' | 'player' | 'club';
-
-const LEVELS = ['1ª — Iniciación', '2ª — Básico', '3ª — Intermedio', '4ª — Avanzado', '4ª alta', '5ª — Competición'];
 
 const PlayerOnboarding: React.FC = () => {
   const navigate = useNavigate();
@@ -162,17 +161,17 @@ const PlayerOnboarding: React.FC = () => {
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-3">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nivel de juego</p>
               <div className="grid grid-cols-2 gap-2">
-                {LEVELS.map(l => (
+                {[...PADEL_CATEGORIES].reverse().map(cat => (
                   <button
-                    key={l}
+                    key={cat}
                     type="button"
-                    onClick={() => setLevel(l)}
+                    onClick={() => setLevel(cat)}
                     className={`py-2.5 px-3 rounded-xl text-xs font-bold text-left transition-all ${
-                      level === l ? 'text-white' : 'bg-slate-50 text-slate-500 border border-slate-200'
+                      level === cat ? 'text-white' : 'bg-slate-50 text-slate-500 border border-slate-200'
                     }`}
-                    style={level === l ? { background: '#575AF9' } : {}}
+                    style={level === cat ? { background: '#575AF9' } : {}}
                   >
-                    {l}
+                    {CATEGORY_DESCRIPTION[cat]}
                   </button>
                 ))}
               </div>
