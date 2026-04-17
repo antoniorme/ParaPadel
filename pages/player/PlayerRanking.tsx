@@ -99,7 +99,7 @@ const PlayerRanking: React.FC = () => {
 
       {/* Tab toggle */}
       <div className="flex gap-2 mb-4 p-1 bg-slate-100 rounded-2xl">
-        {([['torneos', 'Torneos'], ['club', 'Partidos Libres']] as const).map(([key, label]) => (
+        {([['torneos', 'General'], ['club', 'Club']] as const).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setRankTab(key)}
@@ -127,7 +127,7 @@ const PlayerRanking: React.FC = () => {
                 ? (myPlayer?.club_rating ?? 1200)
                 : calculateDisplayRanking(myPlayer || players[0])}
             </div>
-            <div className="text-xs font-bold text-white/60">{rankTab === 'club' ? 'Club' : 'ELO'}</div>
+            <div className="text-xs font-bold text-white/60">{rankTab === 'club' ? 'Rating Club' : 'Rating General'}</div>
           </div>
         </div>
       )}
@@ -176,7 +176,7 @@ const PlayerRanking: React.FC = () => {
             const displayRating = rankTab === 'club'
               ? (player.club_rating ?? 1200)
               : calculateDisplayRanking(player);
-            const ratingLabel = rankTab === 'club' ? 'Club' : 'ELO';
+            const ratingLabel = rankTab === 'club' ? 'Club' : 'General';
             const initials = player.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
             const color = getAvatarColor(player.name);
             return (
