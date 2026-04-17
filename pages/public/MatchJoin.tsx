@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../store/AuthContext';
-import { generateWhatsAppText, openWhatsApp } from '../../utils/whatsapp';
+import { generateWhatsAppText, generateClubMatchesText, openWhatsApp } from '../../utils/whatsapp';
 import { Match, MatchParticipant } from '../../types';
 import {
   MapPin, Users, BarChart2, Share2,
@@ -344,8 +344,40 @@ const MatchJoin: React.FC = () => {
   };
 
   // ── Share ────────────────────────────────────────────────────
-  const handleShare = () => {
+  const handleShare = async () => {
     if (!match) return;
+    const clubId = (match as any).club_id;
+
+    // If this match belongs to a club, share the full club matches page
+    if (clubId) {
+      const [{ data: clubData }, { data: matchData }] = await Promise.all([
+        supabase.from('clubs').select('name').eq('id', clubId).maybeSingle(),
+        supabase
+          .from('free_matches')
+          .select('id, scheduled_at, level, court, max_players, match_participants!match_id(id, attendance_status)')
+          .eq('club_id', clubId)
+          .eq('status', 'open')
+          .gte('scheduled_at', new Date().toISOString())
+          .order('scheduled_at', { ascending: true }),
+      ]);
+
+      const clubName = clubData?.name || '';
+      const openMatches = (matchData || []).map((m: any) => ({
+        scheduled_at: m.scheduled_at,
+        level: m.level,
+        court: m.court,
+        max_players: m.max_players,
+        spots_taken: (m.match_participants || []).filter(
+          (p: any) => ['joined', 'confirmed'].includes(p.attendance_status)
+        ).length,
+      }));
+
+      const text = generateClubMatchesText(clubName, clubId, openMatches);
+      openWhatsApp(text);
+      return;
+    }
+
+    // Fallback: single match share
     const text = generateWhatsAppText(match, participants);
     openWhatsApp(text);
   };
@@ -836,13 +868,23 @@ const MatchJoin: React.FC = () => {
               <p className="text-rose-500 text-xs font-bold text-center">{joinError}</p>
             )}
 
+            {/* Ver más partidos del club */}
+            {(match as any).club_id && (
+              <button
+                onClick={() => navigate(`/club/${(match as any).club_id}/partidos`)}
+                className="w-full py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-all"
+              >
+                Ver todos los partidos del club
+              </button>
+            )}
+
             {/* WhatsApp share — always visible when match is open */}
             {!isFinished && (
               <button
                 onClick={handleShare}
                 className="w-full py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 bg-emerald-500 text-white hover:bg-emerald-600 transition-all active:scale-95"
               >
-                <MessageCircle size={18} /> Compartir por WhatsApp
+                <MessageCircle size={18} /> Compartir todos los partidos
               </button>
             )}
 

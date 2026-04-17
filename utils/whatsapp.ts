@@ -56,6 +56,49 @@ export function generateWhatsAppText(
   return lines.join('\n');
 }
 
+/** Genera el texto de WhatsApp con todos los partidos abiertos de un club */
+export function generateClubMatchesText(
+  clubName: string,
+  clubId: string,
+  matches: Array<{
+    scheduled_at: string;
+    level?: string | null;
+    court?: string | null;
+    max_players: number;
+    spots_taken: number;
+  }>
+): string {
+  const pageUrl = `${window.location.origin}/club/${clubId}/partidos`;
+  const lines: string[] = [];
+
+  lines.push(`🎾 *${clubName.toUpperCase()}*`);
+  lines.push(`*PARTIDOS ABIERTOS*`);
+  lines.push('');
+
+  if (matches.length === 0) {
+    lines.push('Sin partidos abiertos en este momento.');
+  } else {
+    matches.forEach((m, idx) => {
+      const d = new Date(m.scheduled_at);
+      const timeStr = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+      const dateStr = d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+      const spotsLeft = m.max_players - m.spots_taken;
+      const full = spotsLeft <= 0;
+
+      lines.push(`*${idx + 1}. ${dateStr.charAt(0).toUpperCase() + dateStr.slice(1)} · ${timeStr}*`);
+      if (m.level) lines.push(`   📊 ${m.level}`);
+      if (m.court) lines.push(`   🏟 ${m.court}`);
+      lines.push(full ? `   ✅ Completo (${m.spots_taken}/${m.max_players})` : `   👥 Faltan ${spotsLeft} jugador${spotsLeft > 1 ? 'es' : ''}`);
+      lines.push('');
+    });
+  }
+
+  lines.push(`👉 Apúntate aquí:`);
+  lines.push(pageUrl);
+
+  return lines.join('\n');
+}
+
 /** Abre WhatsApp con el texto prellenado */
 export function openWhatsApp(text: string): void {
   const encoded = encodeURIComponent(text);

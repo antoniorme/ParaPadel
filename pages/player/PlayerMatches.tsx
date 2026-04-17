@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTournament } from '../../store/TournamentContext';
 import { useHistory } from '../../store/HistoryContext';
 import { THEME, getFormatColor } from '../../utils/theme';
-import { Trophy, Medal, ChevronDown, ChevronUp, Swords } from 'lucide-react';
+import { Trophy, Medal, ChevronDown, ChevronUp, Swords, Compass } from 'lucide-react';
+import ClubMatchBrowser from './ClubMatchBrowser';
 
 type MatchFilter = 'all' | 'win' | 'loss';
 import { calculateDisplayRanking, calculateMatchDelta, getPairTeamElo } from '../../utils/Elo';
@@ -54,11 +55,14 @@ interface FreeMatchDisplay {
 
 const PHASE_LABELS: Record<string, string> = { group: 'Grupos', qf: 'QF', sf: 'SF', final: 'Final' };
 
+type MainTab = 'mis' | 'explorar';
+
 const PlayerMatches: React.FC = () => {
   const navigate = useNavigate();
   const { state, formatPlayerName } = useTournament();
   const { pastTournaments, clubData } = useHistory();
 
+  const [mainTab, setMainTab] = useState<MainTab>('mis');
   const [myPlayerId] = useState<string>(() => localStorage.getItem('padel_sim_player_id') || '');
   const currentPlayer = state.players.find(p => p.id === myPlayerId);
 
@@ -201,16 +205,6 @@ const PlayerMatches: React.FC = () => {
     return { tournaments: processed, stats };
   }, [currentPlayer, pastTournaments, state]);
 
-  if (!currentPlayer) {
-    return (
-      <div className="p-8 text-center">
-        <Swords size={40} className="mx-auto mb-3 text-slate-300" />
-        <p className="text-slate-500 font-bold">Perfil no vinculado</p>
-        <button onClick={() => navigate('/p/dashboard')} className="mt-3 text-sm font-bold" style={{ color: THEME.cta }}>Volver al inicio</button>
-      </div>
-    );
-  }
-
   const { tournaments, stats } = historyData;
   const totalMatches = stats.matches + partidos.length;
 
@@ -240,11 +234,42 @@ const PlayerMatches: React.FC = () => {
 
   return (
     <div className="p-4 pb-6">
-      {/* Header */}
+      {/* Header + tab toggle */}
       <div className="mb-4">
-        <h1 className="text-2xl font-black text-slate-900">Mis Partidos</h1>
-        <p className="text-sm text-slate-400 mt-0.5">{currentPlayer.name.split(' ')[0]}</p>
+        <h1 className="text-2xl font-black text-slate-900">Partidos</h1>
+        <div className="flex gap-1 mt-3 bg-slate-100 rounded-xl p-1">
+          <button
+            onClick={() => setMainTab('mis')}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all ${
+              mainTab === 'mis' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'
+            }`}
+          >
+            Mis Partidos
+          </button>
+          <button
+            onClick={() => setMainTab('explorar')}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1 ${
+              mainTab === 'explorar' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'
+            }`}
+          >
+            <Compass size={12} />
+            Explorar
+          </button>
+        </div>
       </div>
+
+      {/* Explorar tab */}
+      {mainTab === 'explorar' && <ClubMatchBrowser />}
+
+      {/* Mis Partidos tab */}
+      {mainTab === 'mis' && (<>
+      {!currentPlayer ? (
+        <div className="p-8 text-center">
+          <Swords size={40} className="mx-auto mb-3 text-slate-300" />
+          <p className="text-slate-500 font-bold">Perfil no vinculado</p>
+          <button onClick={() => navigate('/p/dashboard')} className="mt-3 text-sm font-bold" style={{ color: THEME.cta }}>Volver al inicio</button>
+        </div>
+      ) : (<>
 
       {/* Stats strip */}
       <div className="grid grid-cols-3 gap-2 mb-4">
@@ -404,6 +429,8 @@ const PlayerMatches: React.FC = () => {
           })}
         </div>
       )}
+      </>)} {/* end currentPlayer check */}
+      </>)} {/* end mis tab */}
     </div>
   );
 };

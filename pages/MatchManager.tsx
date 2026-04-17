@@ -5,11 +5,12 @@ import { useToast } from '../components/Toast';
 import { Modal, Button, EmptyState, Badge, PlayerSelector } from '../components';
 import { THEME } from '../utils/theme';
 import { calculateDisplayRanking, calculateMatchDelta, getPairTeamElo } from '../utils/Elo';
+import { generateClubMatchesText, openWhatsApp } from '../utils/whatsapp';
 import { supabase } from '../lib/supabase';
 import { Player, Match, MatchParticipant } from '../types';
 import {
   Swords, Plus, CheckCircle2, Clock, Trash2,
-  ChevronDown, ChevronUp, MapPin, Zap, Users,
+  ChevronDown, ChevronUp, MapPin, Zap, Users, MessageCircle,
 } from 'lucide-react';
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -273,6 +274,24 @@ const MatchManager: React.FC = () => {
     tab === 'pending' ? m.status !== 'finished' && m.status !== 'cancelled' : m.status === 'finished'
   );
 
+  const handleShareClub = () => {
+    if (!clubId || !clubData?.name) return;
+    const openMatches = matches
+      .filter(m => m.status === 'open' && m.scheduled_at && m.scheduled_at >= new Date().toISOString())
+      .sort((a, b) => a.scheduled_at!.localeCompare(b.scheduled_at!))
+      .map(m => ({
+        scheduled_at: m.scheduled_at!,
+        level: m.level,
+        court: m.court,
+        max_players: m.max_players || 4,
+        spots_taken: (m.match_participants || []).filter(
+          (p: MatchParticipant) => p.attendance_status === 'joined' || p.attendance_status === 'confirmed'
+        ).length,
+      }));
+    const text = generateClubMatchesText(clubData.name, clubId, openMatches);
+    openWhatsApp(text);
+  };
+
   // ── RENDER ──────────────────────────────────────────────────
 
   return (
@@ -283,9 +302,18 @@ const MatchManager: React.FC = () => {
           <h1 className="text-2xl font-black text-slate-900">Partidos</h1>
           <p className="text-sm text-slate-400 mt-0.5">Partidos libres del club</p>
         </div>
-        <Button variant="primary" onClick={() => setShowCreate(true)}>
-          <Plus size={16} /> Nuevo partido
-        </Button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleShareClub}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-black text-white"
+            style={{ background: '#25D366' }}
+          >
+            <MessageCircle size={15} /> WhatsApp
+          </button>
+          <Button variant="primary" onClick={() => setShowCreate(true)}>
+            <Plus size={16} /> Nuevo partido
+          </Button>
+        </div>
       </div>
 
       {/* Migration warning */}
