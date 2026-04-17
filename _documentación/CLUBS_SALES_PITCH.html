@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ParaPádel — Para clubs de pádel</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+      line-height: 1.6;
+    }
+
+    /* ── Utilidades ─────────────────────────────── */
+    .container { max-width: 820px; margin: 0 auto; padding: 0 24px; }
+    .cta-color { color: #575AF9; }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .badge-indigo { background: #EEF2FF; color: #575AF9; }
+    .badge-emerald { background: #ECFDF5; color: #059669; }
+    .badge-amber { background: #FFFBEB; color: #D97706; }
+
+    /* ── Hero ───────────────────────────────────── */
+    .hero {
+      background: linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #2B2DBF 100%);
+      color: white;
+      padding: 72px 24px 80px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -80px; left: -80px;
+      width: 300px; height: 300px;
+      background: radial-gradient(circle, rgba(87,90,249,.4) 0%, transparent 70%);
+    }
+    .hero::after {
+      content: '';
+      position: absolute;
+      bottom: -60px; right: -60px;
+      width: 280px; height: 280px;
+      background: radial-gradient(circle, rgba(238,255,0,.15) 0%, transparent 70%);
+    }
+    .hero-logo {
+      font-size: 42px;
+      font-weight: 900;
+      font-style: italic;
+      letter-spacing: -1px;
+      margin-bottom: 8px;
+      position: relative;
+      z-index: 1;
+    }
+    .hero-logo span { color: #EEFF00; }
+    .hero-tagline {
+      font-size: 28px;
+      font-weight: 900;
+      line-height: 1.25;
+      margin-bottom: 16px;
+      position: relative;
+      z-index: 1;
+    }
+    .hero-sub {
+      font-size: 16px;
+      opacity: .75;
+      max-width: 480px;
+      margin: 0 auto 32px;
+      position: relative;
+      z-index: 1;
+    }
+    .hero-pill {
+      display: inline-block;
+      background: rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.2);
+      padding: 8px 20px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── Secciones ──────────────────────────────── */
+    section { padding: 64px 0; }
+    section + section { border-top: 1px solid #e2e8f0; }
+
+    h2 {
+      font-size: 26px;
+      font-weight: 900;
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+    .section-label {
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: #575AF9;
+      margin-bottom: 6px;
+    }
+    .section-sub {
+      font-size: 16px;
+      color: #64748b;
+      margin-bottom: 36px;
+    }
+
+    /* ── Problema ───────────────────────────────── */
+    .problem-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .problem-card {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 20px;
+    }
+    .problem-icon { font-size: 28px; margin-bottom: 10px; }
+    .problem-card h3 { font-size: 15px; font-weight: 800; margin-bottom: 4px; }
+    .problem-card p { font-size: 13px; color: #64748b; line-height: 1.5; }
+
+    /* ── Cómo funciona ──────────────────────────── */
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      position: relative;
+    }
+    .steps::before {
+      content: '';
+      position: absolute;
+      left: 27px;
+      top: 44px;
+      bottom: 44px;
+      width: 2px;
+      background: linear-gradient(to bottom, #575AF9, #818CF8);
+    }
+    .step {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+      padding: 20px 0;
+      position: relative;
+      z-index: 1;
+    }
+    .step-num {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #575AF9, #818CF8);
+      color: white;
+      font-size: 22px;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 4px 12px rgba(87,90,249,.3);
+    }
+    .step-body h3 { font-size: 17px; font-weight: 800; margin-bottom: 4px; }
+    .step-body p { font-size: 14px; color: #475569; }
+    .step-body .step-detail {
+      margin-top: 10px;
+      background: #F8FAFF;
+      border: 1px solid #E0E7FF;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 13px;
+      color: #4338CA;
+      font-weight: 600;
+      line-height: 1.6;
+    }
+
+    /* ── Beneficios ─────────────────────────────── */
+    .benefits-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 580px) { .benefits-grid { grid-template-columns: 1fr; } }
+    .benefit-card {
+      background: white;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 20px;
+      padding: 24px;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .benefit-card:hover {
+      border-color: #c7d2fe;
+      box-shadow: 0 4px 20px rgba(87,90,249,.08);
+    }
+    .benefit-icon {
+      width: 44px; height: 44px;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      margin-bottom: 14px;
+    }
+    .benefit-icon.indigo  { background: #EEF2FF; }
+    .benefit-icon.emerald { background: #ECFDF5; }
+    .benefit-icon.amber   { background: #FFFBEB; }
+    .benefit-icon.rose    { background: #FFF1F2; }
+    .benefit-card h3 { font-size: 15px; font-weight: 800; margin-bottom: 6px; }
+    .benefit-card p { font-size: 13px; color: #64748b; line-height: 1.55; }
+
+    /* ── Para el jugador ────────────────────────── */
+    .player-features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .player-feature {
+      background: linear-gradient(135deg, #1e1b4b, #312e81);
+      color: white;
+      border-radius: 16px;
+      padding: 20px 18px;
+    }
+    .player-feature .feat-icon { font-size: 24px; margin-bottom: 10px; }
+    .player-feature h3 { font-size: 14px; font-weight: 800; margin-bottom: 4px; }
+    .player-feature p { font-size: 12px; opacity: .7; line-height: 1.5; }
+
+    /* ── WhatsApp mockup ────────────────────────── */
+    .wa-mockup {
+      background: #DCF8C6;
+      border-radius: 16px 16px 16px 4px;
+      padding: 14px 18px;
+      font-family: monospace;
+      font-size: 14px;
+      line-height: 1.7;
+      max-width: 320px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.1);
+      color: #111;
+    }
+    .wa-time { font-size: 11px; color: #999; text-align: right; margin-top: 6px; }
+
+    /* ── Comparativa ────────────────────────────── */
+    .compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    .compare-table th {
+      padding: 12px 16px;
+      text-align: left;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #94a3b8;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    .compare-table th:last-child {
+      background: linear-gradient(135deg, #EEF2FF, #E0E7FF);
+      color: #575AF9;
+      border-radius: 8px 8px 0 0;
+    }
+    .compare-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid #f1f5f9;
+      vertical-align: middle;
+    }
+    .compare-table td:last-child { background: #F8FAFF; font-weight: 700; color: #4338CA; }
+    .compare-table tr:last-child td { border-bottom: none; }
+    .check { color: #10b981; font-size: 17px; }
+    .cross { color: #cbd5e1; font-size: 17px; }
+
+    /* ── Precio ─────────────────────────────────── */
+    .price-card {
+      background: linear-gradient(135deg, #1e1b4b, #2B2DBF);
+      color: white;
+      border-radius: 24px;
+      padding: 40px 32px;
+      text-align: center;
+      max-width: 420px;
+      margin: 0 auto;
+    }
+    .price-badge {
+      display: inline-block;
+      background: rgba(238,255,0,.15);
+      border: 1px solid rgba(238,255,0,.3);
+      color: #EEFF00;
+      padding: 4px 14px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    .price-amount {
+      font-size: 64px;
+      font-weight: 900;
+      letter-spacing: -3px;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .price-period { font-size: 16px; opacity: .6; margin-bottom: 24px; }
+    .price-features { list-style: none; text-align: left; margin-bottom: 28px; }
+    .price-features li {
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,.1);
+      font-size: 15px;
+      display: flex;
+      gap: 10px;
+    }
+    .price-features li:last-child { border-bottom: none; }
+    .price-features .tick { color: #EEFF00; font-size: 16px; flex-shrink: 0; }
+    .cta-button {
+      display: block;
+      background: #EEFF00;
+      color: #1e1b4b;
+      padding: 16px 32px;
+      border-radius: 16px;
+      font-size: 16px;
+      font-weight: 900;
+      text-decoration: none;
+      text-align: center;
+      letter-spacing: -.2px;
+    }
+
+    /* ── Footer ─────────────────────────────────── */
+    .footer {
+      background: #0f172a;
+      color: white;
+      padding: 40px 24px;
+      text-align: center;
+    }
+    .footer-logo { font-size: 28px; font-weight: 900; font-style: italic; margin-bottom: 8px; }
+    .footer-logo span { color: #EEFF00; }
+    .footer p { font-size: 14px; opacity: .5; }
+
+    /* ── Print ──────────────────────────────────── */
+    @media print {
+      .hero { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      section { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── HERO ──────────────────────────────────────────── -->
+<div class="hero">
+  <div class="hero-logo">Para<span>Pádel</span></div>
+  <h1 class="hero-tagline">La gestión de torneos que tus jugadores merecen</h1>
+  <p class="hero-sub">Organiza torneos, sigue el ranking de tu club y conecta a tus jugadores — todo desde el móvil, sin instalar nada.</p>
+  <div class="hero-pill">🎾 Diseñado para clubs de pádel locales</div>
+</div>
+
+<!-- ─── EL PROBLEMA ───────────────────────────────────── -->
+<section>
+  <div class="container">
+    <div class="section-label">El problema de hoy</div>
+    <h2>¿Te suena esto?</h2>
+    <p class="section-sub">La gestión de torneos en la mayoría de clubs todavía es manual, dispersa y lleva horas.</p>
+
+    <div class="problem-grid">
+      <div class="problem-card">
+        <div class="problem-icon">📋</div>
+        <h3>Inscripciones por WhatsApp</h3>
+        <p>Recibes mensajes de 30 jugadores diferentes, los apuntas en papel o en una hoja de Excel.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-icon">📊</div>
+        <h3>Cuadros hechos a mano</h3>
+        <p>Dibujas los cruces en papel o en un PDF. Cuando hay un cambio de última hora, rehaces todo.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-icon">❓</div>
+        <h3>El jugador no sabe su nivel</h3>
+        <p>No hay ningún sistema que diga "eres de 3ª" basándose en partidos reales. Todo es por ojo.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-icon">💬</div>
+        <h3>Partidos sin registro</h3>
+        <p>Los partidos entre amigos no quedan en ningún sitio. El nivel del jugador no crece con ellos.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── SOLUCIÓN ──────────────────────────────────────── -->
+<section style="background: white;">
+  <div class="container">
+    <div class="section-label">La solución</div>
+    <h2>ParaPádel lo hace <span class="cta-color">todo automático</span></h2>
+    <p class="section-sub">En 3 pasos, tu torneo está montado y tus jugadores conectados.</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h3>Creas el torneo en 2 minutos</h3>
+          <p>Formato (8, 10, 12 o 16 parejas), fecha, categorías y precio. Listo.</p>
+          <div class="step-detail">
+            El sistema genera automáticamente los grupos, el cuadro y el orden de partidos.<br/>
+            Tú solo introduces los resultados.
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h3>Los jugadores se inscriben solos</h3>
+          <p>Compartes un enlace por WhatsApp. Ellos entran, eligen categoría y quedan apuntados.</p>
+          <div class="step-detail">
+            Sin llamadas. Sin mensajes. Sin hojas de cálculo.<br/>
+            Tú ves en tiempo real quién está inscrito y queda hueco en qué categoría.
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h3>El ranking se actualiza solo</h3>
+          <p>Cada resultado introduce ELO. El jugador ve cómo sube (o baja) su nivel después de cada torneo.</p>
+          <div class="step-detail">
+            Sistema ELO propio de tu club — como el de ajedrez.<br/>
+            "Ganaste a una pareja 200 puntos por encima → subes más."
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── PARA EL CLUB ───────────────────────────────────── -->
+<section>
+  <div class="container">
+    <div class="section-label">Para el club</div>
+    <h2>Todo lo que necesitas para <span class="cta-color">gestionar tu club</span></h2>
+    <p class="section-sub">Un panel completo desde el que controlas todo sin salir de la app.</p>
+
+    <div class="benefits-grid">
+      <div class="benefit-card">
+        <div class="benefit-icon indigo">🏆</div>
+        <h3>Mini Torneos automáticos</h3>
+        <p>Formatos de 8 a 16 parejas. El sistema genera grupos, cruces y cuadro de eliminatoria. Tú solo metes resultados.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon emerald">📅</div>
+        <h3>Liga con seguimiento de temporada</h3>
+        <p>Grupos, jornadas y playoffs. Tabla de clasificación en tiempo real que los jugadores pueden consultar desde casa.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon amber">👥</div>
+        <h3>Base de datos de jugadores</h3>
+        <p>Todos los jugadores de tu club en un solo sitio. Con nivel real basado en sus resultados, no en lo que ellos dicen.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon rose">📈</div>
+        <h3>Estadísticas del club</h3>
+        <p>¿Cuántos torneos habéis jugado? ¿Quién sube más de nivel? ¿Cuándo hay más participación? Todo a la vista.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon indigo">🔗</div>
+        <h3>Inscripción por enlace</h3>
+        <p>Un link o un QR impreso en el club. El jugador escanea, se apunta y queda registrado. Sin app, sin instalación.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon emerald">📱</div>
+        <h3>Funciona en cualquier móvil</h3>
+        <p>Sin descarga. Se abre en el navegador como cualquier web. iOS, Android, ordenador — todo.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── PARTIDOS LIBRES (novedad) ─────────────────────── -->
+<section style="background: #f8faff;">
+  <div class="container">
+    <div class="section-label">Funcionalidad estrella</div>
+    <h2>Partidos entre amigos, <span class="cta-color">con estadísticas reales</span></h2>
+    <p class="section-sub">No todo el pádel son torneos. Ahora los partidos de entre semana también cuentan.</p>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center;">
+      <div>
+        <p style="font-size: 15px; color: #475569; margin-bottom: 20px;">
+          Un jugador crea un partido en segundos y lo comparte por WhatsApp. El mensaje tiene ya el formato que todos conocen — plazas libres, hora, nivel, enlace para apuntarse.
+        </p>
+        <p style="font-size: 15px; color: #475569; margin-bottom: 24px;">
+          Quien recibe el enlace puede unirse con un tap si tiene cuenta, o apuntarse como invitado solo con su nombre y móvil.
+        </p>
+        <ul style="list-style: none; display: flex; flex-direction: column; gap: 10px;">
+          <li style="display: flex; gap: 10px; font-size: 14px; font-weight: 600;">
+            <span style="color: #575AF9;">✓</span> Plazas en tiempo real
+          </li>
+          <li style="display: flex; gap: 10px; font-size: 14px; font-weight: 600;">
+            <span style="color: #575AF9;">✓</span> Resultado registrado con ventana de 24h para disputas
+          </li>
+          <li style="display: flex; gap: 10px; font-size: 14px; font-weight: 600;">
+            <span style="color: #575AF9;">✓</span> ELO de partidos libres independiente del de torneos
+          </li>
+          <li style="display: flex; gap: 10px; font-size: 14px; font-weight: 600;">
+            <span style="color: #575AF9;">✓</span> El ranking del club refleja también estos partidos
+          </li>
+        </ul>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 12px;">
+        <div class="wa-mockup">
+          <strong>PARTIDO ABIERTO 🎾</strong><br/>
+          16:30 · Sábado 19 Abr<br/>
+          4ª alta · Pista 3<br/>
+          <br/>
+          1. Antonio M.<br/>
+          2. Nacho R.<br/>
+          3. —<br/>
+          4. —<br/>
+          <br/>
+          <em>Falta 1 jugador</em><br/>
+          👉 parapadel.vercel.app/m/ax7k2f
+          <div class="wa-time">16:12 ✓✓</div>
+        </div>
+        <p style="font-size: 12px; color: #94a3b8; text-align: center;">Así recibe el mensaje el jugador en WhatsApp</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── PARA EL JUGADOR ────────────────────────────────── -->
+<section>
+  <div class="container">
+    <div class="section-label">Para tus jugadores</div>
+    <h2>Una app que <span class="cta-color">engacha de verdad</span></h2>
+    <p class="section-sub">Cuando el jugador ve su ELO subir, vuelve. Y trae amigos.</p>
+
+    <div class="player-features">
+      <div class="player-feature">
+        <div class="feat-icon">📊</div>
+        <h3>Su nivel real</h3>
+        <p>ELO calculado con sus partidos de torneo y sus partidos libres. No autopercepción — datos reales.</p>
+      </div>
+      <div class="player-feature">
+        <div class="feat-icon">🏅</div>
+        <h3>Historial completo</h3>
+        <p>Cada partido, cada marcador, cada cambio de ELO. Con quién jugó, contra quién, cuándo.</p>
+      </div>
+      <div class="player-feature">
+        <div class="feat-icon">🔥</div>
+        <h3>Ranking del club</h3>
+        <p>¿Cuánto le falta para superar al compañero de arriba? El ranking es el gancho de retención más potente.</p>
+      </div>
+      <div class="player-feature">
+        <div class="feat-icon">📲</div>
+        <h3>Sin instalación</h3>
+        <p>Se abre desde el móvil como una web normal. Sin pasar por la App Store, sin 400 MB descargados.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── COMPARATIVA ────────────────────────────────────── -->
+<section style="background: white;">
+  <div class="container">
+    <div class="section-label">Comparativa</div>
+    <h2>¿Por qué no Playtomic?</h2>
+    <p class="section-sub">Playtomic es para reservar pistas. ParaPádel es para gestionar torneos serios.</p>
+
+    <div style="overflow-x: auto;">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>Funcionalidad</th>
+            <th>Papel / Excel</th>
+            <th>Playtomic</th>
+            <th>✦ ParaPádel</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Inscripciones online</td>
+            <td><span class="cross">✕</span></td>
+            <td><span class="check">✓</span></td>
+            <td>✓ Sin comisión</td>
+          </tr>
+          <tr>
+            <td>Cuadro de torneo automático</td>
+            <td><span class="cross">✕</span></td>
+            <td>Básico</td>
+            <td>✓ Grupos + KO + Liga</td>
+          </tr>
+          <tr>
+            <td>Ranking ELO propio del club</td>
+            <td><span class="cross">✕</span></td>
+            <td><span class="cross">✕</span></td>
+            <td>✓ Torneos + Partidos libres</td>
+          </tr>
+          <tr>
+            <td>Partidos entre amigos con estadísticas</td>
+            <td><span class="cross">✕</span></td>
+            <td><span class="cross">✕</span></td>
+            <td>✓ Enlace WhatsApp</td>
+          </tr>
+          <tr>
+            <td>Liga de temporada</td>
+            <td>Manual</td>
+            <td><span class="cross">✕</span></td>
+            <td>✓ Completa</td>
+          </tr>
+          <tr>
+            <td>App para el jugador</td>
+            <td><span class="cross">✕</span></td>
+            <td>✓</td>
+            <td>✓ Sin instalación</td>
+          </tr>
+          <tr>
+            <td>Precio para el club</td>
+            <td>€0</td>
+            <td>€30–150/mes</td>
+            <td><strong>€0 (Early Adopter)</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ─── PRECIO ─────────────────────────────────────────── -->
+<section>
+  <div class="container">
+    <div class="section-label">Acceso anticipado</div>
+    <h2 style="text-align:center; margin-bottom: 8px;">Precio de lanzamiento</h2>
+    <p class="section-sub" style="text-align:center;">Los primeros clubs en unirse entran en condiciones especiales y ayudan a dar forma al producto.</p>
+
+    <div class="price-card">
+      <div class="price-badge">Early Adopter</div>
+      <div class="price-amount">€0</div>
+      <div class="price-period">durante el periodo de lanzamiento</div>
+      <ul class="price-features">
+        <li><span class="tick">✓</span> Torneos ilimitados</li>
+        <li><span class="tick">✓</span> Jugadores ilimitados</li>
+        <li><span class="tick">✓</span> Liga de temporada</li>
+        <li><span class="tick">✓</span> App jugador completa</li>
+        <li><span class="tick">✓</span> Partidos libres con estadísticas</li>
+        <li><span class="tick">✓</span> Soporte directo en WhatsApp</li>
+        <li><span class="tick">✓</span> Precio congelado cuando pase a pago</li>
+      </ul>
+      <a href="mailto:antoniorme@gmail.com?subject=Quiero probar ParaPádel en mi club" class="cta-button">
+        Quiero empezar con mi club →
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ─── FOOTER ─────────────────────────────────────────── -->
+<div class="footer">
+  <div class="footer-logo">Para<span>Pádel</span></div>
+  <p>La plataforma de gestión de pádel para clubs locales · Murcia · 2026</p>
+  <p style="margin-top: 6px;">antoniorme@gmail.com · parapadel.vercel.app</p>
+</div>
+
+</body>
+</html>

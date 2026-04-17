@@ -138,27 +138,13 @@ const PlayerDashboard: React.FC = () => {
             <div>
                 <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-black text-slate-700 uppercase tracking-wider">Mis Próximos Partidos</h3>
-                    <button
-                        onClick={() => navigate('/p/matches/create')}
-                        className="text-xs font-bold px-3 py-1.5 rounded-full text-white"
-                        style={{ background: THEME.cta }}
-                    >
-                        + Crear
-                    </button>
                 </div>
 
                 {upcomingMatches.length === 0 ? (
                     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 text-center">
                         <div className="text-3xl mb-2">🎾</div>
                         <p className="text-sm font-bold text-slate-500 mb-1">Sin partidos próximos</p>
-                        <p className="text-xs text-slate-400">Crea uno y compártelo por WhatsApp</p>
-                        <button
-                            onClick={() => navigate('/p/matches/create')}
-                            className="mt-4 px-5 py-2 rounded-full text-xs font-black text-white"
-                            style={{ background: THEME.cta }}
-                        >
-                            Crear partido
-                        </button>
+                        <p className="text-xs text-slate-400">Cuando el club publique un partido y te unas, aparecerá aquí.</p>
                     </div>
                 ) : (
                     <div className="space-y-2">

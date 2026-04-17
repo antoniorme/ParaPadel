@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Activity, Award, User, Bell, Plus } from 'lucide-react';
+import { Home, Activity, Award, User, Bell } from 'lucide-react';
 import { THEME } from '../utils/theme';
 import { useNotifications } from '../store/NotificationContext';
 
@@ -79,19 +79,6 @@ export const PlayerLayout: React.FC<{ children: React.ReactNode }> = ({ children
                 );
               })}
 
-              {/* Botón crear partido */}
-              <button
-                onClick={() => navigate('/p/matches/create')}
-                className="flex flex-col items-center justify-center py-2 px-2 w-full group"
-              >
-                <div
-                  className="w-10 h-10 rounded-2xl flex items-center justify-center mb-0.5 shadow-md transition-all group-active:scale-90"
-                  style={{ background: THEME.cta }}
-                >
-                  <Plus size={22} strokeWidth={2.5} color="white" />
-                </div>
-                <span className="text-[10px] font-bold text-slate-400">Crear</span>
-              </button>
             </nav>
           </div>
       </div>

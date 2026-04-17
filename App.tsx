@@ -52,7 +52,6 @@ import TournamentBrowser from './pages/player/TournamentBrowser';
 import PlayerAppProfile from './pages/player/PlayerProfile';
 import PlayerPublicProfile from './pages/public/PlayerPublicProfile';
 import MatchJoin from './pages/public/MatchJoin';
-import CreateMatch from './pages/player/CreateMatch';
 import PlayerOnboarding from './pages/player/PlayerOnboarding';
 import MatchManager from './pages/MatchManager';
 
@@ -157,8 +156,7 @@ const AppRoutes = () => {
                         <Route path="explore" element={<TournamentBrowser />} />
                         <Route path="tournaments" element={<PlayerTournaments />} />
                         <Route path="profile" element={<PlayerAppProfile />} />
-                        <Route path="matches/create" element={<CreateMatch />} />
-                        <Route path="*" element={<Navigate to="dashboard" replace />} />
+<Route path="*" element={<Navigate to="dashboard" replace />} />
                     </Routes>
                 </PlayerLayout>
             </ProtectedRoute>
