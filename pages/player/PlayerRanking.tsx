@@ -4,7 +4,7 @@ import { calculateDisplayRanking } from '../../utils/Elo';
 import { Award, Search, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Player } from '../../types';
-import { PADEL_CATEGORIES, CATEGORY_SHORT, PadelCategory } from '../../utils/categories';
+import { PADEL_CATEGORIES, CATEGORY_SHORT, PadelCategory, categoryFromElo } from '../../utils/categories';
 
 const getAvatarColor = (name: string): string => {
   const colors = ['#4F46E5','#7C3AED','#DB2777','#059669','#D97706','#DC2626','#0284C7','#0F766E'];
@@ -159,8 +159,8 @@ const PlayerRanking: React.FC = () => {
       const matchesSearch = p.name.toLowerCase().includes(q) || (p.nickname || '').toLowerCase().includes(q);
       if (!matchesSearch) return false;
       if (filterCat === 'Todos') return true;
-      // El filterCat es '1ª CAT', '2ª CAT', etc.
-      return (p.categories || []).includes(filterCat) || p.main_category === filterCat;
+      // Filtrar por categoría real según ELO
+      return categoryFromElo(calculateDisplayRanking(p)) === filterCat;
     })
     .sort((a, b) => calculateDisplayRanking(b) - calculateDisplayRanking(a));
 
@@ -194,11 +194,9 @@ const PlayerRanking: React.FC = () => {
             {player.nickname && <span className="text-slate-400 font-normal ml-1">"{player.nickname}"</span>}
             {isMe && <span className="ml-1.5 text-[10px] font-black text-indigo-500 bg-indigo-100 px-1 py-0.5 rounded-full">TÚ</span>}
           </span>
-          {(player.main_category || (player.categories || [])[0]) && (
-            <span className="text-[10px] text-slate-400">
-              {player.main_category || (player.categories || [])[0]}
-            </span>
-          )}
+          <span className="text-[10px] text-slate-400">
+            {CATEGORY_SHORT[categoryFromElo(calculateDisplayRanking(player))]}
+          </span>
         </div>
         <div className={`text-sm font-black tabular-nums shrink-0 ${isMe ? 'text-indigo-600' : 'text-slate-700'}`}>
           {calculateDisplayRanking(player)}

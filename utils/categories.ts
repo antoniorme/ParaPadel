@@ -34,6 +34,25 @@ export const CATEGORY_DESCRIPTION: Record<PadelCategory, string> = {
   'Iniciación':'Iniciación — Principiante',
 };
 
+/** Rango de ELO de cada categoría [min, max) */
+export const CATEGORY_ELO_RANGE: Record<PadelCategory, [number, number]> = {
+  '1ª CAT':    [5000, Infinity],
+  '2ª CAT':    [4000, 5000],
+  '3ª CAT':    [3000, 4000],
+  '4ª CAT':    [2000, 3000],
+  '5ª CAT':    [1000, 2000],
+  'Iniciación': [0,   1000],
+};
+
+/** Devuelve la categoría real de un jugador según su ELO */
+export function categoryFromElo(elo: number): PadelCategory {
+  for (const cat of PADEL_CATEGORIES) {
+    const [min, max] = CATEGORY_ELO_RANGE[cat];
+    if (elo >= min && elo < max) return cat;
+  }
+  return 'Iniciación';
+}
+
 /**
  * Niveles de partido (más granulares que categorías).
  * Usados en selects al crear partidos y torneos.
