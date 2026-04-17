@@ -67,51 +67,39 @@ const ClubMatchBrowser: React.FC = () => {
   }, [user]);
 
   const loadData = useCallback(async () => {
-    // 1. Clubs con partidos abiertos
-    const { data: matchData } = await supabase
-      .from('free_matches')
-      .select(`
-        id, share_token, scheduled_at, level, court, max_players, club_id,
-        match_participants!match_id ( id, attendance_status ),
-        clubs!club_id ( id, name )
-      `)
-      .eq('status', 'open')
-      .gte('scheduled_at', new Date().toISOString())
-      .order('scheduled_at', { ascending: true });
+    // 1. Todos los clubs + partidos abiertos (en paralelo)
+    const [{ data: allClubsData }, { data: matchData }, followResult] = await Promise.all([
+      supabase.from('clubs').select('id, name').order('name'),
+      supabase
+        .from('free_matches')
+        .select(`
+          id, share_token, scheduled_at, level, court, max_players, club_id,
+          match_participants!match_id ( id, attendance_status )
+        `)
+        .eq('status', 'open')
+        .gte('scheduled_at', new Date().toISOString())
+        .order('scheduled_at', { ascending: true }),
+      myPlayerId
+        ? supabase.from('player_club_follows').select('club_id, notify_new_matches').eq('player_id', myPlayerId)
+        : Promise.resolve({ data: null }),
+    ]);
 
-    // 2. Clubs que sigo (si estoy logueado con player_id)
+    // 2. Follows del jugador
     let followedClubIds: string[] = [];
     let notifyMap: Record<string, boolean> = {};
-    if (myPlayerId) {
-      const { data: followData } = await supabase
-        .from('player_club_follows')
-        .select('club_id, notify_new_matches')
-        .eq('player_id', myPlayerId);
-      if (followData) {
-        followedClubIds = followData.map((f: any) => f.club_id);
-        followData.forEach((f: any) => { notifyMap[f.club_id] = f.notify_new_matches; });
-      }
+    if (followResult.data) {
+      followedClubIds = followResult.data.map((f: any) => f.club_id);
+      followResult.data.forEach((f: any) => { notifyMap[f.club_id] = f.notify_new_matches; });
     }
 
-    // 3. Si no hay partidos abiertos, mostrar igualmente los clubs seguidos
-    const clubMap = new Map<string, ClubWithMatches>();
-
+    // 3. Construir mapa de partidos por club
+    const matchesByClub = new Map<string, OpenMatch[]>();
     (matchData || []).forEach((m: any) => {
-      const club = m.clubs;
-      if (!club) return;
+      if (!m.club_id) return;
       const spots_taken = (m.match_participants || [])
         .filter((p: any) => ['joined', 'confirmed'].includes(p.attendance_status)).length;
-
-      if (!clubMap.has(club.id)) {
-        clubMap.set(club.id, {
-          id: club.id,
-          name: club.name,
-          matches: [],
-          isFollowed: followedClubIds.includes(club.id),
-          notifyEnabled: notifyMap[club.id] ?? true,
-        });
-      }
-      clubMap.get(club.id)!.matches.push({
+      if (!matchesByClub.has(m.club_id)) matchesByClub.set(m.club_id, []);
+      matchesByClub.get(m.club_id)!.push({
         id: m.id,
         share_token: m.share_token,
         scheduled_at: m.scheduled_at,
@@ -122,25 +110,23 @@ const ClubMatchBrowser: React.FC = () => {
       });
     });
 
-    // Clubs seguidos sin partidos abiertos también aparecen
-    if (myPlayerId && followedClubIds.length > 0) {
-      const missingIds = followedClubIds.filter(id => !clubMap.has(id));
-      if (missingIds.length > 0) {
-        const { data: clubsData } = await supabase
-          .from('clubs').select('id, name').in('id', missingIds);
-        (clubsData || []).forEach((c: any) => {
-          clubMap.set(c.id, {
-            id: c.id, name: c.name, matches: [],
-            isFollowed: true, notifyEnabled: notifyMap[c.id] ?? true,
-          });
-        });
-      }
-    }
+    // 4. Todos los clubs en el mapa (con o sin partidos)
+    const clubMap = new Map<string, ClubWithMatches>();
+    (allClubsData || []).forEach((c: any) => {
+      clubMap.set(c.id, {
+        id: c.id,
+        name: c.name,
+        matches: matchesByClub.get(c.id) || [],
+        isFollowed: followedClubIds.includes(c.id),
+        notifyEnabled: notifyMap[c.id] ?? true,
+      });
+    });
 
-    // Ordenar: seguidos primero, luego por nº de partidos
+    // Ordenar: seguidos primero, luego con partidos, luego alfabético
     const sorted = Array.from(clubMap.values()).sort((a, b) => {
       if (a.isFollowed !== b.isFollowed) return a.isFollowed ? -1 : 1;
-      return b.matches.length - a.matches.length;
+      if (b.matches.length !== a.matches.length) return b.matches.length - a.matches.length;
+      return a.name.localeCompare(b.name);
     });
 
     setClubs(sorted);
