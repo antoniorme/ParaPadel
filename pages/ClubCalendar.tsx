@@ -150,7 +150,7 @@ const ClubCalendar: React.FC = () => {
     const [recurringExceptions, setRecurringExceptions] = useState<RecurringException[]>([]);
     const [loading, setLoading] = useState(true);
     const [showConfig, setShowConfig] = useState(false);
-    const [slotMinutes, setSlotMinutes] = useState<60 | 90>(90);
+    const [selectedDuration, setSelectedDuration] = useState<60 | 90>(90);
 
     // Modales de reserva / bloqueo
     const [selectedSlot, setSelectedSlot] = useState<{ courtNumber: number; startTime: string } | null>(null);
@@ -251,7 +251,7 @@ const ClubCalendar: React.FC = () => {
         if (!selectedSlot || !clubData.id || !createForm.playerName.trim()) return;
         setSaving(true);
         const startAt = buildTimestamp(dateStr, selectedSlot.startTime);
-        const endAt = buildTimestamp(dateStr, minsToTime(timeToMins(selectedSlot.startTime) + slotMinutes));
+        const endAt = buildTimestamp(dateStr, minsToTime(timeToMins(selectedSlot.startTime) + selectedDuration));
         const { error } = await supabase.from('court_reservations').insert([{
             club_id: clubData.id, court_number: selectedSlot.courtNumber,
             player_name: createForm.playerName.trim(), player_phone: createForm.playerPhone.trim() || null,
@@ -285,7 +285,7 @@ const ClubCalendar: React.FC = () => {
         if (!blockSlotData || !clubData.id) return;
         setSaving(true);
         const startAt = buildTimestamp(dateStr, blockSlotData.startTime);
-        const endAt = buildTimestamp(dateStr, minsToTime(timeToMins(blockSlotData.startTime) + slotMinutes));
+        const endAt = buildTimestamp(dateStr, minsToTime(timeToMins(blockSlotData.startTime) + selectedDuration));
         const { error } = await supabase.from('court_blocks').insert([{
             club_id: clubData.id, court_number: blockSlotData.courtNumber,
             reason: blockForm.reason.trim() || 'Bloqueado', block_type: blockForm.blockType,
@@ -459,20 +459,6 @@ const ClubCalendar: React.FC = () => {
                         <button onClick={() => setShowConfig(false)} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg transition-colors"><X size={16}/></button>
                     </div>
 
-                    {/* Duración de slot global */}
-                    <div>
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">Duración de slot (global)</label>
-                        <div className="flex gap-2">
-                            {([60, 90] as const).map(m => (
-                                <button key={m} onClick={() => setSlotMinutes(m)}
-                                    className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all ${slotMinutes === m ? 'text-white border-transparent' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
-                                    style={slotMinutes === m ? { backgroundColor: THEME.cta } : {}}>
-                                    {m} min
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
                     {/* Gestión de pistas */}
                     <div>
                         <div className="flex items-center justify-between mb-3">
@@ -608,7 +594,7 @@ const ClubCalendar: React.FC = () => {
                                             key={court.id}
                                             court={court} dateStr={dateStr}
                                             openTime={openTime} closeTime={closeTime}
-                                            slotMinutes={slotMinutes}
+                                            slotMinutes={30}
                                             gridHeight={gridHeight} timeLabels={timeLabels}
                                             reservations={courtRes} blocks={courtBlocks}
                                             recurringSlots={courtRecurring}
@@ -622,7 +608,7 @@ const ClubCalendar: React.FC = () => {
                                                 setShowBlockModal(true);
                                             }}
                                             onSlotRecurring={(startTime) => {
-                                                setRecurringForm(f => ({ ...f, court_number: court.court_number, start_time: startTime, end_time: minsToTime(timeToMins(startTime) + slotMinutes), day_of_week: new Date(dateStr + 'T12:00:00').getDay() }));
+                                                setRecurringForm(f => ({ ...f, court_number: court.court_number, start_time: startTime, end_time: minsToTime(timeToMins(startTime) + selectedDuration), day_of_week: new Date(dateStr + 'T12:00:00').getDay() }));
                                                 setShowRecurringModal(true);
                                             }}
                                             onReservationClick={setSelectedReservation}
@@ -649,12 +635,25 @@ const ClubCalendar: React.FC = () => {
                 ]}>
                 {selectedSlot && (
                     <div className="space-y-4">
+                        {/* Duración */}
+                        <div>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">Duración</label>
+                            <div className="flex gap-2">
+                                {([60, 90] as const).map(m => (
+                                    <button key={m} type="button" onClick={() => setSelectedDuration(m)}
+                                        className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all ${selectedDuration === m ? 'text-white border-transparent' : 'bg-white text-slate-500 border-slate-200'}`}
+                                        style={selectedDuration === m ? { backgroundColor: THEME.cta } : {}}>
+                                        {m} min
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                         <div className="bg-indigo-50 rounded-xl p-3 flex items-center gap-3">
                             <Calendar size={18} className="text-indigo-600 shrink-0"/>
                             <div>
                                 <div className="text-xs font-bold text-indigo-600 uppercase">Pista {selectedSlot.courtNumber}</div>
                                 <div className="font-black text-slate-800 text-sm">
-                                    {selectedSlot.startTime} — {minsToTime(timeToMins(selectedSlot.startTime) + slotMinutes)} · {slotMinutes} min
+                                    {selectedSlot.startTime} — {minsToTime(timeToMins(selectedSlot.startTime) + selectedDuration)} · {selectedDuration} min
                                 </div>
                             </div>
                         </div>
@@ -727,7 +726,7 @@ const ClubCalendar: React.FC = () => {
                 <div className="space-y-4">
                     {blockSlotData && (
                         <div className="bg-slate-50 rounded-xl p-3 text-sm font-medium text-slate-600">
-                            Pista {blockSlotData.courtNumber} · {blockSlotData.startTime}–{minsToTime(timeToMins(blockSlotData.startTime) + slotMinutes)}
+                            Pista {blockSlotData.courtNumber} · {blockSlotData.startTime}–{minsToTime(timeToMins(blockSlotData.startTime) + selectedDuration)}
                         </div>
                     )}
                     <div>
@@ -942,13 +941,14 @@ const CourtColumn: React.FC<CourtColumnProps> = ({
     const isOccupied = (startMins: number, endMins: number) =>
         occupiedRanges.some(r => startMins < r.end && endMins > r.start);
 
+    // Free slots every 30 min — duration chosen in modal
     const freeSlots: string[] = [];
     let t = timeToMins(openTime);
     const end = timeToMins(closeTime);
-    while (t + slotMinutes <= end) {
+    while (t + 30 <= end) {
         const slotStart = minsToTime(t);
-        if (!isOccupied(t, t + slotMinutes)) freeSlots.push(slotStart);
-        t += slotMinutes;
+        if (!isOccupied(t, t + 30)) freeSlots.push(slotStart);
+        t += 30;
     }
 
     return (
@@ -959,10 +959,10 @@ const CourtColumn: React.FC<CourtColumnProps> = ({
                     style={{ top: i * GRID_ROW_MINS * PX_PER_MIN, height: GRID_ROW_MINS * PX_PER_MIN }}/>
             ))}
 
-            {/* Free slots */}
+            {/* Free slots — 30 min rows, duration chosen in modal */}
             {freeSlots.map(startTime => {
                 const top = (timeToMins(startTime) - timeToMins(openTime)) * PX_PER_MIN;
-                const height = slotMinutes * PX_PER_MIN - 2;
+                const height = GRID_ROW_MINS * PX_PER_MIN - 2;
                 const isHovered = hoveredSlot === startTime;
                 return (
                     <div key={startTime}
