@@ -20,16 +20,16 @@ const PlayerRanking: React.FC = () => {
   const { clubData } = useHistory();
   const { state } = useTournament();
 
-  const [rankTab, setRankTab] = useState<'torneos' | 'club'>('torneos');
-  const [players, setPlayers] = useState<Player[]>([]);
+  const [rankTab, setRankTab] = useState<'club' | 'general'>('club');
   const [clubPlayers, setClubPlayers] = useState<Player[]>([]);
+  const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState<string>('Todos');
 
   const [myPlayerId] = useState<string>(() => localStorage.getItem('padel_sim_player_id') || '');
 
-  // Ranking de torneos (jugadores del club)
+  // Ranking Club: jugadores del mismo club
   useEffect(() => {
     const clubId = clubData?.id || state.players[0]?.user_id;
     if (!clubId) { setLoading(false); return; }
@@ -39,44 +39,39 @@ const PlayerRanking: React.FC = () => {
       .eq('user_id', clubId)
       .order('global_rating', { ascending: false })
       .then(({ data }) => {
-        if (data) setPlayers(data as Player[]);
+        if (data) setClubPlayers(data as Player[]);
         setLoading(false);
       });
   }, [clubData?.id]);
 
-  // Ranking de partidos libres (cualquier jugador con club_confidence > 0)
+  // Ranking General: todos los jugadores de la app
   useEffect(() => {
-    if (rankTab !== 'club') return;
+    if (rankTab !== 'general') return;
+    if (allPlayers.length > 0) return; // ya cargado
     supabase
       .from('players')
       .select('*')
-      .gt('club_confidence', 0)
-      .order('club_rating', { ascending: false })
-      .limit(100)
+      .order('global_rating', { ascending: false })
+      .limit(200)
       .then(({ data }) => {
-        if (data) setClubPlayers(data as Player[]);
+        if (data) setAllPlayers(data as Player[]);
       });
   }, [rankTab]);
 
-  const activePlayers = rankTab === 'club' ? clubPlayers : players;
+  const activePlayers = rankTab === 'general' ? allPlayers : clubPlayers;
 
   const categories = ['Todos', ...Array.from(new Set(
-    players.flatMap(p => p.categories || [p.main_category]).filter(Boolean) as string[]
+    clubPlayers.flatMap(p => p.categories || [p.main_category]).filter(Boolean) as string[]
   ))];
 
   const sorted = activePlayers
     .filter(p => {
       const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
         (p.nickname || '').toLowerCase().includes(search.toLowerCase());
-      if (rankTab === 'club') return matchesSearch;
       const matchesCat = filterCat === 'Todos' || (p.categories || []).includes(filterCat) || p.main_category === filterCat;
       return matchesSearch && matchesCat;
     })
-    .sort((a, b) =>
-      rankTab === 'club'
-        ? (b.club_rating ?? 1200) - (a.club_rating ?? 1200)
-        : calculateDisplayRanking(b) - calculateDisplayRanking(a)
-    );
+    .sort((a, b) => calculateDisplayRanking(b) - calculateDisplayRanking(a));
 
   const myRank = sorted.findIndex(p => p.id === myPlayerId) + 1;
   const myPlayer = sorted.find(p => p.id === myPlayerId);
@@ -99,7 +94,7 @@ const PlayerRanking: React.FC = () => {
 
       {/* Tab toggle */}
       <div className="flex gap-2 mb-4 p-1 bg-slate-100 rounded-2xl">
-        {([['torneos', 'General'], ['club', 'Club']] as const).map(([key, label]) => (
+        {([['club', 'Mi Club'], ['general', 'General']] as const).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setRankTab(key)}
@@ -123,11 +118,9 @@ const PlayerRanking: React.FC = () => {
           </div>
           <div className="text-right">
             <div className="text-2xl font-black text-white">
-              {rankTab === 'club'
-                ? (myPlayer?.club_rating ?? 1200)
-                : calculateDisplayRanking(myPlayer || players[0])}
+              {calculateDisplayRanking(myPlayer || clubPlayers[0])}
             </div>
-            <div className="text-xs font-bold text-white/60">{rankTab === 'club' ? 'Rating Club' : 'Rating General'}</div>
+            <div className="text-xs font-bold text-white/60">ELO</div>
           </div>
         </div>
       )}
@@ -143,8 +136,8 @@ const PlayerRanking: React.FC = () => {
         />
       </div>
 
-      {/* Category filter — solo en tab torneos */}
-      {rankTab === 'torneos' && categories.length > 1 && (
+      {/* Category filter — solo en tab club */}
+      {rankTab === 'club' && categories.length > 1 && (
         <div className="flex gap-2 overflow-x-auto pb-2 mb-3 scrollbar-hide">
           {categories.map(cat => (
             <button
@@ -173,10 +166,8 @@ const PlayerRanking: React.FC = () => {
         <div className="space-y-2">
           {sorted.map((player, idx) => {
             const isMe = player.id === myPlayerId;
-            const displayRating = rankTab === 'club'
-              ? (player.club_rating ?? 1200)
-              : calculateDisplayRanking(player);
-            const ratingLabel = rankTab === 'club' ? 'Club' : 'General';
+            const displayRating = calculateDisplayRanking(player);
+            const ratingLabel = 'ELO';
             const initials = player.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
             const color = getAvatarColor(player.name);
             return (
@@ -228,9 +219,6 @@ const PlayerRanking: React.FC = () => {
                     {displayRating}
                   </div>
                   <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">{ratingLabel}</div>
-                  {rankTab === 'club' && (player.club_confidence ?? 0) > 0 && (
-                    <div className="text-[9px] text-slate-400">{player.club_confidence} partidos</div>
-                  )}
                 </div>
               </div>
             );
