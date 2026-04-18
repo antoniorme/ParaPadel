@@ -9,8 +9,10 @@ import {
     ChevronLeft, ChevronRight, Plus, Settings, Check, X,
     Phone, MessageCircle, Clock, User, Trash2, RefreshCw,
     Calendar, Lock, Wrench, AlertTriangle, Edit2, CalendarDays,
-    Repeat, Ban
+    Repeat, Ban, Swords, BarChart2
 } from 'lucide-react';
+import { MATCH_LEVELS } from '../utils/categories';
+import { generateClubMatchesText, openWhatsApp } from '../utils/whatsapp';
 import { THEME } from '../utils/theme';
 
 // ─── CONSTANTES ───────────────────────────────────────────────────────────────
@@ -151,6 +153,15 @@ const ClubCalendar: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [showConfig, setShowConfig] = useState(false);
     const [selectedDuration, setSelectedDuration] = useState<60 | 90>(90);
+
+    // Menú de elección de acción al pulsar un slot libre
+    const [slotChoiceData, setSlotChoiceData] = useState<{ courtNumber: number; startTime: string } | null>(null);
+
+    // Modal de partido abierto desde pista
+    const [showOpenMatchModal, setShowOpenMatchModal] = useState(false);
+    const [openMatchSlot, setOpenMatchSlot] = useState<{ courtNumber: number; startTime: string } | null>(null);
+    const [openMatchLevel, setOpenMatchLevel] = useState('');
+    const [openMatchNotes, setOpenMatchNotes] = useState('');
 
     // Modales de reserva / bloqueo
     const [selectedSlot, setSelectedSlot] = useState<{ courtNumber: number; startTime: string } | null>(null);
@@ -343,6 +354,46 @@ const ClubCalendar: React.FC = () => {
     const handleDeleteRecurringSlot = async (id: string) => {
         await supabase.from('recurring_slots').update({ is_active: false }).eq('id', id);
         success('Slot recurrente eliminado'); setSelectedRecurring(null); loadRecurringData();
+    };
+
+    const handleCreateOpenMatch = async () => {
+        if (!openMatchSlot || !clubData.id) return;
+        setSaving(true);
+        const scheduledAt = buildTimestamp(dateStr, openMatchSlot.startTime);
+        const { data: matchData, error } = await supabase.from('free_matches').insert({
+            club_id: clubData.id,
+            scheduled_at: scheduledAt,
+            court: courts.find(c => c.court_number === openMatchSlot.courtNumber)?.court_name || `Pista ${openMatchSlot.courtNumber}`,
+            level: openMatchLevel || null,
+            notes: openMatchNotes || null,
+            max_players: 4,
+            status: 'open',
+        }).select('id, share_token').single();
+        setSaving(false);
+        if (error) { showError('Error al crear el partido'); return; }
+        success('Partido abierto creado');
+        setShowOpenMatchModal(false);
+        setOpenMatchSlot(null);
+        setOpenMatchLevel('');
+        setOpenMatchNotes('');
+        // Ofrecer WhatsApp con todos los partidos del club
+        if (clubData.name && clubData.id && matchData) {
+            const { data: allOpen } = await supabase
+                .from('free_matches')
+                .select('id, scheduled_at, level, court, max_players, match_participants(id, attendance_status)')
+                .eq('club_id', clubData.id).eq('status', 'open')
+                .gte('scheduled_at', new Date().toISOString());
+            if (allOpen && allOpen.length > 0) {
+                const text = generateClubMatchesText(clubData.name, clubData.id, allOpen.map((m: any) => ({
+                    scheduled_at: m.scheduled_at,
+                    level: m.level,
+                    court: m.court,
+                    max_players: m.max_players || 4,
+                    spots_taken: (m.match_participants || []).filter((p: any) => ['joined','confirmed'].includes(p.attendance_status)).length,
+                })));
+                openWhatsApp(text);
+            }
+        }
     };
 
     // ─── DRAG & DROP ──────────────────────────────────────────────────────────
@@ -594,14 +645,12 @@ const ClubCalendar: React.FC = () => {
                                             key={court.id}
                                             court={court} dateStr={dateStr}
                                             openTime={openTime} closeTime={closeTime}
-                                            slotMinutes={30}
                                             gridHeight={gridHeight} timeLabels={timeLabels}
                                             reservations={courtRes} blocks={courtBlocks}
                                             recurringSlots={courtRecurring}
                                             draggingId={draggingId}
                                             onSlotClick={(startTime) => {
-                                                setSelectedSlot({ courtNumber: court.court_number, startTime });
-                                                setCreateForm({ playerName: '', playerPhone: '', partnerName: '', notes: '' });
+                                                setSlotChoiceData({ courtNumber: court.court_number, startTime });
                                             }}
                                             onSlotRightClick={(startTime) => {
                                                 setBlockSlotData({ courtNumber: court.court_number, startTime });
@@ -878,6 +927,157 @@ const ClubCalendar: React.FC = () => {
                 onClose={() => { setShowCourtModal(false); setEditingCourt(null); }}
                 onSave={handleSaveCourt} saving={saving}
             />
+
+            {/* ELEGIR TIPO DE ACCIÓN AL PULSAR SLOT */}
+            <Modal isOpen={!!slotChoiceData} onClose={() => setSlotChoiceData(null)} title="¿Qué quieres crear?" size="sm">
+                {slotChoiceData && (
+                    <div className="space-y-2">
+                        <div className="bg-indigo-50 rounded-xl px-4 py-2 text-center text-sm font-bold text-indigo-700 mb-3">
+                            Pista {slotChoiceData.courtNumber} · {slotChoiceData.startTime}
+                        </div>
+                        <button
+                            onClick={() => {
+                                setSelectedSlot({ courtNumber: slotChoiceData.courtNumber, startTime: slotChoiceData.startTime });
+                                setCreateForm({ playerName: '', playerPhone: '', partnerName: '', notes: '' });
+                                setSlotChoiceData(null);
+                            }}
+                            className="w-full flex items-center gap-3 p-4 bg-indigo-50 hover:bg-indigo-100 rounded-2xl transition-all border border-indigo-100"
+                        >
+                            <div className="w-9 h-9 bg-indigo-500 rounded-xl flex items-center justify-center shrink-0">
+                                <Calendar size={18} className="text-white" />
+                            </div>
+                            <div className="text-left">
+                                <div className="font-black text-slate-800 text-sm">Reserva</div>
+                                <div className="text-xs text-slate-400">Reserva de pista para un jugador</div>
+                            </div>
+                        </button>
+                        <button
+                            onClick={() => {
+                                setOpenMatchSlot({ courtNumber: slotChoiceData.courtNumber, startTime: slotChoiceData.startTime });
+                                setShowOpenMatchModal(true);
+                                setSlotChoiceData(null);
+                            }}
+                            className="w-full flex items-center gap-3 p-4 bg-violet-50 hover:bg-violet-100 rounded-2xl transition-all border border-violet-100"
+                        >
+                            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: THEME.cta }}>
+                                <Swords size={18} className="text-white" />
+                            </div>
+                            <div className="text-left">
+                                <div className="font-black text-slate-800 text-sm">Partido abierto</div>
+                                <div className="text-xs text-slate-400">Crea y comparte por WhatsApp</div>
+                            </div>
+                        </button>
+                        <button
+                            onClick={() => {
+                                setRecurringForm(f => ({
+                                    ...f,
+                                    court_number: slotChoiceData.courtNumber,
+                                    start_time: slotChoiceData.startTime,
+                                    end_time: minsToTime(timeToMins(slotChoiceData.startTime) + selectedDuration),
+                                    day_of_week: new Date(dateStr + 'T12:00:00').getDay(),
+                                }));
+                                setShowRecurringModal(true);
+                                setSlotChoiceData(null);
+                            }}
+                            className="w-full flex items-center gap-3 p-4 bg-amber-50 hover:bg-amber-100 rounded-2xl transition-all border border-amber-100"
+                        >
+                            <div className="w-9 h-9 bg-amber-500 rounded-xl flex items-center justify-center shrink-0">
+                                <Repeat size={18} className="text-white" />
+                            </div>
+                            <div className="text-left">
+                                <div className="font-black text-slate-800 text-sm">Slot recurrente</div>
+                                <div className="text-xs text-slate-400">Se repite cada semana</div>
+                            </div>
+                        </button>
+                        <button
+                            onClick={() => {
+                                setBlockSlotData({ courtNumber: slotChoiceData.courtNumber, startTime: slotChoiceData.startTime });
+                                setShowBlockModal(true);
+                                setSlotChoiceData(null);
+                            }}
+                            className="w-full flex items-center gap-3 p-4 bg-slate-50 hover:bg-slate-100 rounded-2xl transition-all border border-slate-100"
+                        >
+                            <div className="w-9 h-9 bg-slate-600 rounded-xl flex items-center justify-center shrink-0">
+                                <Lock size={18} className="text-white" />
+                            </div>
+                            <div className="text-left">
+                                <div className="font-black text-slate-800 text-sm">Bloquear pista</div>
+                                <div className="text-xs text-slate-400">Mantenimiento, torneo, uso privado</div>
+                            </div>
+                        </button>
+                    </div>
+                )}
+            </Modal>
+
+            {/* CREAR PARTIDO ABIERTO DESDE PISTA */}
+            <Modal
+                isOpen={showOpenMatchModal}
+                onClose={() => { setShowOpenMatchModal(false); setOpenMatchSlot(null); }}
+                title="Partido abierto"
+                icon={<Swords size={22} />}
+                iconColor="brand"
+                size="sm"
+                actions={[
+                    { label: 'Cancelar', onClick: () => { setShowOpenMatchModal(false); setOpenMatchSlot(null); }, variant: 'secondary' },
+                    { label: 'Crear y compartir', onClick: handleCreateOpenMatch, variant: 'primary', loading: saving },
+                ]}
+            >
+                {openMatchSlot && (
+                    <div className="space-y-4">
+                        <div className="bg-violet-50 border border-violet-100 rounded-xl p-3 flex items-center gap-3">
+                            <Swords size={18} className="text-violet-600 shrink-0" />
+                            <div>
+                                <div className="text-xs font-bold text-violet-600 uppercase">
+                                    Pista {openMatchSlot.courtNumber} · {openMatchSlot.startTime} · {selectedDuration} min
+                                </div>
+                                <div className="font-black text-slate-800 text-sm">
+                                    {openMatchSlot.startTime} — {minsToTime(timeToMins(openMatchSlot.startTime) + selectedDuration)}
+                                </div>
+                            </div>
+                        </div>
+                        {/* Duración */}
+                        <div>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">Duración</label>
+                            <div className="flex gap-2">
+                                {([60, 90] as const).map(m => (
+                                    <button key={m} type="button" onClick={() => setSelectedDuration(m)}
+                                        className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all ${selectedDuration === m ? 'text-white border-transparent' : 'bg-white text-slate-500 border-slate-200'}`}
+                                        style={selectedDuration === m ? { backgroundColor: THEME.cta } : {}}>
+                                        {m} min
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        {/* Nivel */}
+                        <div>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">
+                                <BarChart2 size={11} className="inline mr-1" />Nivel del partido
+                            </label>
+                            <select
+                                value={openMatchLevel}
+                                onChange={e => setOpenMatchLevel(e.target.value)}
+                                className="w-full border border-slate-200 rounded-xl p-3 text-sm font-medium focus:border-violet-400 outline-none bg-white"
+                            >
+                                <option value="">Cualquier nivel (Abierto)</option>
+                                {MATCH_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+                            </select>
+                        </div>
+                        {/* Notas */}
+                        <div>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">Notas (opcional)</label>
+                            <input
+                                value={openMatchNotes}
+                                onChange={e => setOpenMatchNotes(e.target.value)}
+                                className="w-full border border-slate-200 rounded-xl p-3 text-sm font-medium focus:border-violet-400 outline-none"
+                                placeholder="Ej: Partido amistoso de tarde"
+                            />
+                        </div>
+                        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-xs text-emerald-700 font-medium">
+                            Al crear, se abrirá WhatsApp con todos los partidos abiertos del club para que puedas compartirlos de una vez.
+                        </div>
+                    </div>
+                )}
+            </Modal>
         </div>
     );
 };
@@ -906,7 +1106,6 @@ interface CourtColumnProps {
     dateStr: string;
     openTime: string;
     closeTime: string;
-    slotMinutes: 60 | 90;
     gridHeight: number;
     timeLabels: string[];
     reservations: CourtReservation[];
@@ -924,7 +1123,7 @@ interface CourtColumnProps {
 }
 
 const CourtColumn: React.FC<CourtColumnProps> = ({
-    court, dateStr, openTime, closeTime, slotMinutes, gridHeight,
+    court, dateStr, openTime, closeTime, gridHeight,
     timeLabels, reservations, blocks, recurringSlots, draggingId,
     onSlotClick, onSlotRightClick, onSlotRecurring, onReservationClick,
     onBlockClick, onRecurringClick, onDragStart, onDrop,

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     Trophy, Users, ClipboardList, Activity, List, Menu, LogOut,
@@ -22,11 +22,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-
-  // Auto-collapse sidebar when entering courts view (max screen real estate)
-  useEffect(() => {
-    if (location.pathname === '/courts') setIsSidebarCollapsed(true);
-  }, [location.pathname]);
 
   // CONTEXT DETECTION
   const isMiniList = location.pathname === '/minis';
@@ -114,10 +109,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       )}
 
       {/* --- DESKTOP SIDEBAR (GLOBAL NAV) --- */}
-      <aside 
-        className={`hidden md:flex flex-col fixed inset-y-0 z-50 border-r transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'} bg-slate-900 border-slate-800 text-white`}
+      <aside
+        className={`hidden md:flex flex-col fixed inset-y-0 z-50 border-r transition-all duration-300 ${isSidebarCollapsed ? 'w-16' : 'w-52'} bg-slate-900 border-slate-800 text-white`}
       >
-          <div className={`p-6 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} h-20 shrink-0`}>
+          <div className={`px-4 py-5 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} shrink-0`}>
               <div className={`w-8 h-8 rounded-lg overflow-hidden shrink-0 border-2 border-slate-700 bg-slate-800 flex items-center justify-center`}>
                     {clubData.logoUrl ? (
                         <img src={clubData.logoUrl} alt="Logo" className="w-full h-full object-cover" />
@@ -219,7 +214,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </aside>
 
       {/* --- MAIN CONTENT AREA --- */}
-      <div className={`flex-1 flex flex-col ${isSidebarCollapsed ? 'md:pl-20' : 'md:pl-64'} min-h-screen transition-all duration-300 relative z-10`}>
+      <div className={`flex-1 flex flex-col ${isSidebarCollapsed ? 'md:pl-16' : 'md:pl-52'} min-h-screen transition-all duration-300 relative z-10`}>
           
           {/* MOBILE HEADER */}
           <div className="md:hidden pt-2 px-2 pb-2 sticky top-0 z-40 transition-colors duration-500">
@@ -260,32 +255,55 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               </header>
           </div>
 
-          {/* CONTENT - Added pb-32/40 to clear bottom nav */}
-          <main className={`flex-1 p-4 md:p-8 md:pt-6 overflow-y-auto ${contextNavItems ? 'pb-32 md:pb-24' : 'pb-10'}`}>
+          {/* DESKTOP CONTEXT TOP NAV — solo visible en md+ cuando hay contexto */}
+          {contextNavItems && !isOverlayOpen && (
+            <div className="hidden md:flex sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur-md shadow-sm">
+              <nav className="flex items-center gap-1 px-6 h-12 w-full max-w-[1600px] mx-auto">
+                {contextNavItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = location.pathname + location.search === item.path || location.pathname === item.path;
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${
+                        isActive
+                          ? 'bg-[#575AF9]/10 text-[#575AF9]'
+                          : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                      }`}
+                    >
+                      <Icon size={15} strokeWidth={isActive ? 2.5 : 2} />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+          )}
+
+          {/* CONTENT */}
+          <main className={`flex-1 p-4 md:p-8 md:pt-6 overflow-y-auto ${contextNavItems ? 'pb-32 md:pb-10' : 'pb-10'}`}>
             <div className="w-full max-w-[1600px] mx-auto">
               {children}
             </div>
           </main>
       </div>
 
-      {/* --- CONTEXT NAVIGATION (BOTTOM DOCK) --- */}
+      {/* MOBILE CONTEXT BOTTOM DOCK — solo en móvil */}
       {contextNavItems && !isOverlayOpen && (
-        <div className="fixed bottom-0 left-0 right-0 z-[40] p-4 pointer-events-none flex justify-center md:pl-20 safe-pb">
-            <nav className={`w-full max-w-md backdrop-blur-md border rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.3)] flex justify-around items-center px-2 py-1 pointer-events-auto transition-all duration-500 ${isSpecificMini ? 'bg-white/95 border-slate-200' : 'bg-white/95 border-slate-200'}`}>
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-[40] p-4 pointer-events-none flex justify-center safe-pb">
+            <nav className="w-full max-w-md backdrop-blur-md border border-slate-200 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.3)] flex justify-around items-center px-2 py-1 pointer-events-auto bg-white/95">
               {contextNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname + location.search === item.path || location.pathname === item.path;
-
-                // UNIFIED STYLE FOR DOCK (White base)
                 const activeColor = 'text-[#575AF9]';
                 const inactiveColor = 'text-slate-400';
                 const activeBg = 'bg-[#575AF9]/10 scale-110';
-
                 return (
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`flex flex-col items-center justify-center py-2 px-2 w-full transition-all rounded-xl group hover:bg-white/5`}
+                    className="flex flex-col items-center justify-center py-2 px-2 w-full transition-all rounded-xl"
                   >
                     <div className={`p-1.5 rounded-xl mb-0.5 transition-all ${isActive ? activeBg : 'bg-transparent'}`}>
                       <Icon size={20} strokeWidth={isActive ? 2.5 : 2} className={`transition-colors ${isActive ? activeColor : inactiveColor}`}/>

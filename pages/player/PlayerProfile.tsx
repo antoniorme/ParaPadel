@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Modal } from '../../components';
 import { calculateDisplayRanking, getPairTeamElo, calculateMatchDelta } from '../../utils/Elo';
+import { categoryFromElo, CATEGORY_SHORT } from '../../utils/categories';
 import { TournamentState, Player } from '../../types';
 import { supabase } from '../../lib/supabase';
 
@@ -317,9 +318,32 @@ const PlayerProfile: React.FC = () => {
             <p className="text-sm text-slate-400 mt-0.5">{currentPlayer.name}</p>
           )}
           <div className="flex items-center gap-2 mt-2 flex-wrap justify-center">
-            <span className="bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-xs font-bold uppercase">
-              {currentPlayer.categories?.[0] || 'Sin Nivel'}
-            </span>
+            {/* Categoría asignada por el club */}
+            {currentPlayer.categories && currentPlayer.categories.length > 0 && (
+              <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold uppercase">
+                {currentPlayer.categories[0]}
+              </span>
+            )}
+            {/* Categoría global por ELO — solo si difiere de la del club */}
+            {(() => {
+              const elocat = categoryFromElo(currentElo);
+              const clubcat = currentPlayer.categories?.[0];
+              if (clubcat && clubcat !== elocat) {
+                return (
+                  <span className="flex items-center gap-1 bg-indigo-50 text-indigo-600 border border-indigo-100 px-2.5 py-1 rounded-full text-xs font-bold">
+                    <Trophy size={10} /> Global: {CATEGORY_SHORT[elocat]}
+                  </span>
+                );
+              }
+              if (!clubcat) {
+                return (
+                  <span className="bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-xs font-bold uppercase">
+                    {CATEGORY_SHORT[elocat]}
+                  </span>
+                );
+              }
+              return null;
+            })()}
             <span className="font-black text-base" style={{ color: THEME.cta }}>{currentElo} pts</span>
             <span
               className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border"
@@ -352,7 +376,7 @@ const PlayerProfile: React.FC = () => {
         <div className="bg-slate-900 rounded-2xl p-4 text-white">
           <div className="flex justify-between items-center mb-1.5">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Progreso {currentPlayer.categories?.[0] || 'Categoría'}
+              Progreso · {CATEGORY_SHORT[categoryFromElo(currentElo)]}
             </span>
             <span className="text-xs font-bold text-slate-400">{Math.round(progressPct)}%</span>
           </div>

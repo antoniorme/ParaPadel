@@ -8,10 +8,20 @@ import { calculateDisplayRanking, calculateMatchDelta, getPairTeamElo } from '..
 import { generateClubMatchesText, openWhatsApp } from '../utils/whatsapp';
 import { supabase } from '../lib/supabase';
 import { Player, Match, MatchParticipant } from '../types';
+import { MATCH_LEVELS } from '../utils/categories';
 import {
   Swords, Plus, CheckCircle2, Clock, Trash2,
   ChevronDown, ChevronUp, MapPin, Zap, Users, MessageCircle,
+  LayoutGrid, ChevronRight,
 } from 'lucide-react';
+
+// ── HELPERS CALENDARIO ────────────────────────────────────────────────────────
+
+const timeToMins = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const minsToTime = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+const toLocalDateStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+interface FreeSlot { courtNumber: number; courtName: string; startTime: string; }
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 
@@ -72,6 +82,56 @@ const MatchManager: React.FC = () => {
   const allPlayers: Player[] = state.players;
   const clubId = clubData?.id || state.players[0]?.user_id;
 
+  // Free slots de hoy (si courts_enabled)
+  const [todaySlots, setTodaySlots] = useState<FreeSlot[]>([]);
+
+  const loadTodaySlots = useCallback(async () => {
+    if (!clubId || !clubData.courts_enabled) return;
+    const todayStr = toLocalDateStr(new Date());
+    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+    const todayEnd   = new Date(); todayEnd.setHours(23,59,59,999);
+
+    const [{ data: courts }, { data: reservations }, { data: blocks }] = await Promise.all([
+      supabase.from('court_availability').select('court_number, court_name, open_time, close_time, active_days, is_active')
+        .eq('club_id', clubId).eq('is_active', true).order('sort_order'),
+      supabase.from('court_reservations').select('court_number, start_at, end_at, status')
+        .eq('club_id', clubId).not('status', 'in', '("rejected","cancelled")')
+        .gte('start_at', todayStart.toISOString()).lte('start_at', todayEnd.toISOString()),
+      supabase.from('court_blocks').select('court_number, start_at, end_at')
+        .eq('club_id', clubId)
+        .gte('start_at', todayStart.toISOString()).lte('start_at', todayEnd.toISOString()),
+    ]);
+
+    if (!courts) return;
+    const todayDow = new Date().getDay();
+    const nowMins = new Date().getHours() * 60 + new Date().getMinutes();
+    const slots: FreeSlot[] = [];
+
+    courts.forEach((c: any) => {
+      if (!c.active_days.includes(todayDow)) return;
+      const open = timeToMins(c.open_time);
+      const close = timeToMins(c.close_time);
+      const occupied = [
+        ...(reservations || []).filter((r: any) => r.court_number === c.court_number)
+          .map((r: any) => ({ start: timeToMins(r.start_at.slice(11,16)), end: timeToMins(r.end_at.slice(11,16)) })),
+        ...(blocks || []).filter((b: any) => b.court_number === c.court_number)
+          .map((b: any) => ({ start: timeToMins(b.start_at.slice(11,16)), end: timeToMins(b.end_at.slice(11,16)) })),
+      ];
+      const isOccupied = (s: number, e: number) => occupied.some(r => s < r.end && e > r.start);
+      let t = open;
+      while (t + 60 <= close) {
+        if (t >= nowMins && !isOccupied(t, t + 60)) {
+          slots.push({ courtNumber: c.court_number, courtName: c.court_name, startTime: minsToTime(t) });
+        }
+        t += 30;
+      }
+    });
+
+    // Sort by time, then by court
+    slots.sort((a, b) => a.startTime.localeCompare(b.startTime) || a.courtNumber - b.courtNumber);
+    setTodaySlots(slots);
+  }, [clubId, clubData.courts_enabled]);
+
   // ── LOAD ────────────────────────────────────────────────────
 
   const loadMatches = useCallback(async () => {
@@ -109,6 +169,7 @@ const MatchManager: React.FC = () => {
   }, [clubId]);
 
   useEffect(() => { loadMatches(); }, [loadMatches]);
+  useEffect(() => { loadTodaySlots(); }, [loadTodaySlots]);
 
   // ── CREATE ──────────────────────────────────────────────────
 
@@ -295,26 +356,76 @@ const MatchManager: React.FC = () => {
   // ── RENDER ──────────────────────────────────────────────────
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black text-slate-900">Partidos</h1>
           <p className="text-sm text-slate-400 mt-0.5">Partidos libres del club</p>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={handleShareClub}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-black text-white"
-            style={{ background: '#25D366' }}
-          >
-            <MessageCircle size={15} /> WhatsApp
-          </button>
+          {filtered.some(m => m.status === 'open') && (
+            <button
+              onClick={handleShareClub}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-black text-white"
+              style={{ background: '#25D366' }}
+            >
+              <MessageCircle size={15} /> WhatsApp
+            </button>
+          )}
           <Button variant="primary" onClick={() => setShowCreate(true)}>
             <Plus size={16} /> Nuevo partido
           </Button>
         </div>
       </div>
+
+      {/* Slots libres hoy */}
+      {clubData.courts_enabled && todaySlots.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+            <LayoutGrid size={15} className="text-slate-400" />
+            <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Pistas libres hoy</span>
+            <span className="ml-auto text-xs font-bold text-slate-400">{todaySlots.length} slots</span>
+          </div>
+          <div className="divide-y divide-slate-50">
+            {todaySlots.slice(0, 8).map((slot, i) => (
+              <button
+                key={i}
+                onClick={() => {
+                  setForm(f => ({
+                    ...f,
+                    date: toLocalDateStr(new Date()),
+                    time: slot.startTime,
+                    court: slot.courtName,
+                  }));
+                  setShowCreate(true);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left"
+              >
+                <div
+                  className="w-11 h-11 rounded-xl flex flex-col items-center justify-center text-white shrink-0"
+                  style={{ background: THEME.cta }}
+                >
+                  <span className="text-[10px] font-bold leading-none opacity-80">HOY</span>
+                  <span className="text-xs font-black leading-none mt-0.5">{slot.startTime}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-slate-800 text-sm">{slot.courtName}</div>
+                  <div className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                    <Users size={10} /> Libre · pulsa para crear partido
+                  </div>
+                </div>
+                <ChevronRight size={15} className="text-slate-300 shrink-0" />
+              </button>
+            ))}
+            {todaySlots.length > 8 && (
+              <div className="px-4 py-2 text-xs text-slate-400 font-bold text-center">
+                +{todaySlots.length - 8} slots más disponibles
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Migration warning */}
       {!tableReady && (
@@ -327,7 +438,7 @@ const MatchManager: React.FC = () => {
       )}
 
       {/* Tabs */}
-      <div className="flex bg-slate-100 rounded-xl p-1 mb-6">
+      <div className="flex bg-slate-100 rounded-xl p-1">
         {([['pending', 'Pendientes'], ['finished', 'Finalizados']] as const).map(([v, l]) => (
           <button
             key={v}
@@ -525,12 +636,14 @@ const MatchManager: React.FC = () => {
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Nivel</label>
-              <input
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:border-indigo-400"
-                placeholder="Ej. 4ª alta"
+              <select
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:border-indigo-400 bg-white"
                 value={form.level}
                 onChange={e => setForm(f => ({ ...f, level: e.target.value }))}
-              />
+              >
+                <option value="">Abierto (cualquier nivel)</option>
+                {MATCH_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
             </div>
           </div>
 
