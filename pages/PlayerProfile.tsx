@@ -5,7 +5,7 @@ import { useTournament, TOURNAMENT_CATEGORIES } from '../store/TournamentContext
 import { useHistory } from '../store/HistoryContext';
 import { ArrowLeft, Trophy, Medal, Edit2, Save, Calendar, User, Smartphone, Mail, Activity, BarChart2, Hash, Trash2, ArrowRightCircle, ArrowLeftCircle, Check, Shuffle } from 'lucide-react';
 import { Modal, StatCard, useToast } from '../components';
-import { TournamentState, Match } from '../types';
+import { TournamentState, TournamentMatch as Match } from '../types';
 import { calculateDisplayRanking, manualToElo, calculateInitialElo, getPairTeamElo, calculateMatchDelta } from '../utils/Elo';
 import { THEME } from '../utils/theme';
 

@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { ClubData, PastTournament, TournamentState, PublicTournament, Player, Pair, Match, TournamentFormat } from '../types';
+import { ClubData, PastTournament, TournamentState, PublicTournament, Player, Pair, TournamentMatch as Match, TournamentFormat } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 

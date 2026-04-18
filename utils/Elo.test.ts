@@ -5,9 +5,26 @@ import {
     calculateMatchDelta,
     calculateDisplayRanking,
     getPairTeamElo,
+    countPreviousMatchups,
+    getRepeatOpponentMultiplier,
+    applyAntiFraudRules,
     CATEGORY_ANCHORS,
 } from './Elo';
-import type { Player } from '../types';
+import type { Player, TournamentMatch as Match } from '../types';
+
+const makeMatch = (overrides: Partial<Match> = {}): Match => ({
+    id: 'm1',
+    round: 1,
+    phase: 'group',
+    bracket: 'main',
+    courtId: 1,
+    pairAId: 'pA',
+    pairBId: 'pB',
+    scoreA: null,
+    scoreB: null,
+    isFinished: false,
+    ...overrides,
+});
 
 // --- manualToElo ---
 describe('manualToElo', () => {
@@ -136,5 +153,98 @@ describe('getPairTeamElo', () => {
         const p1: Player = { id: '1', name: 'A', global_rating: 1000 };
         const p2: Player = { id: '2', name: 'B', global_rating: 1001 };
         expect(getPairTeamElo(p1, p2)).toBe(1001); // Math.round(1000.5)
+    });
+});
+
+// --- countPreviousMatchups ---
+describe('countPreviousMatchups', () => {
+    it('devuelve 0 sin historial', () => {
+        expect(countPreviousMatchups('pA', 'pB', [])).toBe(0);
+    });
+
+    it('cuenta partidos finalizados entre las dos parejas', () => {
+        const history: Match[] = [
+            makeMatch({ pairAId: 'pA', pairBId: 'pB', isFinished: true }),
+            makeMatch({ id: 'm2', pairAId: 'pB', pairBId: 'pA', isFinished: true }),
+            makeMatch({ id: 'm3', pairAId: 'pA', pairBId: 'pC', isFinished: true }), // pareja diferente
+        ];
+        expect(countPreviousMatchups('pA', 'pB', history)).toBe(2);
+    });
+
+    it('ignora partidos no finalizados', () => {
+        const history: Match[] = [
+            makeMatch({ pairAId: 'pA', pairBId: 'pB', isFinished: false }),
+        ];
+        expect(countPreviousMatchups('pA', 'pB', history)).toBe(0);
+    });
+
+    it('es simétrico (A vs B = B vs A)', () => {
+        const history: Match[] = [
+            makeMatch({ pairAId: 'pA', pairBId: 'pB', isFinished: true }),
+        ];
+        expect(countPreviousMatchups('pA', 'pB', history))
+            .toBe(countPreviousMatchups('pB', 'pA', history));
+    });
+});
+
+// --- getRepeatOpponentMultiplier ---
+describe('getRepeatOpponentMultiplier', () => {
+    it('devuelve 1.0 en el primer encuentro (0 previos)', () => {
+        expect(getRepeatOpponentMultiplier(0)).toBe(1.0);
+    });
+
+    it('devuelve 0.5 para 1 partido previo', () => {
+        expect(getRepeatOpponentMultiplier(1)).toBe(0.5);
+    });
+
+    it('devuelve 0.25 para 2 partidos previos', () => {
+        expect(getRepeatOpponentMultiplier(2)).toBe(0.25);
+    });
+
+    it('no baja del suelo de 0.125 por muchas repeticiones', () => {
+        expect(getRepeatOpponentMultiplier(10)).toBe(0.125);
+        expect(getRepeatOpponentMultiplier(100)).toBe(0.125);
+    });
+});
+
+// --- applyAntiFraudRules ---
+describe('applyAntiFraudRules', () => {
+    it('torneo oficial: solo aplica multiplicador por repetición', () => {
+        // 1 partido previo → x0.5
+        expect(applyAntiFraudRules(100, true, 1, 0, 0)).toBe(50);
+    });
+
+    it('torneo oficial: no aplica cap diario', () => {
+        // ELO diario ya en 9999 pero no importa en torneo
+        expect(applyAntiFraudRules(100, true, 0, 9999, 0)).toBe(100);
+    });
+
+    it('amistoso: aplica multiplicador amistoso (x0.6)', () => {
+        expect(applyAntiFraudRules(100, false, 0, 0, 0)).toBe(60);
+    });
+
+    it('amistoso: devuelve 0 si se alcanzó el límite de partidos del día', () => {
+        // MAX_DAILY_FRIENDLY_MATCHES = 2
+        expect(applyAntiFraudRules(100, false, 0, 0, 2)).toBe(0);
+    });
+
+    it('amistoso: devuelve 0 si ya se alcanzó el cap diario de ELO', () => {
+        // DAILY_ELO_CAP_FRIENDLY = 80
+        expect(applyAntiFraudRules(100, false, 0, 80, 0)).toBe(0);
+    });
+
+    it('amistoso: recorta la ganancia para no superar el cap diario', () => {
+        // Ya ganados 50 ELO hoy. 100 * 0.6 = 60 pero solo caben 30 → 30
+        expect(applyAntiFraudRules(100, false, 0, 50, 0)).toBe(30);
+    });
+
+    it('amistoso: pérdida de ELO no está sujeta al cap diario', () => {
+        // Cap ya al máximo pero la pérdida sigue aplicando
+        expect(applyAntiFraudRules(-100, false, 0, 80, 0)).toBe(-60);
+    });
+
+    it('amistoso: combina multiplicador de repetición y amistoso', () => {
+        // 1 previo (x0.5) + amistoso (x0.6) = x0.3 → 30
+        expect(applyAntiFraudRules(100, false, 1, 0, 0)).toBe(30);
     });
 });

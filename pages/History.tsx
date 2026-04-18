@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useHistory } from '../store/HistoryContext';
 import { Calendar, Trophy, ChevronDown, ChevronUp, Shield, Loader2 } from 'lucide-react';
 import { EmptyState } from '../components';
-import { Player, Pair, Match } from '../types';
+import { Player, Pair, TournamentMatch as Match } from '../types';
 import { supabase } from '../lib/supabase';
 
 type DetailData = { players: Player[]; pairs: Pair[]; matches: Match[] };

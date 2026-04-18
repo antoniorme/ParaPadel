@@ -1,5 +1,5 @@
 
-import { Match, Group, TournamentState, Pair, Player, TournamentFormat } from '../types';
+import { TournamentMatch as Match, Group, TournamentState, Pair, Player, TournamentFormat } from '../types';
 import { GROUP_NAMES_16, GROUP_NAMES_12, GROUP_NAMES_10, GROUP_NAMES_8, getRankedPairsForGroup, generateGroupsHelper } from './logic_helpers';
 
 export const recalculateStats = (pairs: Pair[], matches: Match[]) => {

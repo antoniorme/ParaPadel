@@ -7,6 +7,10 @@
 
 -- ── players ──────────────────────────────────────────────────
 
+-- user_id es el club admin que gestiona al jugador.
+-- Para jugadores auto-registrados (sin club) debe ser nullable.
+ALTER TABLE players ALTER COLUMN user_id DROP NOT NULL;
+
 DROP POLICY IF EXISTS "player_self_insert" ON players;
 CREATE POLICY "player_self_insert" ON players
   FOR INSERT WITH CHECK (profile_user_id = auth.uid());

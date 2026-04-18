@@ -1,5 +1,5 @@
 
-import { Player, Pair, Match } from '../types';
+import { Player, Pair, TournamentMatch as Match } from '../types';
 
 // CONFIGURACIÓN ELO
 // Escala x5 respecto a la anterior (aprox).

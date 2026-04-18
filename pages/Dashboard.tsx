@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
-import { Modal } from '../components';
+import { Modal, StatCard } from '../components';
 import { TournamentFormat, GenerationMethod, Pair, Player } from '../types';
 import ClubDashboard from './ClubDashboard';
 
@@ -224,25 +224,6 @@ const Dashboard: React.FC = () => {
       } catch (e: any) { setErrorMessage(e.message || "Error manual."); }
   };
 
-  const StatCard = ({ title, value, subValue, icon: Icon, color, onClick, active, fullWidth = false }: any) => (
-    <div 
-      onClick={onClick}
-      className={`p-4 rounded-2xl border transition-all shadow-sm flex flex-col justify-between h-24 relative overflow-hidden ${fullWidth ? 'col-span-2' : ''} ${active ? 'bg-white border-slate-200 hover:border-blue-300 cursor-pointer' : 'bg-slate-50 border-slate-100 text-slate-400'}`}
-    >
-      <div className="flex justify-between items-start z-10">
-          <div>
-              <h3 className="text-[10px] font-bold uppercase tracking-wider opacity-70">{title}</h3>
-              <div className={`text-2xl font-black tracking-tight mt-1 ${active ? 'text-slate-800' : 'text-slate-400'}`}>{value}</div>
-          </div>
-          <div className={`p-2 rounded-xl ${active ? color.replace('text-', 'bg-').replace('400', '50') + ' ' + color.replace('400', '600') : 'bg-slate-100 text-slate-300'}`}>
-            <Icon size={20} />
-          </div>
-      </div>
-      {subValue && active && (
-          <div className="text-[10px] font-bold text-slate-500 mt-auto z-10">{subValue}</div>
-      )}
-    </div>
-  );
 
   return (
     <div className="pb-10 space-y-6">
@@ -280,14 +261,44 @@ const Dashboard: React.FC = () => {
 
       {/* 2. KEY METRICS GRID (Responsive 2 cols -> 4 cols on Desktop) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard title="Inscritos" value={`${titularPairs.length}/${currentLimit}`} subValue={reservePairs.length > 0 ? `+${reservePairs.length} Reservas` : null} icon={Users} color="text-blue-400" active={true} onClick={() => navigate('/registration')} />
+          <StatCard
+            value={`${titularPairs.length}/${currentLimit}`}
+            label="Inscritos"
+            delta={reservePairs.length > 0 ? `+${reservePairs.length} Reservas` : undefined}
+            deltaType="neutral"
+            icon={<Users size={20} />}
+            onClick={() => navigate('/registration')}
+          />
           {isActiveMode ? (
-              <StatCard title="Ronda Actual" value={`Ronda ${state.currentRound}`} icon={Clock} color="text-emerald-400" active={true} onClick={() => navigate('/active')} />
+              <StatCard
+                value={`Ronda ${state.currentRound}`}
+                label="Ronda Actual"
+                icon={<Clock size={20} />}
+                valueColor="success"
+                onClick={() => navigate('/active')}
+              />
           ) : (
-              <StatCard title="Formato" value={`Mini ${currentLimit}`} icon={LayoutGrid} color="text-indigo-400" active={true} onClick={() => navigate('/setup')} />
+              <StatCard
+                value={`Mini ${currentLimit}`}
+                label="Formato"
+                icon={<LayoutGrid size={20} />}
+                valueColor="brand"
+                onClick={() => navigate('/setup')}
+              />
           )}
-          <StatCard title="Control" value="Pistas" icon={Settings} color="text-slate-400" active={true} onClick={() => navigate('/checkin')} />
-          <StatCard title="Resultados" value="Live" icon={Trophy} color="text-amber-400" active={true} onClick={() => navigate('/results')} />
+          <StatCard
+            value="Pistas"
+            label="Control"
+            icon={<Settings size={20} />}
+            onClick={() => navigate('/checkin')}
+          />
+          <StatCard
+            value="Live"
+            label="Resultados"
+            icon={<Trophy size={20} />}
+            valueColor="warning"
+            onClick={() => navigate('/results')}
+          />
       </div>
 
       {/* 3. SETUP PHASE PANEL */}
