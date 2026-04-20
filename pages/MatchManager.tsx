@@ -4,7 +4,7 @@ import { useHistory } from '../store/HistoryContext';
 import { useToast } from '../components/Toast';
 import { Modal, Button, EmptyState, Badge, PlayerSelector } from '../components';
 import { THEME } from '../utils/theme';
-import { calculateDisplayRanking, calculateMatchDelta, getPairTeamElo } from '../utils/Elo';
+import { calculateMatchDelta } from '../utils/Elo';
 import { generateClubMatchesText, openWhatsApp } from '../utils/whatsapp';
 import { supabase } from '../lib/supabase';
 import { Player, Match, MatchParticipant } from '../types';
@@ -12,7 +12,7 @@ import { MATCH_LEVELS } from '../utils/categories';
 import {
   Swords, Plus, CheckCircle2, Clock, Trash2,
   ChevronDown, ChevronUp, MapPin, Zap, Users, MessageCircle,
-  LayoutGrid, ChevronRight,
+  LayoutGrid, ChevronRight, Flag, ShieldCheck,
 } from 'lucide-react';
 
 // ── HELPERS CALENDARIO ────────────────────────────────────────────────────────
@@ -78,6 +78,10 @@ const MatchManager: React.FC = () => {
   // Delete modal
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Dispute resolution
+  const [resolvingDispute, setResolvingDispute] = useState<string | null>(null);
+  const [resolving, setResolving] = useState(false);
 
   const allPlayers: Player[] = state.players;
   const clubId = clubData?.id || state.players[0]?.user_id;
@@ -149,7 +153,10 @@ const MatchManager: React.FC = () => {
             category_ratings, main_category, categories
           )
         ),
-        match_results ( id, team_a_score, team_b_score, status, rating_impact_mode )
+        match_results (
+          id, team_a_score, team_b_score, status, rating_impact_mode,
+          match_result_disputes ( id, raised_by_user_id, reason, status )
+        )
       `)
       .eq('club_id', clubId)
       .order('scheduled_at', { ascending: false });
@@ -229,6 +236,38 @@ const MatchManager: React.FC = () => {
     loadMatches();
   };
 
+  // ── CLUB RATING HELPER ──────────────────────────────────────
+
+  const applyClubRating = async (m: Match, teamAScore: number, teamBScore: number) => {
+    const parts = (m.match_participants || []) as MatchParticipant[];
+    const teamA = parts.filter(p => p.team === 'A' && p.player).map(p => p.player as Player);
+    const teamB = parts.filter(p => p.team === 'B' && p.player).map(p => p.player as Player);
+    if (teamA.length === 0 || teamB.length === 0) return;
+
+    const clubElo = (p: Player) => p.club_rating ?? 1200;
+    const eloA = teamA.length === 2
+      ? (clubElo(teamA[0]) + clubElo(teamA[1])) / 2
+      : clubElo(teamA[0]);
+    const eloB = teamB.length === 2
+      ? (clubElo(teamB[0]) + clubElo(teamB[1])) / 2
+      : clubElo(teamB[0]);
+
+    const delta = calculateMatchDelta(eloA, eloB, teamAScore, teamBScore);
+    const allPlayers = [
+      ...teamA.map(p => ({ p, d: delta })),
+      ...teamB.map(p => ({ p, d: -delta })),
+    ];
+
+    await Promise.all(allPlayers.map(({ p, d }) =>
+      supabase.from('players').update({
+        club_rating: Math.max(100, Math.round(clubElo(p) + d)),
+        club_confidence: (p.club_confidence ?? 0) + 1,
+      }).eq('id', p.id)
+    ));
+
+    await supabase.from('free_matches').update({ elo_processed: true }).eq('id', m.id);
+  };
+
   // ── SAVE SCORE + ELO ────────────────────────────────────────
 
   const handleSaveScore = async () => {
@@ -259,28 +298,9 @@ const MatchManager: React.FC = () => {
       .update({ status: 'finished', result_status: 'final' })
       .eq('id', scoreMatch.id);
 
-    // 3. Procesar ELO si no está procesado
+    // 3. Procesar club_rating si no está procesado
     if (!scoreMatch.elo_processed) {
-      const parts = scoreMatch.match_participants || [];
-      const teamA = parts.filter(p => p.team === 'A' && p.player).map(p => p.player as Player);
-      const teamB = parts.filter(p => p.team === 'B' && p.player).map(p => p.player as Player);
-
-      if (teamA.length > 0 && teamB.length > 0) {
-        const eloA = teamA.length === 2 ? getPairTeamElo(teamA[0], teamA[1]) : calculateDisplayRanking(teamA[0]);
-        const eloB = teamB.length === 2 ? getPairTeamElo(teamB[0], teamB[1]) : calculateDisplayRanking(teamB[0]);
-        const delta = calculateMatchDelta(eloA, eloB, a, b);
-
-        const updates = [
-          ...teamA.map(p => ({ id: p.id, delta, current: calculateDisplayRanking(p) })),
-          ...teamB.map(p => ({ id: p.id, delta: -delta, current: calculateDisplayRanking(p) })),
-        ];
-
-        await Promise.all(updates.map(({ id, delta: d, current }) =>
-          supabase.from('players').update({ global_rating: Math.max(100, Math.round(current + d)) }).eq('id', id)
-        ));
-
-        await supabase.from('free_matches').update({ elo_processed: true }).eq('id', scoreMatch.id);
-      }
+      await applyClubRating(scoreMatch, a, b);
     }
 
     setSavingScore(false);
@@ -301,6 +321,37 @@ const MatchManager: React.FC = () => {
     success('Partido eliminado');
     setDeleteId(null);
     loadMatches();
+  };
+
+  // ── RESOLVE DISPUTE ─────────────────────────────────────────
+
+  const handleResolveDispute = async () => {
+    if (!resolvingDispute) return;
+    setResolving(true);
+
+    const [{ error: resErr }, { error: dispErr }] = await Promise.all([
+      supabase.from('match_results').update({ status: 'final' }).eq('id', resolvingDispute),
+      supabase.from('match_result_disputes').update({ status: 'resolved' }).eq('match_result_id', resolvingDispute),
+    ]);
+
+    if (resErr || dispErr) {
+      toastError('Error al resolver la disputa');
+    } else {
+      // Apply club_rating for the resolved match
+      const m = matches.find(match =>
+        (match.match_results || []).some((r: any) => r.id === resolvingDispute)
+      );
+      if (m && !m.elo_processed) {
+        const result = (m.match_results || []).find((r: any) => r.id === resolvingDispute);
+        if (result) {
+          await applyClubRating(m, result.team_a_score, result.team_b_score);
+        }
+      }
+      success('Resultado finalizado · club_rating actualizado');
+      setResolvingDispute(null);
+      loadMatches();
+    }
+    setResolving(false);
   };
 
   // ── HELPERS UI ──────────────────────────────────────────────
@@ -324,10 +375,11 @@ const MatchManager: React.FC = () => {
     const p1b = allPlayers.find(p => p.id === form.p1b);
     const p2b = allPlayers.find(p => p.id === form.p2b);
     if (!p1a || !p1b) return null;
-    const eloA = p2a ? getPairTeamElo(p1a, p2a) : calculateDisplayRanking(p1a);
-    const eloB = p2b ? getPairTeamElo(p1b, p2b) : calculateDisplayRanking(p1b);
+    const cr = (p: Player) => p.club_rating ?? 1200;
+    const eloA = p2a ? (cr(p1a) + cr(p2a)) / 2 : cr(p1a);
+    const eloB = p2b ? (cr(p1b) + cr(p2b)) / 2 : cr(p1b);
     const delta = Math.abs(calculateMatchDelta(eloA, eloB, 1, 0));
-    return { eloA, eloB, delta };
+    return { eloA: Math.round(eloA), eloB: Math.round(eloB), delta };
   };
   const preview = eloPreview();
 
@@ -514,11 +566,19 @@ const MatchManager: React.FC = () => {
                         <div className="text-base font-black text-slate-800 tabular-nums">
                           {result.team_a_score} – {result.team_b_score}
                         </div>
-                        {m.elo_processed && (
+                        {result.status === 'disputed' || (result.match_result_disputes || []).some((d: any) => d.status === 'open') ? (
+                          <div className="text-[10px] font-bold text-rose-500 flex items-center justify-end gap-0.5">
+                            <Flag size={9} /> Disputado
+                          </div>
+                        ) : result.status === 'pending_confirmation' ? (
+                          <div className="text-[10px] font-bold text-amber-500 flex items-center justify-end gap-0.5">
+                            <Clock size={9} /> Pendiente 24h
+                          </div>
+                        ) : m.elo_processed ? (
                           <div className="text-[10px] font-bold text-emerald-600 flex items-center justify-end gap-0.5">
                             <Zap size={9} /> ELO ok
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     ) : (
                       <Badge variant="neutral">Pendiente</Badge>
@@ -556,7 +616,7 @@ const MatchManager: React.FC = () => {
                                 </div>
                                 <span className="text-xs font-bold text-slate-700 truncate">{pl.name}</span>
                                 <span className="text-[10px] font-bold text-slate-400 ml-auto tabular-nums">
-                                  {calculateDisplayRanking(pl)}
+                                  {pl.club_rating ?? 1200}
                                 </span>
                               </div>
                             ))}
@@ -568,6 +628,31 @@ const MatchManager: React.FC = () => {
                     {m.notes && (
                       <p className="text-xs text-slate-400 italic">{m.notes}</p>
                     )}
+
+                    {/* Disputes */}
+                    {result && (() => {
+                      const disputes: any[] = result.match_result_disputes || [];
+                      const openDisputes = disputes.filter((d: any) => d.status === 'open');
+                      if (openDisputes.length === 0) return null;
+                      return (
+                        <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 space-y-2">
+                          <div className="flex items-center gap-1.5 text-xs font-black text-rose-600 uppercase tracking-wider">
+                            <Flag size={12} /> {openDisputes.length} disputa{openDisputes.length > 1 ? 's' : ''} abierta{openDisputes.length > 1 ? 's' : ''}
+                          </div>
+                          {openDisputes.map((d: any) => d.reason && (
+                            <p key={d.id} className="text-xs text-rose-700 bg-rose-100 rounded-lg px-2 py-1.5">
+                              "{d.reason}"
+                            </p>
+                          ))}
+                          <Button
+                            variant="primary"
+                            onClick={() => setResolvingDispute(result.id)}
+                          >
+                            <ShieldCheck size={14} /> Finalizar resultado
+                          </Button>
+                        </div>
+                      );
+                    })()}
 
                     <div className="flex gap-2 pt-1">
                       {!result && (
@@ -672,7 +757,7 @@ const MatchManager: React.FC = () => {
                 Si gana Pareja A: <strong>+{preview.delta} / -{preview.delta}</strong> pts
               </div>
               <div className="text-xs text-indigo-500">
-                ELO medio A: {preview.eloA} vs B: {preview.eloB}
+                Rating club A: {preview.eloA} vs B: {preview.eloB}
               </div>
             </div>
           )}
@@ -733,6 +818,23 @@ const MatchManager: React.FC = () => {
             )}
           </div>
         )}
+      </Modal>
+
+      {/* ── RESOLVE DISPUTE MODAL ────────────────────────────── */}
+      <Modal
+        isOpen={!!resolvingDispute}
+        onClose={() => setResolvingDispute(null)}
+        title="¿Finalizar resultado?"
+        icon={<ShieldCheck size={22} />}
+        iconColor="info"
+        actions={[
+          { label: 'Cancelar', onClick: () => setResolvingDispute(null), variant: 'secondary' },
+          { label: 'Confirmar y finalizar', onClick: handleResolveDispute, variant: 'primary', loading: resolving },
+        ]}
+      >
+        <p className="text-sm text-slate-600">
+          El resultado se marcará como <strong>final</strong> y se aplicará el ELO de partidos libres automáticamente. Esta acción no se puede deshacer.
+        </p>
       </Modal>
 
       {/* ── DELETE MODAL ─────────────────────────────────────── */}

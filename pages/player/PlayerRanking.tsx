@@ -47,6 +47,7 @@ const PlayerRanking: React.FC = () => {
   const [filterCat, setFilterCat] = useState<string>('Todos');
 
   const [search, setSearch] = useState('');
+  const [ratingMode, setRatingMode] = useState<'global' | 'club'>('global');
   const [myPlayerId] = useState<string>(() => localStorage.getItem('padel_sim_player_id') || '');
 
   // ── Cargar clubs del jugador ───────────────────────────────────
@@ -168,8 +169,11 @@ const PlayerRanking: React.FC = () => {
   const myGeneralPlayer = generalSorted.find(p => p.id === myPlayerId);
 
   // ── Render helpers ────────────────────────────────────────────
-  const renderPlayerRow = (player: Player, idx: number) => {
+  const renderPlayerRow = (player: Player, idx: number, mode: 'global' | 'club' = 'global') => {
     const isMe = player.id === myPlayerId;
+    const displayRating = mode === 'club'
+      ? (player.club_rating ?? 1200)
+      : calculateDisplayRanking(player);
     return (
       <div
         key={player.id}
@@ -195,11 +199,13 @@ const PlayerRanking: React.FC = () => {
             {isMe && <span className="ml-1.5 text-[10px] font-black text-indigo-500 bg-indigo-100 px-1 py-0.5 rounded-full">TÚ</span>}
           </span>
           <span className="text-[10px] text-slate-400">
-            {CATEGORY_SHORT[categoryFromElo(calculateDisplayRanking(player))]}
+            {mode === 'club'
+              ? `Confianza: ${player.club_confidence ?? 0} partidos`
+              : CATEGORY_SHORT[categoryFromElo(calculateDisplayRanking(player))]}
           </span>
         </div>
         <div className={`text-sm font-black tabular-nums shrink-0 ${isMe ? 'text-indigo-600' : 'text-slate-700'}`}>
-          {calculateDisplayRanking(player)}
+          {displayRating}
         </div>
       </div>
     );
@@ -239,18 +245,38 @@ const PlayerRanking: React.FC = () => {
             <p className="text-slate-500 font-bold text-sm">Aún no has jugado en ningún club</p>
             <p className="text-xs text-slate-400 mt-1">Únete a un partido para aparecer en el ranking</p>
           </div>
-        ) : (
+        ) : (<>
+          {/* Rating mode toggle */}
+          <div className="flex gap-1 mb-3 bg-slate-100 rounded-xl p-1">
+            {([['global', 'ELO Torneos'], ['club', 'Partidos Libres']] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setRatingMode(key)}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all ${
+                  ratingMode === key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="space-y-3">
             {clubs.map(club => {
               const isExpanded = expandedId === club.id;
               const color = getClubColor(club.name);
               const clubSearch = search.toLowerCase();
+              const sortedByMode = [...club.players].sort((a, b) =>
+                ratingMode === 'club'
+                  ? (b.club_rating ?? 1200) - (a.club_rating ?? 1200)
+                  : calculateDisplayRanking(b) - calculateDisplayRanking(a)
+              );
               const filteredPlayers = isExpanded
-                ? club.players.filter(p =>
+                ? sortedByMode.filter(p =>
                     p.name.toLowerCase().includes(clubSearch) ||
                     (p.nickname || '').toLowerCase().includes(clubSearch)
                   )
                 : [];
+              const myRankByMode = sortedByMode.findIndex(p => p.id === myPlayerId) + 1;
 
               return (
                 <div key={club.id} className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
@@ -276,12 +302,12 @@ const PlayerRanking: React.FC = () => {
                     </div>
 
                     {/* Mi posición */}
-                    {club.myRank > 0 ? (
+                    {myRankByMode > 0 ? (
                       <div
                         className="shrink-0 px-3 py-1.5 rounded-xl text-white text-xs font-black"
-                        style={{ background: club.myRank <= 3 ? color : THEME.cta }}
+                        style={{ background: myRankByMode <= 3 ? color : THEME.cta }}
                       >
-                        {club.myRank <= 3 ? MEDAL[club.myRank - 1] : `#${club.myRank}`}
+                        {myRankByMode <= 3 ? MEDAL[myRankByMode - 1] : `#${myRankByMode}`}
                       </div>
                     ) : (
                       <div className="shrink-0 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-400 text-xs font-bold">
@@ -314,7 +340,7 @@ const PlayerRanking: React.FC = () => {
                         <div className="py-6 text-center text-xs text-slate-400">Sin resultados</div>
                       ) : (
                         <div className="divide-y divide-slate-50">
-                          {filteredPlayers.map((p, idx) => renderPlayerRow(p, club.players.indexOf(p)))}
+                          {filteredPlayers.map((p, idx) => renderPlayerRow(p, sortedByMode.indexOf(p), ratingMode))}
                         </div>
                       )}
                     </div>
@@ -323,7 +349,7 @@ const PlayerRanking: React.FC = () => {
               );
             })}
           </div>
-        )
+        </>)
       )}
 
       {/* ── TAB: GENERAL ── */}

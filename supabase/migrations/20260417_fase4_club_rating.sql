@@ -31,8 +31,8 @@ DECLARE
   v_actual       float;
   v_delta        int;
 BEGIN
-  -- Solo cuando pasa A 'final' desde otro estado
-  IF NEW.status <> 'final' OR OLD.status = 'final' THEN
+  -- Solo cuando el nuevo estado es 'final' y no venía ya de 'final'
+  IF NEW.status <> 'final' OR (OLD IS NOT NULL AND OLD.status = 'final') THEN
     RETURN NEW;
   END IF;
 
@@ -142,7 +142,7 @@ $$;
 
 DROP TRIGGER IF EXISTS tr_apply_club_ratings ON match_results;
 CREATE TRIGGER tr_apply_club_ratings
-  AFTER UPDATE ON match_results
+  AFTER INSERT OR UPDATE ON match_results
   FOR EACH ROW
   EXECUTE FUNCTION fn_apply_club_ratings();
 
