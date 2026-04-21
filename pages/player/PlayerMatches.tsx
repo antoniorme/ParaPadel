@@ -206,7 +206,18 @@ const PlayerMatches: React.FC = () => {
   }, [currentPlayer, pastTournaments, state]);
 
   const { tournaments, stats } = historyData;
+
+  const freeWins = useMemo(() =>
+    partidos.filter(p => {
+      const myScore = p.myTeam === 'A' ? p.score_a : p.score_b;
+      const oppScore = p.myTeam === 'A' ? p.score_b : p.score_a;
+      return myScore > oppScore;
+    }).length,
+  [partidos]);
+
   const totalMatches = stats.matches + partidos.length;
+  const totalWins = stats.wins + freeWins;
+  const totalLosses = totalMatches - totalWins;
 
   // Filtered tournaments — only show those that have at least one matching match
   const filteredTournaments = useMemo(() => {
@@ -228,8 +239,8 @@ const PlayerMatches: React.FC = () => {
 
   const FILTERS: { key: MatchFilter; label: string; count: number }[] = [
     { key: 'all',  label: 'Todos',     count: totalMatches },
-    { key: 'win',  label: 'Victorias', count: stats.wins },
-    { key: 'loss', label: 'Derrotas',  count: totalMatches - stats.wins },
+    { key: 'win',  label: 'Victorias', count: totalWins },
+    { key: 'loss', label: 'Derrotas',  count: totalLosses },
   ];
 
   return (

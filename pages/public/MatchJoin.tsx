@@ -185,6 +185,7 @@ const MatchJoin: React.FC = () => {
     setJoinError(null);
 
     const nextSlot = participants.length + 1;
+    const willBeFull = nextSlot >= match.max_players;
 
     const { error } = await supabase.from('match_participants').insert({
       match_id: match.id,
@@ -199,6 +200,9 @@ const MatchJoin: React.FC = () => {
     if (error) {
       setJoinError('No se pudo unir al partido. Inténtalo de nuevo.');
     } else {
+      if (willBeFull) {
+        await supabase.from('free_matches').update({ status: 'full' }).eq('id', match.id);
+      }
       setJoined(true);
       await fetchMatch();
     }
@@ -213,6 +217,7 @@ const MatchJoin: React.FC = () => {
     setJoinError(null);
 
     const nextSlot = participants.length + 1;
+    const willBeFull = nextSlot >= match.max_players;
 
     const { error } = await supabase.from('match_participants').insert({
       match_id: match.id,
@@ -229,6 +234,9 @@ const MatchJoin: React.FC = () => {
     if (error) {
       setJoinError('No se pudo unir. Inténtalo de nuevo.');
     } else {
+      if (willBeFull) {
+        await supabase.from('free_matches').update({ status: 'full' }).eq('id', match.id);
+      }
       setJoined(true);
       await fetchMatch();
     }

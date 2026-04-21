@@ -91,6 +91,19 @@ const PlayerDashboard: React.FC = () => {
         return <div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"/></div>;
     }
 
+    if (!currentPlayer) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+                <div className="text-5xl mb-4">🎾</div>
+                <h1 className="text-xl font-black text-slate-900 mb-2">Perfil no encontrado</h1>
+                <p className="text-slate-400 text-sm mb-6">Tu cuenta no está vinculada a un jugador todavía.</p>
+                <button onClick={() => navigate('/p/onboarding')} className="text-sm font-bold" style={{ color: '#575AF9' }}>
+                    Completar perfil
+                </button>
+            </div>
+        );
+    }
+
     return (
         <div className="p-6 space-y-8 relative pb-24">
             {/* Banner modo preview superadmin */}
