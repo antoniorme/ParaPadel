@@ -286,8 +286,8 @@ const PlayerMatches: React.FC = () => {
       <div className="grid grid-cols-3 gap-2 mb-4">
         {[
           { label: 'Jugados',   value: totalMatches },
-          { label: 'Victorias', value: stats.wins },
-          { label: 'Ratio',     value: `${stats.winRate}%` },
+          { label: 'Victorias', value: totalWins },
+          { label: 'Ratio',     value: totalMatches > 0 ? `${Math.round((totalWins / totalMatches) * 100)}%` : '0%' },
         ].map(s => (
           <div key={s.label} className="bg-white rounded-xl p-3 text-center border border-slate-100">
             <div className="text-xl font-black text-slate-900">{s.value}</div>

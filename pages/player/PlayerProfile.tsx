@@ -147,9 +147,9 @@ const PlayerProfile: React.FC = () => {
     ]).then(([r1, r2]) => setSocialStats({ followers: r1.count || 0, following: r2.count || 0 }))
       .catch(() => {});
 
-    supabase.from('partidos').select('id', { count: 'exact', head: true })
-      .or(`player1_a.eq.${myPlayerId},player2_a.eq.${myPlayerId},player1_b.eq.${myPlayerId},player2_b.eq.${myPlayerId}`)
-      .eq('is_finished', true)
+    supabase.from('match_participants').select('id', { count: 'exact', head: true })
+      .eq('player_id', myPlayerId)
+      .in('attendance_status', ['joined', 'confirmed'])
       .then(({ count }) => setPartidosCount(count || 0))
       .catch(() => {});
   }, [myPlayerId]);
@@ -396,6 +396,34 @@ const PlayerProfile: React.FC = () => {
             )
           }
         </div>
+
+        {/* ── CLUB RATING CARD ──────────────────────────────────────────────── */}
+        {dbPlayer && (dbPlayer.club_rating != null || (dbPlayer.club_confidence ?? 0) > 0) && (
+          <div className="bg-white rounded-2xl p-4 border border-slate-100">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-black text-slate-900 flex items-center gap-2">
+                <Star size={15} style={{ color: THEME.cta }} /> Rating Partidos Libres
+              </span>
+              <span className="text-xl font-black" style={{ color: THEME.cta }}>
+                {dbPlayer.club_rating ?? 1200}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{
+                    width: `${Math.min(100, Math.max(0, ((dbPlayer.club_rating ?? 1200) - 800) / 16))}%`,
+                    backgroundColor: THEME.cta,
+                  }}
+                />
+              </div>
+              <span className="text-[11px] font-bold text-slate-400">
+                {(dbPlayer.club_confidence ?? 0)} partido{(dbPlayer.club_confidence ?? 0) !== 1 ? 's' : ''} verificado{(dbPlayer.club_confidence ?? 0) !== 1 ? 's' : ''}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* ── FIABILIDAD CARD ────────────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl p-4 border border-slate-100">
