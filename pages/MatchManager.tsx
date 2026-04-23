@@ -3,7 +3,7 @@ import { useTournament } from '../store/TournamentContext';
 import { useHistory } from '../store/HistoryContext';
 import { useToast } from '../components/Toast';
 import { Modal, Button, EmptyState, Badge, PlayerSelector } from '../components';
-import { THEME } from '../utils/theme';
+import { THEME, PP } from '../utils/theme';
 import { calculateMatchDelta } from '../utils/Elo';
 import { generateClubMatchesText, openWhatsApp } from '../utils/whatsapp';
 import { supabase } from '../lib/supabase';
@@ -408,26 +408,40 @@ const MatchManager: React.FC = () => {
   // ── RENDER ──────────────────────────────────────────────────
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div style={{ fontFamily: PP.font }} className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <h1 className="text-2xl font-black text-slate-900">Partidos</h1>
-          <p className="text-sm text-slate-400 mt-0.5">Partidos libres del club</p>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: PP.ink, letterSpacing: -0.8, lineHeight: 1.05 }}>Partidos Abiertos</h1>
+          <p style={{ fontSize: 13.5, color: PP.mute, fontWeight: 500, marginTop: 6 }}>
+            Partidos libres publicados · los jugadores se unen por enlace público
+          </p>
         </div>
-        <div className="flex gap-2">
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
           {filtered.some(m => m.status === 'open') && (
             <button
               onClick={handleShareClub}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-black text-white"
-              style={{ background: '#25D366' }}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                padding: '9px 14px', borderRadius: 10, border: 0,
+                background: '#25D366', color: '#fff',
+                fontFamily: PP.font, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              }}
             >
-              <MessageCircle size={15} /> WhatsApp
+              <MessageCircle size={15}/> Compartir todos
             </button>
           )}
-          <Button variant="primary" onClick={() => setShowCreate(true)}>
-            <Plus size={16} /> Nuevo partido
-          </Button>
+          <button
+            onClick={() => setShowCreate(true)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '9px 14px', borderRadius: 10, border: 0,
+              background: PP.primary, color: '#fff',
+              fontFamily: PP.font, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            <Plus size={15}/> Crear partido
+          </button>
         </div>
       </div>
 
@@ -490,17 +504,21 @@ const MatchManager: React.FC = () => {
       )}
 
       {/* Tabs */}
-      <div className="flex bg-slate-100 rounded-xl p-1">
+      <div style={{ display: 'flex', background: PP.hairStrong, borderRadius: 12, padding: 4, width: 'fit-content' }}>
         {([['pending', 'Pendientes'], ['finished', 'Finalizados']] as const).map(([v, l]) => (
           <button
             key={v}
             onClick={() => setTab(v)}
-            className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
-              tab === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
-            }`}
+            style={{
+              padding: '8px 20px', borderRadius: 9, border: 0, cursor: 'pointer',
+              fontFamily: PP.font, fontSize: 13, fontWeight: 700,
+              background: tab === v ? PP.card : 'transparent',
+              color: tab === v ? PP.ink : PP.mute,
+              boxShadow: tab === v ? PP.shadow : 'none',
+            }}
           >
             {l}
-            {tab === v && <span className="ml-1 text-xs font-black text-slate-400">({filtered.length})</span>}
+            {tab === v && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 800, color: PP.muteSoft }}>({filtered.length})</span>}
           </button>
         ))}
       </div>
@@ -515,78 +533,80 @@ const MatchManager: React.FC = () => {
           body={tab === 'pending' ? 'Crea un partido libre entre jugadores del club.' : 'Los partidos terminados aparecerán aquí.'}
         />
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filtered.map(m => {
             const isExpanded = expandedId === m.id;
             const teamA = getTeamPlayers(m, 'A');
             const teamB = getTeamPlayers(m, 'B');
             const result = getResult(m);
+            const timeStr = m.scheduled_at ? fmtTime(m.scheduled_at) : '—';
             const dateInfo = fmtDate(m.scheduled_at);
 
             return (
-              <div key={m.id} className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
+              <div key={m.id} style={{
+                background: PP.card, border: `1px solid ${PP.hair}`,
+                borderRadius: 16, boxShadow: PP.shadow,
+                overflow: 'hidden', display: 'flex', flexDirection: 'column',
+              }}>
                 <button
-                  className="w-full p-4 text-left flex items-center gap-3 hover:bg-slate-50 transition-colors"
+                  style={{ width: '100%', background: 'none', border: 0, textAlign: 'left', cursor: 'pointer', padding: 0 }}
                   onClick={() => setExpandedId(isExpanded ? null : m.id)}
                 >
-                  {/* Date */}
-                  <div className="shrink-0 w-12 text-center">
-                    <div className="text-lg font-black text-slate-800">{dateInfo.day}</div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase">{dateInfo.month}</div>
-                  </div>
-
-                  {/* Teams */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                      <span className="truncate">{pairLabel(teamA)}</span>
-                      <span className="text-slate-300 shrink-0 text-xs font-black">VS</span>
-                      <span className="truncate">{pairLabel(teamB)}</span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {m.court && (
-                        <span className="text-xs text-slate-400 flex items-center gap-1">
-                          <MapPin size={10} /> {m.court}
-                        </span>
-                      )}
-                      {m.scheduled_at && (
-                        <span className="text-xs text-slate-400 flex items-center gap-1">
-                          <Clock size={10} /> {fmtTime(m.scheduled_at)}
-                        </span>
-                      )}
-                      {m.level && (
-                        <span className="text-xs font-bold text-slate-400">{m.level}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Score / Status */}
-                  <div className="shrink-0 text-right">
-                    {result ? (
-                      <div>
-                        <div className="text-base font-black text-slate-800 tabular-nums">
-                          {result.team_a_score} – {result.team_b_score}
-                        </div>
-                        {result.status === 'disputed' || (result.match_result_disputes || []).some((d: any) => d.status === 'open') ? (
-                          <div className="text-[10px] font-bold text-rose-500 flex items-center justify-end gap-0.5">
-                            <Flag size={9} /> Disputado
-                          </div>
-                        ) : result.status === 'pending_confirmation' ? (
-                          <div className="text-[10px] font-bold text-amber-500 flex items-center justify-end gap-0.5">
-                            <Clock size={9} /> Pendiente 24h
-                          </div>
-                        ) : m.elo_processed ? (
-                          <div className="text-[10px] font-bold text-emerald-600 flex items-center justify-end gap-0.5">
-                            <Zap size={9} /> ELO ok
-                          </div>
-                        ) : null}
+                  {/* Time hero header */}
+                  <div style={{ display: 'flex', alignItems: 'stretch', borderBottom: `1px solid ${PP.hair}` }}>
+                    <div style={{ padding: '14px 12px 14px 16px', borderRight: `1px solid ${PP.hair}`, minWidth: 76, flexShrink: 0 }}>
+                      <div style={{ fontSize: 28, fontWeight: 800, color: PP.ink, letterSpacing: -1, lineHeight: 1, fontFeatureSettings: '"tnum"' }}>{timeStr}</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: PP.mute, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 4 }}>
+                        {dateInfo.day} {dateInfo.month}
                       </div>
-                    ) : (
-                      <Badge variant="neutral">Pendiente</Badge>
-                    )}
+                    </div>
+                    <div style={{ flex: 1, padding: '14px 14px 14px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 4, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <div style={{ minWidth: 0 }}>
+                          {m.court && <div style={{ fontSize: 13, fontWeight: 700, color: PP.ink, letterSpacing: -0.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.court}</div>}
+                          <div style={{ fontSize: 11, color: PP.mute, fontWeight: 500, marginTop: 2 }}>
+                            {m.level ? `Nivel ${m.level}` : 'Libre'}
+                          </div>
+                        </div>
+                        <div style={{ flexShrink: 0 }}>
+                          {result ? (
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: 15, fontWeight: 800, color: PP.ink, fontFeatureSettings: '"tnum"' }}>
+                                {result.team_a_score} – {result.team_b_score}
+                              </div>
+                              {result.status === 'disputed' || (result.match_result_disputes || []).some((d: any) => d.status === 'open') ? (
+                                <div style={{ fontSize: 10, fontWeight: 700, color: PP.error, display: 'flex', alignItems: 'center', gap: 3, justifyContent: 'flex-end' }}>
+                                  <Flag size={9}/> Disputado
+                                </div>
+                              ) : result.status === 'pending_confirmation' ? (
+                                <div style={{ fontSize: 10, fontWeight: 700, color: PP.warn, display: 'flex', alignItems: 'center', gap: 3, justifyContent: 'flex-end' }}>
+                                  <Clock size={9}/> Pendiente
+                                </div>
+                              ) : m.elo_processed ? (
+                                <div style={{ fontSize: 10, fontWeight: 700, color: PP.ok, display: 'flex', alignItems: 'center', gap: 3, justifyContent: 'flex-end' }}>
+                                  <Zap size={9}/> ELO ok
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', background: PP.primaryTint, color: PP.primary, fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 8 }}>
+                              Abierto
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px 0 0', flexShrink: 0 }}>
+                      {isExpanded ? <ChevronUp size={14} color={PP.muteSoft}/> : <ChevronDown size={14} color={PP.muteSoft}/>}
+                    </div>
                   </div>
-                  {isExpanded
-                    ? <ChevronUp size={16} className="text-slate-400 shrink-0" />
-                    : <ChevronDown size={16} className="text-slate-400 shrink-0" />}
+
+                  {/* Teams strip */}
+                  <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: PP.ink, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pairLabel(teamA)}</span>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: PP.muteSoft, flexShrink: 0 }}>VS</span>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: PP.ink, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right' }}>{pairLabel(teamB)}</span>
+                  </div>
                 </button>
 
                 {/* Expanded detail */}

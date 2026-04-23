@@ -28,8 +28,8 @@ export const PlayerLayout: React.FC<{ children: React.ReactNode }> = ({ children
               <div className="font-black text-xl italic tracking-tighter text-slate-900">
                   Para<span style={{color: THEME.cta}}>Pádel</span>
               </div>
-              <button 
-                onClick={() => navigate('/notifications')} 
+              <button
+                onClick={() => navigate('/p/notifications')}
                 className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors"
               >
                   <Bell size={24} />

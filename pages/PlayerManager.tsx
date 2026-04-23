@@ -222,9 +222,12 @@ const PlayerManager: React.FC = () => {
   const mergeList = state.players.filter(p => p.name.toLowerCase().includes(mergeSearch.toLowerCase()));
 
   return (
-    <div className="space-y-8 pb-20">
-      <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-black text-slate-900">Gestión Jugadores</h2>
+    <div className="space-y-6 pb-20">
+      <div className="flex justify-between items-end gap-4 flex-wrap">
+          <div>
+            <h1 className="font-black text-slate-900" style={{ fontSize: 28, letterSpacing: -0.8, lineHeight: 1.05 }}>Jugadores</h1>
+            <p className="text-sm font-medium mt-1.5 text-slate-500">Miembros del club · ELO y categorías</p>
+          </div>
           <div className="flex gap-2">
               <button
                 onClick={() => setShowMergeModal(true)}

@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { MATCH_LEVELS } from '../utils/categories';
 import { generateClubMatchesText, openWhatsApp } from '../utils/whatsapp';
-import { THEME } from '../utils/theme';
+import { THEME, PP } from '../utils/theme';
 
 // ─── CONSTANTES ───────────────────────────────────────────────────────────────
 
@@ -468,36 +468,49 @@ const ClubCalendar: React.FC = () => {
     const pendingToday = reservations.filter(r => r.status === 'pending' && isSameDay(r.start_at, dateStr));
 
     return (
-        <div className="space-y-3 pb-20">
+        <div className="space-y-4 pb-20" style={{ fontFamily: PP.font }}>
 
             {/* ── HEADER ── */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <button onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() - 7); setSelectedDate(d); }}
-                        className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-600">
-                        <ChevronLeft size={20}/>
-                    </button>
-                    <div>
-                        <div className="font-black text-slate-900 text-sm leading-tight">Semana del {formatWeekRange(selectedDate)}</div>
-                        <div className="text-xs text-slate-500 font-medium">{courts.length} pistas · {formatDateLong(selectedDate)}</div>
-                    </div>
-                    <button onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() + 7); setSelectedDate(d); }}
-                        className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-600">
-                        <ChevronRight size={20}/>
-                    </button>
+            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 4 }}>
+                <div>
+                    <h1 style={{ fontSize: 28, fontWeight: 800, color: PP.ink, letterSpacing: -0.8, lineHeight: 1.05 }}>Pistas</h1>
+                    <p style={{ fontSize: 13.5, color: PP.mute, fontWeight: 500, marginTop: 6 }}>
+                        Calendario semanal · {courts.length} pistas · {formatDateLong(selectedDate)}
+                    </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {/* Week nav */}
+                    <div style={{ display: 'flex', background: PP.card, border: `1px solid ${PP.hair}`, borderRadius: 10, height: 36 }}>
+                        <button onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() - 7); setSelectedDate(d); }}
+                            style={{ width: 34, background: 'none', border: 0, color: PP.ink2, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <ChevronLeft size={16}/>
+                        </button>
+                        <div style={{ width: 1, background: PP.hair }}/>
+                        <button onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() + 7); setSelectedDate(d); }}
+                            style={{ width: 34, background: 'none', border: 0, color: PP.ink2, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <ChevronRight size={16}/>
+                        </button>
+                    </div>
+                    <button onClick={() => setSelectedDate(new Date())}
+                        style={{ padding: '8px 14px', borderRadius: 10, border: `1px solid ${PP.hairStrong}`, background: PP.card, color: PP.ink2, fontFamily: PP.font, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                        Hoy
+                    </button>
                     <button onClick={() => { setRecurringSlotCtx(null); setShowRecurringModal(true); }}
-                        className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-600 hover:bg-amber-100 transition-colors" title="Añadir slot recurrente">
-                        <Repeat size={18}/>
+                        style={{ padding: '8px 12px', borderRadius: 10, border: `1px solid #FDE68A`, background: '#FFFBEB', color: '#92400E', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                        title="Añadir slot recurrente">
+                        <Repeat size={16}/>
                     </button>
                     <button onClick={() => setShowConfig(v => !v)}
-                        className={`p-2.5 border rounded-xl transition-colors ${showConfig ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-200'}`}>
-                        <Settings size={18}/>
+                        style={{ padding: '8px 12px', borderRadius: 10, border: `1px solid ${showConfig ? PP.ink : PP.hairStrong}`, background: showConfig ? PP.ink : PP.card, color: showConfig ? '#fff' : PP.ink2, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                        <Settings size={16}/>
                     </button>
                     <button onClick={() => { loadDayData(); loadRecurringData(); }}
-                        className="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-indigo-600 transition-colors">
-                        <RefreshCw size={18} className={loading ? 'animate-spin' : ''}/>
+                        style={{ padding: '8px 12px', borderRadius: 10, border: `1px solid ${PP.hairStrong}`, background: PP.card, color: PP.ink2, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''}/>
+                    </button>
+                    <button onClick={() => setSlotChoiceData({ courtNumber: courts[0]?.court_number || 1, startTime: '09:00' })}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10, border: 0, background: PP.primary, color: '#fff', fontFamily: PP.font, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                        <Plus size={15}/> Nueva reserva
                     </button>
                 </div>
             </div>
@@ -546,22 +559,28 @@ const ClubCalendar: React.FC = () => {
             )}
 
             {/* ── WEEK STRIP ── */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3">
-                <div className="flex gap-1 justify-between">
-                    {weekDays.map(d => {
-                        const isSelected = toLocalDateStr(d) === dateStr;
-                        const isTodayDay = isToday(d);
-                        return (
-                            <button key={d.toISOString()} onClick={() => setSelectedDate(new Date(d))}
-                                className={`flex-1 flex flex-col items-center py-2 rounded-xl transition-all ${isSelected ? 'text-white' : isTodayDay ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
-                                style={isSelected ? { backgroundColor: THEME.cta } : {}}>
-                                <span className={`text-[9px] font-bold uppercase ${isSelected ? 'text-white/70' : 'text-slate-400'}`}>{DAY_NAMES[d.getDay()]}</span>
-                                <span className={`text-sm font-black ${isSelected ? 'text-white' : 'text-slate-700'}`}>{d.getDate()}</span>
-                                {isTodayDay && !isSelected && <div className="w-1 h-1 rounded-full bg-indigo-500 mt-0.5"/>}
-                            </button>
-                        );
-                    })}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: PP.ink, letterSpacing: -0.2, marginRight: 4 }}>
+                    {new Date(selectedDate).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase())}
                 </div>
+                {weekDays.map(d => {
+                    const isSelected = toLocalDateStr(d) === dateStr;
+                    const isTodayDay = isToday(d);
+                    return (
+                        <button key={d.toISOString()} onClick={() => setSelectedDate(new Date(d))}
+                            style={{
+                                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                                padding: '8px 14px', borderRadius: 10, border: `1px solid ${isSelected ? PP.ink : PP.hair}`,
+                                background: isSelected ? PP.ink : (isTodayDay ? PP.hairStrong : PP.card),
+                                color: isSelected ? '#fff' : PP.ink2,
+                                cursor: 'pointer', minWidth: 52,
+                            }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, opacity: isSelected ? 0.7 : 1, color: isSelected ? 'rgba(255,255,255,0.7)' : PP.mute }}>{DAY_NAMES[d.getDay()]}</span>
+                            <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: -0.3 }}>{d.getDate()}</span>
+                            {isTodayDay && !isSelected && <div style={{ width: 4, height: 4, borderRadius: 2, background: PP.primary, marginTop: 2 }}/>}
+                        </button>
+                    );
+                })}
             </div>
 
             {/* ── PENDIENTES ── */}
@@ -602,10 +621,10 @@ const ClubCalendar: React.FC = () => {
 
             {/* ── GRID CALENDARIO ── */}
             {courts.length > 0 && (
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div style={{ background: PP.card, border: `1px solid ${PP.hair}`, borderRadius: 14, boxShadow: PP.shadow, overflow: 'hidden' }}>
                     {/* Leyenda */}
-                    <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-100 bg-slate-50 flex-wrap">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Leyenda:</span>
+                    <div className="flex items-center gap-3 px-4 py-2 flex-wrap" style={{ borderBottom: `1px solid ${PP.hair}`, background: '#FAFBFD' }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: PP.mute, textTransform: 'uppercase', letterSpacing: 1 }}>Leyenda:</span>
                         <LegendDot color="bg-white border border-dashed border-slate-300" label="Libre"/>
                         <LegendDot color="bg-amber-50 border border-amber-300" label="Pendiente"/>
                         <LegendDot color="bg-indigo-50 border border-indigo-300" label="Confirmada"/>

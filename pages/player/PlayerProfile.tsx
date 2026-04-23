@@ -9,7 +9,7 @@ import { avatarColor, initials as getInitials } from '../../utils/avatar';
 import {
   ArrowLeft, Key, Trash2, AlertTriangle, Lock, Check, Loader2,
   TrendingUp, Shield, ChevronDown, ChevronUp, Edit3, Trophy,
-  Calendar, Star,
+  Calendar, Star, LogOut,
 } from 'lucide-react';
 import { Modal } from '../../components';
 import { calculateDisplayRanking, getPairTeamElo, calculateMatchDelta } from '../../utils/Elo';
@@ -549,6 +549,12 @@ const PlayerProfile: React.FC = () => {
             style={{ width: '100%', padding: '14px 0', borderRadius: 20, border: `1px solid ${PP.hairStrong}`, background: PP.card, color: PP.ink2, fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}
           >
             <Key size={16} /> Cambiar contraseña
+          </button>
+          <button
+            onClick={async () => { await signOut(); navigate('/'); }}
+            style={{ width: '100%', padding: '14px 0', borderRadius: 20, border: `1px solid ${PP.hairStrong}`, background: PP.card, color: PP.ink2, fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}
+          >
+            <LogOut size={16} /> Cerrar sesión
           </button>
           <button
             onClick={() => setShowDeleteConfirm(true)}
