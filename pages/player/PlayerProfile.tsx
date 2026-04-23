@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTournament } from '../../store/TournamentContext';
 import { useHistory } from '../../store/HistoryContext';
 import { useAuth } from '../../store/AuthContext';
-import { THEME } from '../../utils/theme';
+import { THEME, PP } from '../../utils/theme';
+import { avatarColor, initials as getInitials } from '../../utils/avatar';
 import {
   ArrowLeft, Key, Trash2, AlertTriangle, Lock, Check, Loader2,
   TrendingUp, Shield, ChevronDown, ChevronUp, Edit3, Trophy,
@@ -41,47 +42,55 @@ interface ProcessedTournament {
 
 // ── ELO SPARKLINE ─────────────────────────────────────────────────────────────
 
+// Stepped sparkline — cada partido es un escalón (estilo del prototipo)
 const EloSparkline: React.FC<{ data: number[] }> = ({ data }) => {
   if (data.length < 2) return null;
-  const W = 280; const H = 64; const P = 8;
+  const W = 340; const H = 120;
+  const pad = { t: 14, r: 8, b: 18, l: 8 };
+  const w = W - pad.l - pad.r;
+  const h = H - pad.t - pad.b;
   const minV = Math.min(...data);
   const maxV = Math.max(...data);
-  const range = maxV - minV || 200;
-  const pts = data.map((v, i) => ({
-    x: P + (i / (data.length - 1)) * (W - P * 2),
-    y: P + (H - P * 2) - ((v - minV) / range) * (H - P * 2),
-  }));
-  const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join('');
-  const area = `${line} L${pts[pts.length - 1].x.toFixed(1)},${H - P} L${pts[0].x.toFixed(1)},${H - P} Z`;
-  const isPos = data[data.length - 1] >= data[0];
-  const color = isPos ? '#10b981' : '#f43f5e';
+  const range = Math.max(1, maxV - minV);
+  const stepX = w / (data.length - 1);
+  const y = (v: number) => pad.t + h - ((v - minV) / range) * h;
+
+  // Stepped path: horizontal then vertical between points
+  let d = `M ${pad.l} ${y(data[0])}`;
+  for (let i = 1; i < data.length; i++) {
+    const px = pad.l + stepX * i;
+    d += ` L ${px} ${y(data[i - 1])} L ${px} ${y(data[i])}`;
+  }
+  const area = d + ` L ${pad.l + w} ${pad.t + h} L ${pad.l} ${pad.t + h} Z`;
+
   const delta = data[data.length - 1] - data[0];
+  const isPos = delta >= 0;
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-2">
-        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-          <TrendingUp size={11} /> Evolución ELO
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase' as const, letterSpacing: 1 }}>
+          Evolución ELO
         </span>
-        <span className={`text-xs font-black ${isPos ? 'text-emerald-400' : 'text-rose-400'}`}>
+        <span style={{ fontSize: 13, fontWeight: 800, color: isPos ? '#6EE7B7' : '#fca5a5' }}>
           {isPos ? '+' : ''}{Math.round(delta)} pts
         </span>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 64 }}>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', height: H }}>
         <defs>
-          <linearGradient id="eloFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.35" />
-            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          <linearGradient id="eloGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={PP.primary} stopOpacity="0.25"/>
+            <stop offset="100%" stopColor={PP.primary} stopOpacity="0"/>
           </linearGradient>
         </defs>
-        <path d={area} fill="url(#eloFill)" />
-        <path d={line} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx={pts[0].x} cy={pts[0].y} r="3" fill="transparent" stroke={color} strokeWidth="2" />
-        <circle cx={pts[pts.length - 1].x} cy={pts[pts.length - 1].y} r="4" fill={color} stroke="white" strokeWidth="2" />
+        <path d={area} fill="url(#eloGrad)"/>
+        <path d={d} fill="none" stroke={PP.primary} strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter"/>
+        <line x1={pad.l} y1={pad.t + h + 1} x2={pad.l + w} y2={pad.t + h + 1} stroke="rgba(255,255,255,0.08)"/>
+        <circle cx={pad.l + stepX * (data.length - 1)} cy={y(data[data.length - 1])} r="5" fill={PP.primary} stroke="#fff" strokeWidth="2"/>
       </svg>
-      <div className="flex justify-between text-[10px] text-slate-600 font-mono mt-1">
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'rgba(255,255,255,0.4)', fontWeight: 600, marginTop: 4 }}>
         <span>{Math.round(data[0])}</span>
-        <span className="font-bold" style={{ color }}>{Math.round(data[data.length - 1])}</span>
+        <span style={{ color: '#A5B4FC', fontWeight: 800 }}>{Math.round(data[data.length - 1])}</span>
       </div>
     </div>
   );
@@ -285,113 +294,108 @@ const PlayerProfile: React.FC = () => {
   const progressPct = Math.max(0, Math.min(100, ((currentElo - rangeFloor) / 1000) * 100));
   const totalMatches = historyData.stats.matches + partidosCount;
   const fiabilidad = getFiabilidad(totalMatches);
-  const initials = currentPlayer.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  const ac = avatarColor(currentPlayer.name);
+  const avatarInitials = getInitials(currentPlayer.name);
   const displayName = currentPlayer.nickname || currentPlayer.name;
+  const elocat = categoryFromElo(currentElo);
+  const clubcat = currentPlayer.categories?.[0];
 
   return (
-    <div className="bg-slate-50 min-h-screen pb-24">
+    <div style={{ background: PP.bg, minHeight: '100vh', paddingBottom: 96, fontFamily: PP.font }}>
 
-      {/* ── HEADER CARD ─────────────────────────────────────────────────────── */}
-      <div className="bg-white px-5 pt-5 pb-6 rounded-b-3xl shadow-sm border-b border-slate-100">
-        <div className="flex items-center justify-between mb-5">
+      {/* ── HEADER ─────────────────────────────────────────────────────── */}
+      <div style={{ background: PP.card, padding: '20px 20px 24px', borderBottom: `1px solid ${PP.hair}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <button
             onClick={() => navigate('/p/dashboard')}
-            className="p-2 bg-slate-50 border border-slate-100 rounded-full text-slate-400 hover:text-slate-700 transition-colors"
+            style={{ width: 40, height: 40, borderRadius: 14, background: PP.bg, border: `1px solid ${PP.hair}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: PP.ink2, cursor: 'pointer' }}
           >
             <ArrowLeft size={18} />
           </button>
-          <h1 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Mi Perfil</h1>
-          <button onClick={() => setShowChangePassModal(true)} className="p-2 text-slate-400 hover:text-slate-700 transition-colors">
+          <span style={{ fontSize: 12, fontWeight: 700, color: PP.mute, textTransform: 'uppercase', letterSpacing: 1.2 }}>Mi Perfil</span>
+          <button onClick={() => setShowChangePassModal(true)} style={{ width: 40, height: 40, borderRadius: 14, background: PP.bg, border: `1px solid ${PP.hair}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: PP.mute, cursor: 'pointer' }}>
             <Key size={18} />
           </button>
         </div>
 
-        {/* Avatar */}
-        <div className="flex flex-col items-center mb-5">
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#2B2DBF] to-[#575AF9] p-0.5 shadow-xl mb-3">
-            <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center text-2xl font-black text-white">
-              {initials}
-            </div>
+        {/* Avatar + nombre */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 20 }}>
+          <div style={{ width: 96, height: 96, borderRadius: '50%', background: ac.bg, color: ac.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 36, marginBottom: 12 }}>
+            {avatarInitials}
           </div>
-          <h2 className="text-xl font-black text-slate-900">{displayName}</h2>
+          <h2 style={{ fontSize: 24, fontWeight: 800, color: PP.ink, letterSpacing: -0.6, margin: 0 }}>{displayName}</h2>
           {currentPlayer.nickname && currentPlayer.name !== displayName && (
-            <p className="text-sm text-slate-400 mt-0.5">{currentPlayer.name}</p>
+            <p style={{ fontSize: 13, color: PP.mute, fontWeight: 600, marginTop: 2 }}>{currentPlayer.name}</p>
           )}
-          <div className="flex items-center gap-2 mt-2 flex-wrap justify-center">
-            {/* Categoría asignada por el club */}
-            {currentPlayer.categories && currentPlayer.categories.length > 0 && (
-              <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold uppercase">
-                {currentPlayer.categories[0]}
-              </span>
+
+          {/* Category badges — Club + Global */}
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' as const, justifyContent: 'center' }}>
+            {clubcat && (
+              <div style={{ padding: '6px 14px', borderRadius: 12, background: PP.card, border: `1px solid ${PP.hairStrong}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: PP.mute, textTransform: 'uppercase' as const, letterSpacing: 0.8 }}>Club</span>
+                <span style={{ fontSize: 14, fontWeight: 800, color: PP.ink, letterSpacing: -0.3 }}>{clubcat}</span>
+              </div>
             )}
-            {/* Categoría global por ELO — solo si difiere de la del club */}
-            {(() => {
-              const elocat = categoryFromElo(currentElo);
-              const clubcat = currentPlayer.categories?.[0];
-              if (clubcat && clubcat !== elocat) {
-                return (
-                  <span className="flex items-center gap-1 bg-indigo-50 text-indigo-600 border border-indigo-100 px-2.5 py-1 rounded-full text-xs font-bold">
-                    <Trophy size={10} /> Global: {CATEGORY_SHORT[elocat]}
-                  </span>
-                );
-              }
-              if (!clubcat) {
-                return (
-                  <span className="bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-xs font-bold uppercase">
-                    {CATEGORY_SHORT[elocat]}
-                  </span>
-                );
-              }
-              return null;
-            })()}
-            <span className="font-black text-base" style={{ color: THEME.cta }}>{currentElo} pts</span>
-            <span
-              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border"
-              style={{ backgroundColor: `${fiabilidad.color}15`, color: fiabilidad.color, borderColor: `${fiabilidad.color}30` }}
-            >
-              <Shield size={10} /> {fiabilidad.label}
-            </span>
+            <div style={{ padding: '6px 14px', borderRadius: 12, background: PP.primaryTint, border: `1px solid ${PP.hairStrong}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: PP.mute, textTransform: 'uppercase' as const, letterSpacing: 0.8 }}>Global</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: PP.primary, letterSpacing: -0.3 }}>{CATEGORY_SHORT[elocat]}</span>
+            </div>
+            <div style={{ padding: '6px 14px', borderRadius: 12, background: `${fiabilidad.color}15`, border: `1px solid ${fiabilidad.color}30`, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Shield size={10} color={fiabilidad.color} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: fiabilidad.color }}>{fiabilidad.label}</span>
+            </div>
           </div>
         </div>
 
         {/* Stats row */}
-        <div className="grid grid-cols-4 divide-x divide-slate-100">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', borderTop: `1px solid ${PP.hair}`, paddingTop: 16 }}>
           {[
-            { label: 'Jugados',   value: totalMatches,                  color: 'text-slate-900' },
-            { label: 'Victorias', value: `${historyData.stats.winRate}%`, color: 'text-emerald-500' },
-            { label: 'Seguidores', value: socialStats.followers,         color: 'text-slate-900' },
-            { label: 'Títulos',   value: historyData.stats.titles,       color: 'text-amber-500' },
-          ].map(s => (
-            <div key={s.label} className="flex flex-col items-center py-1">
-              <span className={`text-lg font-black ${s.color}`}>{s.value}</span>
-              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wide mt-0.5">{s.label}</span>
+            { label: 'Jugados',    value: totalMatches,                    color: PP.ink },
+            { label: 'Victorias',  value: `${historyData.stats.winRate}%`, color: PP.ok },
+            { label: 'Seguidores', value: socialStats.followers,           color: PP.ink },
+            { label: 'Títulos',    value: historyData.stats.titles,        color: PP.warn },
+          ].map((s, i) => (
+            <div key={s.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 0', borderLeft: i > 0 ? `1px solid ${PP.hair}` : 'none' }}>
+              <span style={{ fontSize: 22, fontWeight: 800, color: s.color, letterSpacing: -0.5 }}>{s.value}</span>
+              <span style={{ fontSize: 9, color: PP.mute, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 0.8, marginTop: 2 }}>{s.label}</span>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="p-4 space-y-4">
+      <div style={{ padding: '16px 16px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
         {/* ── ELO CARD (progress + sparkline) ───────────────────────────────── */}
-        <div className="bg-slate-900 rounded-2xl p-4 text-white">
-          <div className="flex justify-between items-center mb-1.5">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Progreso · {CATEGORY_SHORT[categoryFromElo(currentElo)]}
-            </span>
-            <span className="text-xs font-bold text-slate-400">{Math.round(progressPct)}%</span>
+        <div style={{ background: PP.ink, borderRadius: 24, padding: 20, color: '#fff', boxShadow: PP.shadowLg }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.5)', letterSpacing: 1.4, textTransform: 'uppercase' as const }}>Evolución ELO</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
+                <div style={{ fontSize: 40, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1, fontFeatureSettings: '"tnum"' }}>{currentElo}</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.08)', padding: 3, borderRadius: 10 }}>
+              {['1M', '3M', '6M', '1A'].map((t, i) => (
+                <div key={t} style={{ padding: '4px 10px', fontSize: 11, fontWeight: 700, borderRadius: 7, background: i === 2 ? 'rgba(255,255,255,0.15)' : 'transparent', color: i === 2 ? '#fff' : 'rgba(255,255,255,0.4)' }}>{t}</div>
+              ))}
+            </div>
           </div>
-          <div className="w-full bg-slate-700 h-2 rounded-full overflow-hidden mb-4">
-            <div
-              className="bg-gradient-to-r from-emerald-500 to-emerald-400 h-full rounded-full transition-all duration-1000 ease-out"
-              style={{ width: `${progressPct}%` }}
-            />
+          {/* Progress bar */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', fontWeight: 600 }}>Progreso en {CATEGORY_SHORT[elocat]}</span>
+              <span style={{ fontSize: 11, color: '#fff', fontWeight: 700 }}>{Math.round(progressPct)}%</span>
+            </div>
+            <div style={{ height: 5, background: 'rgba(255,255,255,0.12)', borderRadius: 999, overflow: 'hidden' }}>
+              <div style={{ width: `${progressPct}%`, height: '100%', background: '#A5B4FC', borderRadius: 999, transition: 'width .4s ease' }} />
+            </div>
           </div>
           {eloHistory.length >= 2
             ? <EloSparkline data={eloHistory} />
             : (
-              <div className="text-center text-slate-600 text-xs py-4 flex flex-col items-center gap-1.5">
-                <TrendingUp size={22} className="text-slate-700" />
-                Juega más torneos para ver tu evolución de nivel
+              <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: 12, padding: '16px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                <TrendingUp size={22} />
+                Juega más torneos para ver tu evolución
               </div>
             )
           }
@@ -399,151 +403,130 @@ const PlayerProfile: React.FC = () => {
 
         {/* ── CLUB RATING CARD ──────────────────────────────────────────────── */}
         {dbPlayer && (dbPlayer.club_rating != null || (dbPlayer.club_confidence ?? 0) > 0) && (
-          <div className="bg-white rounded-2xl p-4 border border-slate-100">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-black text-slate-900 flex items-center gap-2">
-                <Star size={15} style={{ color: THEME.cta }} /> Rating Partidos Libres
+          <div style={{ background: PP.card, borderRadius: 20, padding: 16, border: `1px solid ${PP.hair}`, boxShadow: PP.shadow }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: PP.ink, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Star size={15} color={PP.primary} /> Rating Partidos Libres
               </span>
-              <span className="text-xl font-black" style={{ color: THEME.cta }}>
+              <span style={{ fontSize: 22, fontWeight: 800, color: PP.primary, letterSpacing: -0.5 }}>
                 {dbPlayer.club_rating ?? 1200}
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-700"
-                  style={{
-                    width: `${Math.min(100, Math.max(0, ((dbPlayer.club_rating ?? 1200) - 800) / 16))}%`,
-                    backgroundColor: THEME.cta,
-                  }}
-                />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ flex: 1, height: 6, background: PP.hair, borderRadius: 999, overflow: 'hidden' }}>
+                <div style={{ width: `${Math.min(100, Math.max(0, ((dbPlayer.club_rating ?? 1200) - 800) / 16))}%`, height: '100%', background: PP.primary, borderRadius: 999, transition: 'width .7s ease' }} />
               </div>
-              <span className="text-[11px] font-bold text-slate-400">
-                {(dbPlayer.club_confidence ?? 0)} partido{(dbPlayer.club_confidence ?? 0) !== 1 ? 's' : ''} verificado{(dbPlayer.club_confidence ?? 0) !== 1 ? 's' : ''}
+              <span style={{ fontSize: 11, fontWeight: 700, color: PP.mute }}>
+                {dbPlayer.club_confidence ?? 0} partido{(dbPlayer.club_confidence ?? 0) !== 1 ? 's' : ''} verificado{(dbPlayer.club_confidence ?? 0) !== 1 ? 's' : ''}
               </span>
             </div>
           </div>
         )}
 
         {/* ── FIABILIDAD CARD ────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-              style={{ background: `${fiabilidad.color}15` }}>
-              <Shield size={20} style={{ color: fiabilidad.color }} />
+        <div style={{ background: PP.card, borderRadius: 20, padding: 16, border: `1px solid ${PP.hair}`, boxShadow: PP.shadow }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: `${fiabilidad.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Shield size={20} color={fiabilidad.color} />
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex justify-between items-baseline">
-                <span className="text-sm font-black text-slate-900">Fiabilidad del nivel</span>
-                <span className="text-xl font-black" style={{ color: fiabilidad.color }}>{fiabilidad.score}%</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ fontSize: 14, fontWeight: 800, color: PP.ink }}>Fiabilidad del nivel</span>
+                <span style={{ fontSize: 20, fontWeight: 800, color: fiabilidad.color }}>{fiabilidad.score}%</span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                {fiabilidad.score < 30
-                  ? 'El sistema está aprendiendo tu nivel. Juega más partidos.'
-                  : fiabilidad.score < 70
-                  ? `Nivel en ajuste (${totalMatches} partidos). Sigue jugando.`
-                  : `Nivel estable. Tu ELO refleja con precisión tu nivel real.`}
+              <p style={{ fontSize: 11, color: PP.mute, marginTop: 2, lineHeight: 1.4 }}>
+                {fiabilidad.score < 30 ? 'El sistema está aprendiendo tu nivel. Juega más partidos.'
+                  : fiabilidad.score < 70 ? `Nivel en ajuste (${totalMatches} partidos). Sigue jugando.`
+                  : 'Nivel estable. Tu ELO refleja con precisión tu nivel real.'}
               </p>
-              <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2">
-                <div
-                  className="h-full rounded-full transition-all duration-700"
-                  style={{ width: `${fiabilidad.score}%`, backgroundColor: fiabilidad.color }}
-                />
+              <div style={{ height: 5, background: PP.hair, borderRadius: 999, marginTop: 8, overflow: 'hidden' }}>
+                <div style={{ width: `${fiabilidad.score}%`, height: '100%', background: fiabilidad.color, borderRadius: 999, transition: 'width .7s ease' }} />
               </div>
             </div>
           </div>
         </div>
 
         {/* ── PREFERENCIAS CARD ──────────────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-100">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-black text-slate-900">Preferencias de juego</span>
+        <div style={{ background: PP.card, borderRadius: 20, padding: 16, border: `1px solid ${PP.hair}`, boxShadow: PP.shadow }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: PP.ink }}>Preferencias de juego</span>
             <button
               onClick={() => setShowPrefsModal(true)}
-              className="flex items-center gap-1 text-xs font-bold text-slate-500 hover:text-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 transition-colors"
+              style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: PP.mute, background: PP.bg, border: `1px solid ${PP.hairStrong}`, borderRadius: 10, padding: '6px 12px', cursor: 'pointer' }}
             >
               <Edit3 size={11} /> Editar
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Posición</div>
-              <div className="text-sm font-bold text-slate-700">
-                {currentPlayer.preferred_position === 'right' ? '🎾 Derecha'
-                  : currentPlayer.preferred_position === 'backhand' ? '🎾 Revés'
-                  : <span className="text-slate-400">— Sin definir</span>}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {[
+              { label: 'Posición', value: currentPlayer.preferred_position === 'right' ? '🎾 Derecha' : currentPlayer.preferred_position === 'backhand' ? '🎾 Revés' : '— Sin definir' },
+              { label: 'Ambos lados', value: currentPlayer.play_both_sides ? '✓ Sí' : '✗ No' },
+            ].map(s => (
+              <div key={s.label} style={{ background: PP.bg, borderRadius: 12, padding: 12, border: `1px solid ${PP.hair}` }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: PP.mute, textTransform: 'uppercase' as const, letterSpacing: 0.8, marginBottom: 4 }}>{s.label}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: PP.ink2 }}>{s.value}</div>
               </div>
-            </div>
-            <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Ambos lados</div>
-              <div className={`text-sm font-bold ${currentPlayer.play_both_sides ? 'text-emerald-600' : 'text-slate-400'}`}>
-                {currentPlayer.play_both_sides ? '✓ Sí' : '✗ No'}
-              </div>
-            </div>
+            ))}
           </div>
         </div>
 
         {/* ── TOURNAMENT HISTORY ─────────────────────────────────────────────── */}
         <div>
-          <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">
+          <h3 style={{ fontSize: 11, fontWeight: 700, color: PP.mute, textTransform: 'uppercase' as const, letterSpacing: 1.4, marginBottom: 12, marginLeft: 4 }}>
             Historial de Torneos
           </h3>
           {historyData.tournaments.length === 0 ? (
-            <div className="text-center py-10">
-              <Trophy size={32} className="mx-auto mb-2 text-slate-200" />
-              <p className="text-slate-400 text-sm font-bold">Sin torneos jugados todavía</p>
+            <div style={{ textAlign: 'center', padding: '40px 0' }}>
+              <Trophy size={32} color={PP.hairStrong} style={{ margin: '0 auto 8px' }} />
+              <p style={{ fontSize: 14, fontWeight: 700, color: PP.mute }}>Sin torneos jugados todavía</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {historyData.tournaments.map(t => {
                 const isOpen = expandedTournamentId === t.id;
                 return (
-                  <div key={t.id} className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+                  <div key={t.id} style={{ background: PP.card, borderRadius: 20, border: `1px solid ${PP.hair}`, overflow: 'hidden', boxShadow: PP.shadow }}>
                     <button
-                      className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors"
+                      style={{ width: '100%', padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', textAlign: 'left', background: 'none', border: 0, cursor: 'pointer' }}
                       onClick={() => setExpandedTournamentId(isOpen ? null : t.id)}
                     >
                       <div>
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <Calendar size={10} className="text-slate-400" />
-                          <span className="text-[10px] font-bold text-slate-400">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <Calendar size={10} color={PP.mute} />
+                          <span style={{ fontSize: 10, fontWeight: 700, color: PP.mute }}>
                             {new Date(t.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </span>
                           {t.resultBadge === 'champion' && (
-                            <span className="bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full text-[9px] font-black flex items-center gap-0.5">
+                            <span style={{ background: PP.warnTint, color: PP.warn, padding: '2px 8px', borderRadius: 99, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 3 }}>
                               <Trophy size={7} /> Campeón
                             </span>
                           )}
                         </div>
-                        <div className="font-black text-slate-900 text-sm">{t.title}</div>
-                        <div className="text-xs text-slate-400 mt-0.5">{t.matches.length} partidos jugados</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: PP.ink }}>{t.title}</div>
+                        <div style={{ fontSize: 12, color: PP.mute, marginTop: 2 }}>{t.matches.length} partidos jugados</div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className={`text-sm font-black ${t.eloChangeTotal >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                        <span style={{ fontSize: 14, fontWeight: 800, color: t.eloChangeTotal >= 0 ? PP.ok : '#EF4444' }}>
                           {t.eloChangeTotal > 0 ? '+' : ''}{Math.round(t.eloChangeTotal)} pts
                         </span>
-                        {isOpen
-                          ? <ChevronUp size={14} className="text-slate-300" />
-                          : <ChevronDown size={14} className="text-slate-300" />}
+                        {isOpen ? <ChevronUp size={14} color={PP.muteSoft} /> : <ChevronDown size={14} color={PP.muteSoft} />}
                       </div>
                     </button>
 
                     {isOpen && (
-                      <div className="border-t border-slate-50 divide-y divide-slate-50">
-                        {t.matches.map(m => (
-                          <div key={m.id} className="px-4 py-3 flex items-center gap-3">
-                            <div className={`w-1 rounded-full self-stretch min-h-[36px] ${m.result === 'win' ? 'bg-emerald-400' : 'bg-rose-400'}`} />
-                            <div className="flex-1 min-w-0">
-                              <div className="text-[10px] font-bold text-slate-400 uppercase">{m.roundLabel}</div>
-                              <div className="text-sm font-bold text-slate-700 truncate">vs {m.opponentsName}</div>
-                              <div className="text-xs text-slate-400 truncate">con {m.partnerName}</div>
+                      <div style={{ borderTop: `1px solid ${PP.hair}` }}>
+                        {t.matches.map((m, i) => (
+                          <div key={m.id} style={{ padding: '12px 16px', borderBottom: i < t.matches.length - 1 ? `1px solid ${PP.hair}` : 'none', display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <div style={{ width: 4, borderRadius: 4, alignSelf: 'stretch', minHeight: 36, background: m.result === 'win' ? PP.ok : '#EF4444', flexShrink: 0 }} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: PP.mute, textTransform: 'uppercase' as const }}>{m.roundLabel}</div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: PP.ink2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>vs {m.opponentsName}</div>
+                              <div style={{ fontSize: 11, color: PP.mute, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>con {m.partnerName}</div>
                             </div>
-                            <div className="text-right shrink-0">
-                              <div className={`text-sm font-black tabular-nums ${m.result === 'win' ? 'text-emerald-600' : 'text-rose-500'}`}>
-                                {m.score}
-                              </div>
+                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 800, color: m.result === 'win' ? PP.ok : '#EF4444', fontFeatureSettings: '"tnum"' }}>{m.score}</div>
                               {m.eloDelta !== 0 && (
-                                <div className={`text-[10px] font-bold ${m.eloDelta > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                <div style={{ fontSize: 10, fontWeight: 700, color: m.eloDelta > 0 ? PP.ok : '#EF4444' }}>
                                   {m.eloDelta > 0 ? '+' : ''}{Math.round(m.eloDelta)} pts
                                 </div>
                               )}
@@ -560,16 +543,16 @@ const PlayerProfile: React.FC = () => {
         </div>
 
         {/* ── ACCOUNT ACTIONS ────────────────────────────────────────────────── */}
-        <div className="space-y-2 pt-2">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
           <button
             onClick={() => setShowChangePassModal(true)}
-            className="w-full py-3.5 rounded-2xl border border-slate-200 bg-white text-slate-600 font-bold text-sm flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors"
+            style={{ width: '100%', padding: '14px 0', borderRadius: 20, border: `1px solid ${PP.hairStrong}`, background: PP.card, color: PP.ink2, fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}
           >
             <Key size={16} /> Cambiar contraseña
           </button>
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className="w-full py-3.5 rounded-2xl border border-rose-100 bg-rose-50 text-rose-500 font-bold text-sm flex items-center justify-center gap-2 hover:bg-rose-100 transition-colors"
+            style={{ width: '100%', padding: '14px 0', borderRadius: 20, border: '1px solid #fee2e2', background: '#fff5f5', color: '#EF4444', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}
           >
             <Trash2 size={16} /> Eliminar mi cuenta
           </button>

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../store/AuthContext';
+import { PP } from '../../utils/theme';
+import { avatarColor, initials } from '../../utils/avatar';
 import { generateWhatsAppText, generateClubMatchesText, openWhatsApp } from '../../utils/whatsapp';
 import { Match, MatchParticipant } from '../../types';
 import {
@@ -423,64 +425,65 @@ const MatchJoin: React.FC = () => {
   const st = statusLabel[match.status] || statusLabel['open'];
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center py-8 px-4">
-      <div className="w-full max-w-sm space-y-4">
+    <div style={{ minHeight: '100vh', background: PP.bg, display: 'flex', justifyContent: 'center', padding: '32px 16px', fontFamily: PP.font }}>
+      <div style={{ width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 12 }}>
 
         {/* Back */}
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-1.5 text-slate-500 text-sm font-bold hover:text-slate-800"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, color: PP.mute, fontSize: 14, fontWeight: 700, background: 'none', border: 0, cursor: 'pointer', padding: 0 }}
         >
           <ArrowLeft size={16} /> Volver
         </button>
 
         {/* Match card */}
-        <div className="bg-white rounded-3xl shadow-lg overflow-hidden">
+        <div style={{ background: PP.card, borderRadius: 24, border: `1px solid ${PP.hair}`, boxShadow: PP.shadowLg, overflow: 'hidden' }}>
 
-          {/* Header band */}
-          <div
-            className="px-6 py-5 text-white"
-            style={{ background: 'linear-gradient(135deg, #2B2DBF, #575AF9)' }}
-          >
-            <div className="flex items-start justify-between mb-3">
+          {/* Header: time-as-hero + meta */}
+          <div style={{ padding: '20px 20px 16px', borderBottom: `1px solid ${PP.hair}` }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 14 }}>
               <div>
-                <div className="text-xs font-bold uppercase tracking-widest opacity-70 mb-1">
-                  Partido Abierto
+                <div style={{ fontSize: 11, fontWeight: 700, color: PP.mute, textTransform: 'uppercase' as const, letterSpacing: 1 }}>Hora</div>
+                <div style={{ fontSize: 48, fontWeight: 800, color: PP.ink, letterSpacing: -2, lineHeight: 1, marginTop: 2, fontFeatureSettings: '"tnum"' }}>
+                  {formatTime(match.scheduled_at)}
                 </div>
-                <div className="text-3xl font-black">{formatTime(match.scheduled_at)}</div>
-                <div className="text-sm opacity-80 mt-0.5 capitalize">
+                <div style={{ fontSize: 13, fontWeight: 600, color: PP.ink2, marginTop: 4, textTransform: 'capitalize' as const }}>
                   {formatDate(match.scheduled_at)}
                 </div>
               </div>
-              <span
-                className="px-3 py-1 rounded-full text-[11px] font-black uppercase"
-                style={{ background: `${st.color}30`, color: st.color, border: `1px solid ${st.color}50` }}
-              >
-                {st.label}
-              </span>
+              <div style={{ marginLeft: 'auto' }}>
+                <span style={{ padding: '6px 12px', borderRadius: 10, fontSize: 11, fontWeight: 800, textTransform: 'uppercase' as const, letterSpacing: 0.4, background: `${st.color}18`, color: st.color, border: `1px solid ${st.color}30` }}>
+                  {st.label}
+                </span>
+              </div>
             </div>
 
-            {/* Info row */}
-            <div className="flex flex-wrap gap-3 mt-3">
+            {/* Meta row */}
+            <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 12 }}>
               {match.level && (
-                <span className="flex items-center gap-1 text-xs font-bold opacity-90">
-                  <BarChart2 size={13} /> {match.level}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <BarChart2 size={13} color={PP.muteSoft} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: PP.ink2 }}>{match.level}</span>
+                </div>
               )}
               {match.court && (
-                <span className="flex items-center gap-1 text-xs font-bold opacity-90">
-                  <MapPin size={13} /> {match.court}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <MapPin size={13} color={PP.muteSoft} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: PP.ink2 }}>{match.court}</span>
+                </div>
               )}
-              <span className="flex items-center gap-1 text-xs font-bold opacity-90">
-                <Users size={13} /> {participants.length}/{match.max_players} jugadores
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Users size={13} color={PP.muteSoft} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: isFull ? PP.mute : PP.primary }}>
+                  {participants.length}/{match.max_players} jugadores
+                </span>
+              </div>
             </div>
           </div>
 
           {/* Players list */}
-          <div className="px-6 py-4">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Jugadores</p>
+          <div style={{ padding: '16px 20px' }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: PP.mute, textTransform: 'uppercase' as const, letterSpacing: 1.2, marginBottom: 12 }}>Jugadores</p>
             <div className="space-y-2">
               {Array.from({ length: match.max_players }).map((_, i) => {
                 const p = participants[i];
@@ -523,35 +526,32 @@ const MatchJoin: React.FC = () => {
                   );
                 }
 
+                const playerName = p ? (p.player?.name || p.guest_name || 'Jugador') : '';
+                const ac = playerName ? avatarColor(playerName) : null;
                 return (
-                  <div key={i} className="flex items-center gap-3 min-h-[36px]">
-                    <div
-                      className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shrink-0 ${
-                        p ? 'text-white' : 'bg-slate-100 text-slate-300'
-                      }`}
-                      style={p ? { background: p.participant_type === 'placeholder_guest' ? '#94a3b8' : '#575AF9' } : {}}
-                    >
-                      {p ? (p.player?.name || p.guest_name || '?')[0].toUpperCase() : slotIndex}
-                    </div>
-                    <span className={`text-sm font-bold flex-1 ${p ? 'text-slate-900' : 'text-slate-300 italic'}`}>
-                      {p ? (p.player?.name || p.guest_name || 'Jugador') : 'Libre'}
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44 }}>
+                    {p && ac ? (
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: ac.bg, color: ac.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
+                        {initials(playerName)}
+                      </div>
+                    ) : (
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: PP.primaryTint, border: `2px dashed ${PP.primary}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <User size={14} color={PP.primary} />
+                      </div>
+                    )}
+                    <span style={{ fontSize: 14, fontWeight: p ? 700 : 600, flex: 1, color: p ? PP.ink : PP.primary, fontStyle: p ? 'normal' : 'normal' }}>
+                      {p ? playerName : 'Plaza libre'}
                     </span>
 
                     {/* Badges */}
                     {isMe && (
-                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                        Tú
-                      </span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: PP.ok, background: PP.okTint, padding: '3px 8px', borderRadius: 99 }}>Tú</span>
                     )}
                     {p?.participant_type === 'claimable_guest' && !p.claimed_user_id && !isMe && (
-                      <span className="text-[10px] font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full">
-                        Invitado
-                      </span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: PP.warn, background: PP.warnTint, padding: '3px 8px', borderRadius: 99 }}>Invitado</span>
                     )}
                     {p?.participant_type === 'placeholder_guest' && !isMe && (
-                      <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                        Reservado
-                      </span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: PP.mute, background: PP.hair, padding: '3px 8px', borderRadius: 99 }}>Reservado</span>
                     )}
 
                     {/* Claim button */}
@@ -559,7 +559,7 @@ const MatchJoin: React.FC = () => {
                       <button
                         onClick={() => handleClaim(p.id)}
                         disabled={!!claiming}
-                        className="flex items-center gap-1 text-[11px] font-black text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition-all disabled:opacity-60"
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 800, color: PP.primary, background: PP.primaryTint, border: 0, borderRadius: 8, padding: '5px 10px', cursor: 'pointer', opacity: claiming ? 0.6 : 1 }}
                       >
                         {claiming === p.id
                           ? <Loader2 size={11} className="animate-spin" />

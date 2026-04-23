@@ -8,6 +8,7 @@ import { Player } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { calculateDisplayRanking, calculateInitialElo, manualToElo } from '../utils/Elo';
 import { supabase } from '../lib/supabase';
+import { avatarColor, initials } from '../utils/avatar';
 
 interface AlertState {
     type: 'error' | 'success';
@@ -40,12 +41,6 @@ const PlayerManager: React.FC = () => {
   const [importDone, setImportDone] = useState(false);
   const csvInputRef = React.useRef<HTMLInputElement>(null);
 
-  const getAvatarColor = (name: string): string => {
-      const colors = ['#f43f5e', '#3b82f6', '#10b981', '#f59e0b', '#6366f1', '#a855f7', '#14b8a6', '#06b6d4'];
-      let hash = 0;
-      for (let i = 0; i < (name || '').length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-      return colors[Math.abs(hash) % colors.length];
-  };
 
   const filteredPlayers = state.players.filter(p => {
       const matchesCat = filterCat === 'all' || (p.categories && p.categories.includes(filterCat));
@@ -291,12 +286,14 @@ const PlayerManager: React.FC = () => {
                   className="bg-slate-900 p-5 rounded-3xl border border-slate-800 shadow-lg flex justify-between items-center group hover:border-[#575AF9]/50 hover:bg-slate-800/50 transition-all cursor-pointer"
               >
                   <div className="flex items-center gap-4">
+                      {(() => { const ac = avatarColor(player.name || ''); return (
                       <div
-                          className="w-12 h-12 rounded-full flex items-center justify-center text-white font-black text-lg shadow-inner shrink-0"
-                          style={{ background: getAvatarColor(player.name || '') }}
+                          className="w-12 h-12 rounded-full flex items-center justify-center font-black text-lg shrink-0"
+                          style={{ background: ac.bg, color: ac.fg }}
                       >
-                          {(player.name || '?').trim().split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+                          {initials(player.name || '')}
                       </div>
+                      ); })()}
                       <div>
                           <div className="font-black text-slate-100 text-lg leading-tight">
                               {formatPlayerName(player)}

@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTournament } from '../../store/TournamentContext';
 import { useHistory } from '../../store/HistoryContext';
-import { THEME, getFormatColor } from '../../utils/theme';
+import { THEME, getFormatColor, PP } from '../../utils/theme';
 import { Trophy, Medal, ChevronDown, ChevronUp, Swords, Compass } from 'lucide-react';
 import ClubMatchBrowser from './ClubMatchBrowser';
 
@@ -244,28 +244,29 @@ const PlayerMatches: React.FC = () => {
   ];
 
   return (
-    <div className="p-4 pb-6">
+    <div style={{ background: PP.bg, minHeight: '100vh', padding: '16px 16px 24px', fontFamily: PP.font }}>
       {/* Header + tab toggle */}
-      <div className="mb-4">
-        <h1 className="text-2xl font-black text-slate-900">Partidos</h1>
-        <div className="flex gap-1 mt-3 bg-slate-100 rounded-xl p-1">
-          <button
-            onClick={() => setMainTab('mis')}
-            className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all ${
-              mainTab === 'mis' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'
-            }`}
-          >
-            Mis Partidos
-          </button>
-          <button
-            onClick={() => setMainTab('explorar')}
-            className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1 ${
-              mainTab === 'explorar' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'
-            }`}
-          >
-            <Compass size={12} />
-            Explorar
-          </button>
+      <div style={{ marginBottom: 16 }}>
+        <h1 style={{ fontSize: 30, fontWeight: 800, color: PP.ink, letterSpacing: -0.9, lineHeight: 1, margin: 0 }}>Partidos</h1>
+        <div style={{ display: 'flex', gap: 4, marginTop: 12, background: PP.hairStrong, borderRadius: 14, padding: 4 }}>
+          {([['mis', 'Mis Partidos'], ['explorar', 'Explorar']] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setMainTab(key)}
+              style={{
+                flex: 1, padding: '8px 0', borderRadius: 10, border: 0, cursor: 'pointer', fontFamily: PP.font,
+                fontWeight: 700, fontSize: 13,
+                background: mainTab === key ? PP.card : 'transparent',
+                color: mainTab === key ? PP.ink : PP.mute,
+                boxShadow: mainTab === key ? '0 1px 3px rgba(11,13,23,0.08)' : 'none',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                transition: 'all .15s',
+              }}
+            >
+              {key === 'explorar' && <Compass size={12} />}
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -283,15 +284,15 @@ const PlayerMatches: React.FC = () => {
       ) : (<>
 
       {/* Stats strip */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
         {[
           { label: 'Jugados',   value: totalMatches },
           { label: 'Victorias', value: totalWins },
           { label: 'Ratio',     value: totalMatches > 0 ? `${Math.round((totalWins / totalMatches) * 100)}%` : '0%' },
         ].map(s => (
-          <div key={s.label} className="bg-white rounded-xl p-3 text-center border border-slate-100">
-            <div className="text-xl font-black text-slate-900">{s.value}</div>
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-0.5">{s.label}</div>
+          <div key={s.label} style={{ background: PP.card, borderRadius: 16, padding: '12px 8px', textAlign: 'center', border: `1px solid ${PP.hair}`, boxShadow: PP.shadow }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: PP.ink, letterSpacing: -0.5 }}>{s.value}</div>
+            <div style={{ fontSize: 9.5, fontWeight: 700, color: PP.mute, textTransform: 'uppercase' as const, letterSpacing: 0.8, marginTop: 2 }}>{s.label}</div>
           </div>
         ))}
       </div>
@@ -321,38 +322,48 @@ const PlayerMatches: React.FC = () => {
 
       {/* Partidos Libres */}
       {filteredPartidos.length > 0 && (
-        <div className="mb-5">
-          <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Partidos Libres</div>
-          <div className="space-y-2">
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: PP.mute, textTransform: 'uppercase' as const, letterSpacing: 1.4, marginBottom: 8 }}>Partidos Libres</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {filteredPartidos.map(p => {
               const myScore = p.myTeam === 'A' ? p.score_a : p.score_b;
               const oppScore = p.myTeam === 'A' ? p.score_b : p.score_a;
               const won = myScore > oppScore;
               const myTeamNames = (p.myTeam === 'A' ? p.teamA : p.teamB).join(' & ') || '—';
               const oppTeamNames = (p.myTeam === 'A' ? p.teamB : p.teamA).join(' & ') || '—';
+              const d = new Date(p.scheduled_at);
+              const timeStr = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+              const dateStr = d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
               return (
                 <div
                   key={p.id}
-                  className="bg-white rounded-xl p-3 border border-slate-100 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-all"
+                  style={{ background: PP.card, borderRadius: 20, border: `1px solid ${PP.hair}`, display: 'flex', alignItems: 'stretch', boxShadow: PP.shadow, cursor: 'pointer', overflow: 'hidden' }}
                   onClick={() => navigate(`/m/${p.share_token}`)}
                 >
-                  <div className={`w-1.5 rounded-full self-stretch ${won ? 'bg-emerald-400' : 'bg-rose-400'}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-bold text-slate-400 mb-0.5">
-                      {new Date(p.scheduled_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
-                      {p.court ? ` · ${p.court}` : ''}
+                  {/* Time hero */}
+                  <div style={{ padding: '14px 12px 14px 16px', borderRight: `1px solid ${PP.hair}`, display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 80 }}>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: PP.ink, letterSpacing: -1, lineHeight: 1, fontFeatureSettings: '"tnum"' }}>{timeStr}</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: PP.mute, textTransform: 'uppercase' as const, letterSpacing: 0.8, marginTop: 3 }}>{dateStr}</div>
+                  </div>
+                  <div style={{ flex: 1, padding: '12px 12px 12px 14px', minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: 4, background: won ? PP.ok : '#EF4444', flexShrink: 0 }} />
+                      <div style={{ fontSize: 11, fontWeight: 700, color: won ? PP.ok : '#EF4444' }}>{won ? 'Victoria' : 'Derrota'}</div>
+                      {p.court && <div style={{ fontSize: 11, color: PP.mute }}>· {p.court}</div>}
                     </div>
-                    <div className="text-sm font-bold text-slate-700 truncate">
-                      {myTeamNames} <span className="text-slate-400 font-normal">vs</span> {oppTeamNames}
+                    <div style={{ fontSize: 13, fontWeight: 700, color: PP.ink2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                      {myTeamNames} <span style={{ color: PP.mute, fontWeight: 400 }}>vs</span> {oppTeamNames}
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <div className={`text-lg font-black tabular-nums ${won ? 'text-emerald-600' : 'text-rose-500'}`}>
-                      {myScore}–{oppScore}
+                  <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingRight: 14 }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 18, fontWeight: 800, fontFeatureSettings: '"tnum"', color: won ? PP.ok : '#EF4444' }}>
+                        {myScore}–{oppScore}
+                      </div>
+                      {p.result_status === 'pending_confirmation' && (
+                        <div style={{ fontSize: 10, fontWeight: 700, color: PP.warn, marginTop: 2 }}>Pendiente</div>
+                      )}
                     </div>
-                    {p.result_status === 'pending_confirmation' && (
-                      <div className="text-[10px] font-bold text-amber-500 mt-0.5">Pendiente</div>
-                    )}
                   </div>
                 </div>
               );
@@ -362,7 +373,7 @@ const PlayerMatches: React.FC = () => {
       )}
 
       {/* Tournament History */}
-      <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Historial de Torneos</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: PP.mute, textTransform: 'uppercase' as const, letterSpacing: 1.4, marginBottom: 8 }}>Historial de Torneos</div>
 
       {filteredTournaments.length === 0 ? (
         <div className="text-center py-12">
