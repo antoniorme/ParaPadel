@@ -284,7 +284,7 @@ const GeneralDashboard: React.FC = () => {
       </div>
 
       {/* ── KPI row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14, marginBottom: 16 }} className="md:grid-cols-4">
+      <div className="grid grid-cols-2 md:grid-cols-4" style={{ gap: 14, marginBottom: 16 }}>
         <KPITile
           label="Partidos abiertos hoy"
           value={openMatchesToday.length}
@@ -330,7 +330,7 @@ const GeneralDashboard: React.FC = () => {
 
       {/* ── Bento row 2: Torneo · Pistas · Atajos ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16, marginBottom: 16 }} className="md:bento-row2">
-        <div style={{ display: 'grid', gap: 16 }} className="hidden md:grid md:grid-cols-[1.55fr_1fr_0.85fr]">
+        <div className="hidden md:grid md:grid-cols-[1.55fr_1fr_0.85fr]" style={{ gap: 16 }}>
 
           {/* Torneo en curso */}
           {activeTournament ? (
@@ -501,7 +501,7 @@ const GeneralDashboard: React.FC = () => {
       </div>
 
       {/* ── Row 3: Partidos hoy + Actividad ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }} className="md:grid-cols-[1.6fr_1fr]">
+      <div className="grid grid-cols-1 md:grid-cols-[1.6fr_1fr]" style={{ gap: 16 }}>
 
         {/* Partidos abiertos hoy */}
         <div style={{ ...tile }}>
