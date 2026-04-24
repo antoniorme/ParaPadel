@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { useHistory } from '../store/HistoryContext';
 import { useToast } from '../components/Toast';
-import { Modal, Button, EmptyState, PlayerSlot } from '../components';
+import { Modal, Button, EmptyState } from '../components';
 import { THEME, PP } from '../utils/theme';
 import { calculateMatchDelta } from '../utils/Elo';
 import { generateClubMatchesText, openWhatsApp } from '../utils/whatsapp';
@@ -48,7 +48,7 @@ const fmtDate = (iso: string) => {
 // ── COMPONENT ─────────────────────────────────────────────────────────────────
 
 const MatchManager: React.FC = () => {
-  const { state, formatPlayerName, addPlayerToDB } = useTournament();
+  const { state, formatPlayerName } = useTournament();
   const { clubData } = useHistory();
   const { success, error: toastError } = useToast();
 
@@ -67,7 +67,7 @@ const MatchManager: React.FC = () => {
     court: '',
     courtNumber: 0,
     level: '',
-    p1a: '', p2a: '', p1b: '', p2b: '',
+    n1: '', n2: '', n3: '', n4: '',
     notes: '',
   });
 
@@ -247,13 +247,18 @@ const MatchManager: React.FC = () => {
       return;
     }
 
-    // 2. Insertar participantes (solo los que tienen jugador asignado)
-    const participants = [
-      form.p1a ? { match_id: matchData.id, player_id: form.p1a, team: 'A', slot_index: 1 } : null,
-      form.p2a ? { match_id: matchData.id, player_id: form.p2a, team: 'A', slot_index: 2 } : null,
-      form.p1b ? { match_id: matchData.id, player_id: form.p1b, team: 'B', slot_index: 3 } : null,
-      form.p2b ? { match_id: matchData.id, player_id: form.p2b, team: 'B', slot_index: 4 } : null,
-    ].filter(Boolean).map(p => ({ ...p, participant_type: 'registered_player', joined_via: 'manual' }));
+    // 2. Insertar participantes (invitados por nombre — claimable_guest)
+    const participants = [form.n1, form.n2, form.n3, form.n4]
+      .map((name, i) => name.trim() ? {
+        match_id: matchData.id,
+        guest_name: name.trim(),
+        slot_index: i + 1,
+        team: i < 2 ? 'A' : 'B',
+        participant_type: 'claimable_guest',
+        joined_via: 'manual',
+        attendance_status: 'joined',
+      } : null)
+      .filter(Boolean);
 
     if (participants.length > 0) {
       const { error: partErr } = await supabase.from('match_participants').insert(participants);
@@ -277,7 +282,7 @@ const MatchManager: React.FC = () => {
 
     setCreating(false);
     setShowCreate(false);
-    setForm({ date: new Date().toISOString().split('T')[0], time: '', court: '', courtNumber: 0, level: '', p1a: '', p2a: '', p1b: '', p2b: '', notes: '' });
+    setForm({ date: new Date().toISOString().split('T')[0], time: '', court: '', courtNumber: 0, level: '', n1: '', n2: '', n3: '', n4: '', notes: '' });
     loadMatches();
     loadTodaySlots();
   };
@@ -879,24 +884,28 @@ const MatchManager: React.FC = () => {
           </div>
 
           {/* Jugadores 1-4 */}
-          <div style={{ borderTop: `1px solid ${PP.hair}`, paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {([
-              { key: 'p1a' as const, num: 1, excludes: [form.p2a, form.p1b, form.p2b] },
-              { key: 'p1b' as const, num: 2, excludes: [form.p1a, form.p2a, form.p2b] },
-              { key: 'p2a' as const, num: 3, excludes: [form.p1a, form.p1b, form.p2b] },
-              { key: 'p2b' as const, num: 4, excludes: [form.p1a, form.p2a, form.p1b] },
-            ]).map(({ key, num, excludes }) => (
-              <PlayerSlot
-                key={key}
-                slotNumber={num}
-                selectedId={form[key]}
-                onSelect={id => setForm(f => ({ ...f, [key]: id }))}
-                excludeIds={excludes.filter(Boolean)}
-                players={allPlayers}
-                onAddPlayer={addPlayerToDB}
-                formatName={formatPlayerName}
-              />
-            ))}
+          <div style={{ borderTop: `1px solid ${PP.hair}`, paddingTop: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: PP.mute, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Jugadores</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {(['n1','n2','n3','n4'] as const).map((key, i) => (
+                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: PP.muteSoft, minWidth: 16, textAlign: 'center' }}>{i + 1}</span>
+                  <input
+                    style={{
+                      flex: 1, padding: '9px 12px', borderRadius: 10,
+                      border: `1.5px solid ${form[key] ? PP.primary : PP.hair}`,
+                      background: PP.bg, fontFamily: PP.font, fontSize: 13, fontWeight: 600,
+                      color: PP.ink, outline: 'none',
+                    }}
+                    placeholder="Nombre del jugador"
+                    value={form[key]}
+                    onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                    onFocus={e => (e.target.style.borderColor = PP.primary)}
+                    onBlur={e => (e.target.style.borderColor = form[key] ? PP.primary : PP.hair)}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
 
           {preview && (
