@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { useHistory } from '../store/HistoryContext';
 import { useToast } from '../components/Toast';
-import { Modal, Button, EmptyState, Badge, PlayerSelector } from '../components';
+import { Modal, Button, EmptyState } from '../components';
 import { THEME, PP } from '../utils/theme';
 import { calculateMatchDelta } from '../utils/Elo';
 import { generateClubMatchesText, openWhatsApp } from '../utils/whatsapp';
@@ -11,8 +11,8 @@ import { Player, Match, MatchParticipant } from '../types';
 import { MATCH_LEVELS } from '../utils/categories';
 import {
   Swords, Plus, CheckCircle2, Clock, Trash2,
-  ChevronDown, ChevronUp, MapPin, Zap, Users, MessageCircle,
-  LayoutGrid, ChevronRight, Flag, ShieldCheck,
+  ChevronDown, ChevronUp, Zap, MessageCircle,
+  LayoutGrid, ChevronRight, Flag, ShieldCheck, Sun, Sunset, X,
 } from 'lucide-react';
 
 // ── HELPERS CALENDARIO ────────────────────────────────────────────────────────
@@ -22,6 +22,7 @@ const minsToTime = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')
 const toLocalDateStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 
 interface FreeSlot { courtNumber: number; courtName: string; startTime: string; }
+interface CourtSummary { courtNumber: number; courtName: string; morning: FreeSlot[]; afternoon: FreeSlot[]; }
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 
@@ -87,11 +88,11 @@ const MatchManager: React.FC = () => {
   const clubId = clubData?.id || state.players[0]?.user_id;
 
   // Free slots de hoy (si courts_enabled)
-  const [todaySlots, setTodaySlots] = useState<FreeSlot[]>([]);
+  const [courtSummaries, setCourtSummaries] = useState<CourtSummary[]>([]);
+  const [courtDetail, setCourtDetail] = useState<CourtSummary | null>(null);
 
   const loadTodaySlots = useCallback(async () => {
     if (!clubId || !clubData.courts_enabled) return;
-    const todayStr = toLocalDateStr(new Date());
     const todayStart = new Date(); todayStart.setHours(0,0,0,0);
     const todayEnd   = new Date(); todayEnd.setHours(23,59,59,999);
 
@@ -109,10 +110,11 @@ const MatchManager: React.FC = () => {
     if (!courts) return;
     const todayDow = new Date().getDay();
     const nowMins = new Date().getHours() * 60 + new Date().getMinutes();
-    const slots: FreeSlot[] = [];
+    const summaryMap = new Map<number, CourtSummary>();
 
     courts.forEach((c: any) => {
       if (!c.active_days.includes(todayDow)) return;
+      summaryMap.set(c.court_number, { courtNumber: c.court_number, courtName: c.court_name, morning: [], afternoon: [] });
       const open = timeToMins(c.open_time);
       const close = timeToMins(c.close_time);
       const occupied = [
@@ -123,17 +125,17 @@ const MatchManager: React.FC = () => {
       ];
       const isOccupied = (s: number, e: number) => occupied.some(r => s < r.end && e > r.start);
       let t = open;
-      while (t + 60 <= close) {
-        if (t >= nowMins && !isOccupied(t, t + 60)) {
-          slots.push({ courtNumber: c.court_number, courtName: c.court_name, startTime: minsToTime(t) });
+      while (t + 90 <= close) {
+        if (t >= nowMins && !isOccupied(t, t + 90)) {
+          const slot: FreeSlot = { courtNumber: c.court_number, courtName: c.court_name, startTime: minsToTime(t) };
+          const entry = summaryMap.get(c.court_number)!;
+          if (t < 14 * 60) entry.morning.push(slot); else entry.afternoon.push(slot);
         }
         t += 30;
       }
     });
 
-    // Sort by time, then by court
-    slots.sort((a, b) => a.startTime.localeCompare(b.startTime) || a.courtNumber - b.courtNumber);
-    setTodaySlots(slots);
+    setCourtSummaries(Array.from(summaryMap.values()).filter(s => s.morning.length + s.afternoon.length > 0));
   }, [clubId, clubData.courts_enabled]);
 
   // ── LOAD ────────────────────────────────────────────────────
@@ -445,50 +447,109 @@ const MatchManager: React.FC = () => {
         </div>
       </div>
 
-      {/* Slots libres hoy */}
-      {clubData.courts_enabled && todaySlots.length > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
-            <LayoutGrid size={15} className="text-slate-400" />
-            <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Pistas libres hoy</span>
-            <span className="ml-auto text-xs font-bold text-slate-400">{todaySlots.length} slots</span>
+      {/* Pistas libres hoy — horizontal cards */}
+      {clubData.courts_enabled && courtSummaries.length > 0 && (
+        <div style={{ background: PP.card, border: `1px solid ${PP.hair}`, borderRadius: 16, boxShadow: PP.shadow, overflow: 'hidden' }}>
+          <div style={{ padding: '10px 16px', borderBottom: `1px solid ${PP.hair}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <LayoutGrid size={14} style={{ color: PP.muteSoft }} />
+            <span style={{ fontSize: 11, fontWeight: 800, color: PP.mute, textTransform: 'uppercase', letterSpacing: 1 }}>Pistas libres hoy · 1h30</span>
           </div>
-          <div className="divide-y divide-slate-50">
-            {todaySlots.slice(0, 8).map((slot, i) => (
-              <button
-                key={i}
-                onClick={() => {
-                  setForm(f => ({
-                    ...f,
-                    date: toLocalDateStr(new Date()),
-                    time: slot.startTime,
-                    court: slot.courtName,
-                  }));
-                  setShowCreate(true);
-                }}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left"
-              >
-                <div
-                  className="w-11 h-11 rounded-xl flex flex-col items-center justify-center text-white shrink-0"
-                  style={{ background: THEME.cta }}
+          <div style={{ display: 'flex', gap: 10, padding: '12px 14px', overflowX: 'auto' }}>
+            {courtSummaries.map(cs => {
+              const total = cs.morning.length + cs.afternoon.length;
+              return (
+                <button
+                  key={cs.courtNumber}
+                  onClick={() => setCourtDetail(cs)}
+                  style={{
+                    flexShrink: 0, minWidth: 130, background: PP.bg, border: `1.5px solid ${PP.hair}`,
+                    borderRadius: 14, padding: '12px 14px', textAlign: 'left', cursor: 'pointer',
+                    transition: 'border-color 0.15s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.borderColor = PP.primary)}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = PP.hair)}
                 >
-                  <span className="text-[10px] font-bold leading-none opacity-80">HOY</span>
-                  <span className="text-xs font-black leading-none mt-0.5">{slot.startTime}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-bold text-slate-800 text-sm">{slot.courtName}</div>
-                  <div className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                    <Users size={10} /> Libre · pulsa para crear partido
+                  <div style={{ fontSize: 13, fontWeight: 800, color: PP.ink, marginBottom: 8, letterSpacing: -0.3 }}>{cs.courtName}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <Sun size={12} style={{ color: '#F59E0B', flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, fontWeight: 700, color: cs.morning.length > 0 ? PP.ink : PP.muteSoft }}>
+                        {cs.morning.length > 0 ? `${cs.morning.length} mañana` : 'Sin mañana'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <Sunset size={12} style={{ color: '#8B5CF6', flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, fontWeight: 700, color: cs.afternoon.length > 0 ? PP.ink : PP.muteSoft }}>
+                        {cs.afternoon.length > 0 ? `${cs.afternoon.length} tarde` : 'Sin tarde'}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 10, fontWeight: 700, color: PP.primary, display: 'flex', alignItems: 'center', gap: 3 }}>
+                    {total} huecos · Ver <ChevronRight size={10} />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Court detail modal */}
+      {courtDetail && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          onClick={() => setCourtDetail(null)}
+        >
+          <div
+            style={{ background: PP.card, borderRadius: 20, width: '100%', maxWidth: 360, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ padding: '16px 20px', borderBottom: `1px solid ${PP.hair}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: PP.ink, letterSpacing: -0.4 }}>{courtDetail.courtName} · Hoy</div>
+              <button onClick={() => setCourtDetail(null)} style={{ background: 'none', border: 0, cursor: 'pointer', color: PP.muteSoft, display: 'flex', alignItems: 'center' }}>
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ padding: '12px 16px', maxHeight: 400, overflowY: 'auto' }}>
+              {courtDetail.morning.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <Sun size={12} style={{ color: '#F59E0B' }} />
+                    <span style={{ fontSize: 10, fontWeight: 800, color: PP.mute, textTransform: 'uppercase', letterSpacing: 1 }}>Mañana</span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {courtDetail.morning.map((s, i) => (
+                      <button key={i} onClick={() => { setForm(f => ({ ...f, date: toLocalDateStr(new Date()), time: s.startTime, court: s.courtName })); setCourtDetail(null); setShowCreate(true); }}
+                        style={{ padding: '7px 14px', borderRadius: 10, border: `1.5px solid ${PP.hair}`, background: PP.bg, fontSize: 13, fontWeight: 700, color: PP.ink, cursor: 'pointer', transition: 'background 0.12s' }}
+                        onMouseEnter={e => (e.currentTarget.style.background = PP.primaryTint)}
+                        onMouseLeave={e => (e.currentTarget.style.background = PP.bg)}
+                      >
+                        {s.startTime}
+                      </button>
+                    ))}
                   </div>
                 </div>
-                <ChevronRight size={15} className="text-slate-300 shrink-0" />
-              </button>
-            ))}
-            {todaySlots.length > 8 && (
-              <div className="px-4 py-2 text-xs text-slate-400 font-bold text-center">
-                +{todaySlots.length - 8} slots más disponibles
-              </div>
-            )}
+              )}
+              {courtDetail.afternoon.length > 0 && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <Sunset size={12} style={{ color: '#8B5CF6' }} />
+                    <span style={{ fontSize: 10, fontWeight: 800, color: PP.mute, textTransform: 'uppercase', letterSpacing: 1 }}>Tarde</span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {courtDetail.afternoon.map((s, i) => (
+                      <button key={i} onClick={() => { setForm(f => ({ ...f, date: toLocalDateStr(new Date()), time: s.startTime, court: s.courtName })); setCourtDetail(null); setShowCreate(true); }}
+                        style={{ padding: '7px 14px', borderRadius: 10, border: `1.5px solid ${PP.hair}`, background: PP.bg, fontSize: 13, fontWeight: 700, color: PP.ink, cursor: 'pointer', transition: 'background 0.12s' }}
+                        onMouseEnter={e => (e.currentTarget.style.background = PP.primaryTint)}
+                        onMouseLeave={e => (e.currentTarget.style.background = PP.bg)}
+                      >
+                        {s.startTime}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -752,19 +813,35 @@ const MatchManager: React.FC = () => {
             </div>
           </div>
 
-          <div className="border-t border-slate-100 pt-3">
-            <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Pareja A</div>
-            <div className="space-y-2">
-              <PlayerSelector label="Jugador 1" selectedId={form.p1a} onSelect={id => setForm(f => ({ ...f, p1a: id }))} otherSelectedId={form.p2a} players={allPlayers} formatName={formatPlayerName} />
-              <PlayerSelector label="Jugador 2 (opcional)" selectedId={form.p2a} onSelect={id => setForm(f => ({ ...f, p2a: id }))} otherSelectedId={form.p1a} players={allPlayers} formatName={formatPlayerName} />
-            </div>
-          </div>
-
-          <div className="border-t border-slate-100 pt-3">
-            <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Pareja B</div>
-            <div className="space-y-2">
-              <PlayerSelector label="Jugador 1" selectedId={form.p1b} onSelect={id => setForm(f => ({ ...f, p1b: id }))} otherSelectedId={form.p2b} players={allPlayers} formatName={formatPlayerName} />
-              <PlayerSelector label="Jugador 2 (opcional)" selectedId={form.p2b} onSelect={id => setForm(f => ({ ...f, p2b: id }))} otherSelectedId={form.p1b} players={allPlayers} formatName={formatPlayerName} />
+          {/* Equipos — grid 2 col compacto */}
+          <div style={{ borderTop: `1px solid ${PP.hair}`, paddingTop: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {([
+                { key: 'p1a', label: 'Pareja A · J1 *', exclude: form.p2a },
+                { key: 'p2a', label: 'Pareja A · J2', exclude: form.p1a },
+                { key: 'p1b', label: 'Pareja B · J1 *', exclude: form.p2b },
+                { key: 'p2b', label: 'Pareja B · J2', exclude: form.p1b },
+              ] as const).map(({ key, label, exclude }) => (
+                <div key={key}>
+                  <label style={{ fontSize: 10, fontWeight: 800, color: PP.mute, textTransform: 'uppercase', letterSpacing: 0.8, display: 'block', marginBottom: 4 }}>{label}</label>
+                  <select
+                    value={form[key]}
+                    onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                    style={{
+                      width: '100%', padding: '9px 10px', borderRadius: 10,
+                      border: `1.5px solid ${form[key] ? PP.primary : PP.hair}`,
+                      background: PP.bg, fontFamily: PP.font, fontSize: 13, fontWeight: 600,
+                      color: form[key] ? PP.ink : PP.mute, outline: 'none', cursor: 'pointer',
+                    }}
+                  >
+                    <option value="">— Sin jugador —</option>
+                    {allPlayers
+                      .filter(p => !exclude || p.id !== exclude)
+                      .map(p => <option key={p.id} value={p.id}>{formatPlayerName(p)}</option>)
+                    }
+                  </select>
+                </div>
+              ))}
             </div>
           </div>
 
