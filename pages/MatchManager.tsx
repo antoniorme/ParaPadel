@@ -65,10 +65,14 @@ const MatchManager: React.FC = () => {
     date: new Date().toISOString().split('T')[0],
     time: '',
     court: '',
+    courtNumber: 0,
     level: '',
     p1a: '', p2a: '', p1b: '', p2b: '',
     notes: '',
   });
+
+  // Available courts for the select
+  const [availableCourts, setAvailableCourts] = useState<{ courtNumber: number; courtName: string }[]>([]);
 
   // Score modal
   const [scoreMatch, setScoreMatch] = useState<Match | null>(null);
@@ -110,6 +114,14 @@ const MatchManager: React.FC = () => {
     if (!courts) return;
     const todayDow = new Date().getDay();
     const nowMins = new Date().getHours() * 60 + new Date().getMinutes();
+
+    // Populate courts list for the select (all active courts, not just those with free slots)
+    setAvailableCourts(
+      (courts as any[])
+        .filter(c => c.active_days.includes(todayDow))
+        .map(c => ({ courtNumber: c.court_number, courtName: c.court_name }))
+    );
+
     const summaryMap = new Map<number, CourtSummary>();
 
     courts.forEach((c: any) => {
@@ -189,6 +201,28 @@ const MatchManager: React.FC = () => {
     }
     setCreating(true);
 
+    // Check solapamiento antes de crear
+    if (form.courtNumber) {
+      const startAt = `${form.date}T${form.time}:00`;
+      const endDate = new Date(`${form.date}T${form.time}:00`);
+      endDate.setMinutes(endDate.getMinutes() + 90);
+      const endAt = `${form.date}T${String(endDate.getHours()).padStart(2,'0')}:${String(endDate.getMinutes()).padStart(2,'0')}:00`;
+      const { data: overlap } = await supabase
+        .from('court_reservations')
+        .select('id')
+        .eq('club_id', clubId)
+        .eq('court_number', form.courtNumber)
+        .not('status', 'in', '("rejected","cancelled")')
+        .lt('start_at', endAt)
+        .gt('end_at', startAt)
+        .limit(1);
+      if (overlap && overlap.length > 0) {
+        toastError('Esa pista ya está ocupada en ese horario');
+        setCreating(false);
+        return;
+      }
+    }
+
     const scheduledAt = form.time
       ? `${form.date}T${form.time}:00`
       : `${form.date}T00:00:00`;
@@ -227,37 +261,28 @@ const MatchManager: React.FC = () => {
       if (partErr) toastError('Partido creado pero hubo un error con los jugadores');
     }
 
-    // 3. Bloquear slot en el calendario si tiene pista + hora asignadas
-    if (form.court && form.time) {
-      const { data: courtRow } = await supabase
-        .from('court_availability')
-        .select('court_number')
-        .eq('club_id', clubId)
-        .eq('court_name', form.court)
-        .maybeSingle();
-
-      if (courtRow) {
-        const startAt = `${form.date}T${form.time}:00`;
-        const endDate = new Date(`${form.date}T${form.time}:00`);
-        endDate.setMinutes(endDate.getMinutes() + 90);
-        const endAt = endDate.toISOString().slice(0, 19);
-        await supabase.from('court_reservations').insert({
-          club_id: clubId,
-          court_number: courtRow.court_number,
-          start_at: startAt,
-          end_at: endAt,
-          status: 'confirmed',
-          source: 'admin',
-          notes: `match:${matchData.id}`,
-        });
-      }
+    // 3. Bloquear slot en el calendario si tiene pista asignada con court_number conocido
+    if (form.courtNumber) {
+      const startAt = `${form.date}T${form.time}:00`;
+      const endDate = new Date(`${form.date}T${form.time}:00`);
+      endDate.setMinutes(endDate.getMinutes() + 90);
+      const endAt = `${String(endDate.getHours()).padStart(2,'0')}:${String(endDate.getMinutes()).padStart(2,'0')}`;
+      await supabase.from('court_reservations').insert({
+        club_id: clubId,
+        court_number: form.courtNumber,
+        start_at: startAt,
+        end_at: `${form.date}T${endAt}:00`,
+        status: 'confirmed',
+        source: 'admin',
+        notes: `match:${matchData.id}`,
+      });
     }
 
     success('Partido creado');
 
     setCreating(false);
     setShowCreate(false);
-    setForm({ date: new Date().toISOString().split('T')[0], time: '', court: '', level: '', p1a: '', p2a: '', p1b: '', p2b: '', notes: '' });
+    setForm({ date: new Date().toISOString().split('T')[0], time: '', court: '', courtNumber: 0, level: '', p1a: '', p2a: '', p1b: '', p2b: '', notes: '' });
     loadMatches();
     loadTodaySlots();
   };
@@ -547,7 +572,7 @@ const MatchManager: React.FC = () => {
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {courtDetail.morning.map((s, i) => (
-                      <button key={i} onClick={() => { setForm(f => ({ ...f, date: toLocalDateStr(new Date()), time: s.startTime, court: s.courtName })); setCourtDetail(null); setShowCreate(true); }}
+                      <button key={i} onClick={() => { setForm(f => ({ ...f, date: toLocalDateStr(new Date()), time: s.startTime, court: s.courtName, courtNumber: s.courtNumber })); setCourtDetail(null); setShowCreate(true); }}
                         style={{ padding: '7px 14px', borderRadius: 10, border: `1.5px solid ${PP.hair}`, background: PP.bg, fontSize: 13, fontWeight: 700, color: PP.ink, cursor: 'pointer', transition: 'background 0.12s' }}
                         onMouseEnter={e => (e.currentTarget.style.background = PP.primaryTint)}
                         onMouseLeave={e => (e.currentTarget.style.background = PP.bg)}
@@ -566,7 +591,7 @@ const MatchManager: React.FC = () => {
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {courtDetail.afternoon.map((s, i) => (
-                      <button key={i} onClick={() => { setForm(f => ({ ...f, date: toLocalDateStr(new Date()), time: s.startTime, court: s.courtName })); setCourtDetail(null); setShowCreate(true); }}
+                      <button key={i} onClick={() => { setForm(f => ({ ...f, date: toLocalDateStr(new Date()), time: s.startTime, court: s.courtName, courtNumber: s.courtNumber })); setCourtDetail(null); setShowCreate(true); }}
                         style={{ padding: '7px 14px', borderRadius: 10, border: `1.5px solid ${PP.hair}`, background: PP.bg, fontSize: 13, fontWeight: 700, color: PP.ink, cursor: 'pointer', transition: 'background 0.12s' }}
                         onMouseEnter={e => (e.currentTarget.style.background = PP.primaryTint)}
                         onMouseLeave={e => (e.currentTarget.style.background = PP.bg)}
@@ -821,12 +846,29 @@ const MatchManager: React.FC = () => {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Pista</label>
-              <input
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:border-indigo-400"
-                placeholder="Ej. Pista 2"
-                value={form.court}
-                onChange={e => setForm(f => ({ ...f, court: e.target.value }))}
-              />
+              {availableCourts.length > 0 ? (
+                <select
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:border-indigo-400 bg-white"
+                  value={form.courtNumber || ''}
+                  onChange={e => {
+                    const cn = parseInt(e.target.value);
+                    const c = availableCourts.find(x => x.courtNumber === cn);
+                    setForm(f => ({ ...f, courtNumber: cn || 0, court: c?.courtName || '' }));
+                  }}
+                >
+                  <option value="">— Sin pista —</option>
+                  {availableCourts.map(c => (
+                    <option key={c.courtNumber} value={c.courtNumber}>{c.courtName}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:border-indigo-400"
+                  placeholder="Ej. Pista 2"
+                  value={form.court}
+                  onChange={e => setForm(f => ({ ...f, court: e.target.value, courtNumber: 0 }))}
+                />
+              )}
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Nivel</label>
