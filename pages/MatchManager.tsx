@@ -62,6 +62,7 @@ const MatchManager: React.FC = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
+    title: '',
     date: new Date().toISOString().split('T')[0],
     time: '',
     court: '',
@@ -201,12 +202,15 @@ const MatchManager: React.FC = () => {
     }
     setCreating(true);
 
+    // Timestamps correctos con zona horaria (igual que buildTimestamp en ClubCalendar)
+    const startDate = new Date(`${form.date}T${form.time}:00`);
+    const endDate = new Date(startDate.getTime() + 90 * 60 * 1000);
+    const scheduledAt = startDate.toISOString();
+    const startAt = startDate.toISOString();
+    const endAt = endDate.toISOString();
+
     // Check solapamiento antes de crear
     if (form.courtNumber) {
-      const startAt = `${form.date}T${form.time}:00`;
-      const endDate = new Date(`${form.date}T${form.time}:00`);
-      endDate.setMinutes(endDate.getMinutes() + 90);
-      const endAt = `${form.date}T${String(endDate.getHours()).padStart(2,'0')}:${String(endDate.getMinutes()).padStart(2,'0')}:00`;
       const { data: overlap } = await supabase
         .from('court_reservations')
         .select('id')
@@ -223,10 +227,6 @@ const MatchManager: React.FC = () => {
       }
     }
 
-    const scheduledAt = form.time
-      ? `${form.date}T${form.time}:00`
-      : `${form.date}T00:00:00`;
-
     // 1. Crear el partido
     const { data: matchData, error: matchErr } = await supabase
       .from('free_matches')
@@ -235,7 +235,7 @@ const MatchManager: React.FC = () => {
         scheduled_at: scheduledAt,
         court: form.court || null,
         level: form.level || null,
-        notes: form.notes || null,
+        notes: form.title ? `${form.title}${form.notes ? ' · ' + form.notes : ''}` : (form.notes || null),
         max_players: 4,
         status: 'open',
       })
@@ -261,17 +261,13 @@ const MatchManager: React.FC = () => {
       if (partErr) toastError('Partido creado pero hubo un error con los jugadores');
     }
 
-    // 3. Bloquear slot en el calendario si tiene pista asignada con court_number conocido
+    // 3. Bloquear slot en el calendario (court_reservations = fuente única de verdad)
     if (form.courtNumber) {
-      const startAt = `${form.date}T${form.time}:00`;
-      const endDate = new Date(`${form.date}T${form.time}:00`);
-      endDate.setMinutes(endDate.getMinutes() + 90);
-      const endAt = `${String(endDate.getHours()).padStart(2,'0')}:${String(endDate.getMinutes()).padStart(2,'0')}`;
       await supabase.from('court_reservations').insert({
         club_id: clubId,
         court_number: form.courtNumber,
         start_at: startAt,
-        end_at: `${form.date}T${endAt}:00`,
+        end_at: endAt,
         status: 'confirmed',
         source: 'admin',
         notes: `match:${matchData.id}`,
@@ -282,7 +278,7 @@ const MatchManager: React.FC = () => {
 
     setCreating(false);
     setShowCreate(false);
-    setForm({ date: new Date().toISOString().split('T')[0], time: '', court: '', courtNumber: 0, level: '', p1a: '', p2a: '', p1b: '', p2b: '', notes: '' });
+    setForm({ title: '', date: new Date().toISOString().split('T')[0], time: '', court: '', courtNumber: 0, level: '', p1a: '', p2a: '', p1b: '', p2b: '', notes: '' });
     loadMatches();
     loadTodaySlots();
   };
@@ -822,6 +818,18 @@ const MatchManager: React.FC = () => {
         ]}
       >
         <div className="space-y-4">
+          {/* Nombre — primer campo, autoFocus */}
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Nombre del partido</label>
+            <input
+              autoFocus
+              className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:border-indigo-400"
+              placeholder="Ej. Partido amistoso, Senior masculino…"
+              value={form.title}
+              onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Fecha</label>
