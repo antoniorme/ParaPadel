@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { useHistory } from '../store/HistoryContext';
 import { useToast } from '../components/Toast';
-import { Modal, Button, EmptyState } from '../components';
+import { Modal, Button, EmptyState, PlayerSelector } from '../components';
 import { THEME, PP } from '../utils/theme';
 import { calculateMatchDelta } from '../utils/Elo';
 import { generateClubMatchesText, openWhatsApp } from '../utils/whatsapp';
@@ -12,7 +12,7 @@ import { MATCH_LEVELS } from '../utils/categories';
 import {
   Swords, Plus, CheckCircle2, Clock, Trash2,
   ChevronDown, ChevronUp, Zap, MessageCircle,
-  LayoutGrid, ChevronRight, Flag, ShieldCheck, Sun, Sunset, X,
+  LayoutGrid, ChevronRight, Flag, ShieldCheck, Sun, Sunset, X, Search,
 } from 'lucide-react';
 
 // ── HELPERS CALENDARIO ────────────────────────────────────────────────────────
@@ -48,7 +48,7 @@ const fmtDate = (iso: string) => {
 // ── COMPONENT ─────────────────────────────────────────────────────────────────
 
 const MatchManager: React.FC = () => {
-  const { state, formatPlayerName } = useTournament();
+  const { state, formatPlayerName, addPlayerToDB } = useTournament();
   const { clubData } = useHistory();
   const { success, error: toastError } = useToast();
 
@@ -61,15 +61,23 @@ const MatchManager: React.FC = () => {
   // Create modal
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
+  // Cada slot: nombre libre (invitado) + playerId opcional (si buscan/crean)
   const [form, setForm] = useState({
     date: new Date().toISOString().split('T')[0],
     time: '',
     court: '',
     courtNumber: 0,
     level: '',
-    n1: '', n2: '', n3: '', n4: '',
+    slots: [
+      { name: '', playerId: '' },
+      { name: '', playerId: '' },
+      { name: '', playerId: '' },
+      { name: '', playerId: '' },
+    ] as { name: string; playerId: string }[],
     notes: '',
   });
+  const [openSlot, setOpenSlot] = useState<number | null>(null);
+  const [slotTab, setSlotTab] = useState<'search' | 'new'>('search');
 
   // Available courts for the select
   const [availableCourts, setAvailableCourts] = useState<{ courtNumber: number; courtName: string }[]>([]);
@@ -247,17 +255,14 @@ const MatchManager: React.FC = () => {
       return;
     }
 
-    // 2. Insertar participantes (invitados por nombre — claimable_guest)
-    const participants = [form.n1, form.n2, form.n3, form.n4]
-      .map((name, i) => name.trim() ? {
-        match_id: matchData.id,
-        guest_name: name.trim(),
-        slot_index: i + 1,
-        team: i < 2 ? 'A' : 'B',
-        participant_type: 'claimable_guest',
-        joined_via: 'manual',
-        attendance_status: 'joined',
-      } : null)
+    // 2. Insertar participantes
+    const participants = form.slots
+      .map((s, i) => {
+        if (!s.name.trim() && !s.playerId) return null;
+        return s.playerId
+          ? { match_id: matchData.id, player_id: s.playerId, slot_index: i + 1, team: i < 2 ? 'A' : 'B', participant_type: 'registered_player', joined_via: 'manual', attendance_status: 'joined' }
+          : { match_id: matchData.id, guest_name: s.name.trim(), slot_index: i + 1, team: i < 2 ? 'A' : 'B', participant_type: 'claimable_guest', joined_via: 'manual', attendance_status: 'joined' };
+      })
       .filter(Boolean);
 
     if (participants.length > 0) {
@@ -282,7 +287,8 @@ const MatchManager: React.FC = () => {
 
     setCreating(false);
     setShowCreate(false);
-    setForm({ date: new Date().toISOString().split('T')[0], time: '', court: '', courtNumber: 0, level: '', n1: '', n2: '', n3: '', n4: '', notes: '' });
+    setForm({ date: new Date().toISOString().split('T')[0], time: '', court: '', courtNumber: 0, level: '', slots: [{name:'',playerId:''},{name:'',playerId:''},{name:'',playerId:''},{name:'',playerId:''}], notes: '' });
+    setOpenSlot(null);
     loadMatches();
     loadTodaySlots();
   };
@@ -887,24 +893,73 @@ const MatchManager: React.FC = () => {
           <div style={{ borderTop: `1px solid ${PP.hair}`, paddingTop: 14 }}>
             <div style={{ fontSize: 11, fontWeight: 800, color: PP.mute, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Jugadores</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {(['n1','n2','n3','n4'] as const).map((key, i) => (
-                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: PP.muteSoft, minWidth: 16, textAlign: 'center' }}>{i + 1}</span>
-                  <input
-                    style={{
-                      flex: 1, padding: '9px 12px', borderRadius: 10,
-                      border: `1.5px solid ${form[key] ? PP.primary : PP.hair}`,
-                      background: PP.bg, fontFamily: PP.font, fontSize: 13, fontWeight: 600,
-                      color: PP.ink, outline: 'none',
-                    }}
-                    placeholder="Nombre del jugador"
-                    value={form[key]}
-                    onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                    onFocus={e => (e.target.style.borderColor = PP.primary)}
-                    onBlur={e => (e.target.style.borderColor = form[key] ? PP.primary : PP.hair)}
-                  />
-                </div>
-              ))}
+              {form.slots.map((slot, i) => {
+                const linked = slot.playerId ? allPlayers.find(p => p.id === slot.playerId) : null;
+                const isOpen = openSlot === i;
+                return (
+                  <div key={i} style={{ position: 'relative' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {/* Número */}
+                      <span style={{ fontSize: 13, fontWeight: 800, color: PP.muteSoft, minWidth: 14, textAlign: 'center', flexShrink: 0 }}>{i + 1}</span>
+                      {/* Input de nombre */}
+                      <input
+                        style={{
+                          flex: 1, padding: '8px 11px', borderRadius: 10,
+                          border: `1.5px solid ${slot.name || slot.playerId ? PP.primary : PP.hair}`,
+                          background: linked ? PP.primaryTint : PP.bg,
+                          fontFamily: PP.font, fontSize: 13, fontWeight: 600,
+                          color: PP.ink, outline: 'none', minWidth: 0,
+                        }}
+                        placeholder="Nombre del jugador"
+                        value={slot.name}
+                        onChange={e => setForm(f => ({ ...f, slots: f.slots.map((s, j) => j === i ? { name: e.target.value, playerId: '' } : s) }))}
+                      />
+                      {/* Buscar */}
+                      <button
+                        type="button"
+                        onClick={() => { setSlotTab('search'); setOpenSlot(isOpen && slotTab === 'search' ? null : i); }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '7px 9px', borderRadius: 8, border: `1px solid ${PP.hair}`, background: PP.card, fontSize: 11, fontWeight: 700, color: PP.ink2, cursor: 'pointer', flexShrink: 0, fontFamily: PP.font }}
+                      >
+                        <Search size={11}/> Buscar
+                      </button>
+                      {/* Crear */}
+                      <button
+                        type="button"
+                        onClick={() => { setSlotTab('new'); setOpenSlot(isOpen && slotTab === 'new' ? null : i); }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '7px 9px', borderRadius: 8, border: 0, background: PP.primary, fontSize: 11, fontWeight: 700, color: '#fff', cursor: 'pointer', flexShrink: 0, fontFamily: PP.font }}
+                      >
+                        <Plus size={11}/>
+                      </button>
+                    </div>
+                    {/* Dropdown PlayerSelector */}
+                    {isOpen && (
+                      <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 22, right: 0, zIndex: 500, background: PP.card, borderRadius: 14, boxShadow: '0 8px 32px rgba(0,0,0,0.15)', border: `1px solid ${PP.hair}`, overflow: 'hidden' }}>
+                        <PlayerSelector
+                          label=""
+                          selectedId={slot.playerId}
+                          onSelect={id => {
+                            const p = allPlayers.find(x => x.id === id);
+                            setForm(f => ({ ...f, slots: f.slots.map((s, j) => j === i ? { name: p ? formatPlayerName(p) : '', playerId: id } : s) }));
+                            setOpenSlot(null);
+                          }}
+                          otherSelectedId=""
+                          players={allPlayers.filter(p => !form.slots.some((s, j) => j !== i && s.playerId === p.id))}
+                          onAddPlayer={async (p) => {
+                            const id = await addPlayerToDB(p);
+                            if (id) {
+                              setForm(f => ({ ...f, slots: f.slots.map((s, j) => j === i ? { name: p.name || '', playerId: id } : s) }));
+                              setOpenSlot(null);
+                            }
+                            return id;
+                          }}
+                          formatName={formatPlayerName}
+                          initialTab={slotTab}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
