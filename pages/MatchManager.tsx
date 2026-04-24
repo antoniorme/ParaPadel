@@ -3,6 +3,7 @@ import { useTournament } from '../store/TournamentContext';
 import { useHistory } from '../store/HistoryContext';
 import { useToast } from '../components/Toast';
 import { Modal, Button, EmptyState, CreateMatchModal } from '../components';
+import type { CreateMatchPrefill } from '../components';
 import { THEME, PP } from '../utils/theme';
 import { calculateMatchDelta } from '../utils/Elo';
 import { generateClubMatchesText, openWhatsApp } from '../utils/whatsapp';
@@ -81,8 +82,7 @@ const MatchManager: React.FC = () => {
   const [courtSummaries, setCourtSummaries] = useState<CourtSummary[]>([]);
   const [courtDetail, setCourtDetail] = useState<CourtSummary | null>(null);
 
-  // Prefill para CreateMatchModal (cuando se clica un slot desde las cards de pista)
-  const [createPrefill, setCreatePrefill] = useState<{ date: string; time: string; court: string; courtNumber: number } | undefined>(undefined);
+  const [createPrefill, setCreatePrefill] = useState<CreateMatchPrefill | undefined>(undefined);
 
   const loadTodaySlots = useCallback(async () => {
     if (!clubId || !clubData.courts_enabled) return;
@@ -460,7 +460,7 @@ const MatchManager: React.FC = () => {
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {courtDetail.morning.map((s, i) => (
-                      <button key={i} onClick={() => { setCreatePrefill({ date: toLocalDateStr(new Date()), time: s.startTime, court: s.courtName, courtNumber: s.courtNumber }); setCourtDetail(null); setShowCreate(true); }}
+                      <button key={i} onClick={() => { setCreatePrefill({ date: toLocalDateStr(new Date()), time: s.startTime, courtName: s.courtName, courtNumber: s.courtNumber }); setCourtDetail(null); setShowCreate(true); }}
                         style={{ padding: '7px 14px', borderRadius: 10, border: `1.5px solid ${PP.hair}`, background: PP.bg, fontSize: 13, fontWeight: 700, color: PP.ink, cursor: 'pointer', transition: 'background 0.12s' }}
                         onMouseEnter={e => (e.currentTarget.style.background = PP.primaryTint)}
                         onMouseLeave={e => (e.currentTarget.style.background = PP.bg)}
@@ -479,7 +479,7 @@ const MatchManager: React.FC = () => {
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {courtDetail.afternoon.map((s, i) => (
-                      <button key={i} onClick={() => { setCreatePrefill({ date: toLocalDateStr(new Date()), time: s.startTime, court: s.courtName, courtNumber: s.courtNumber }); setCourtDetail(null); setShowCreate(true); }}
+                      <button key={i} onClick={() => { setCreatePrefill({ date: toLocalDateStr(new Date()), time: s.startTime, courtName: s.courtName, courtNumber: s.courtNumber }); setCourtDetail(null); setShowCreate(true); }}
                         style={{ padding: '7px 14px', borderRadius: 10, border: `1.5px solid ${PP.hair}`, background: PP.bg, fontSize: 13, fontWeight: 700, color: PP.ink, cursor: 'pointer', transition: 'background 0.12s' }}
                         onMouseEnter={e => (e.currentTarget.style.background = PP.primaryTint)}
                         onMouseLeave={e => (e.currentTarget.style.background = PP.bg)}

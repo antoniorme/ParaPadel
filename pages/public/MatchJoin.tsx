@@ -135,7 +135,7 @@ const MatchJoin: React.FC = () => {
     if (user && match) {
       setIsHost(
         user.id === match.created_by_user_id ||
-        user.id === (match as any).host_user_id
+        user.id === match.host_user_id
       );
     }
   }, [user, match]);
@@ -356,7 +356,7 @@ const MatchJoin: React.FC = () => {
   // ── Share ────────────────────────────────────────────────────
   const handleShare = async () => {
     if (!match) return;
-    const clubId = (match as any).club_id;
+    const clubId = match.club_id;
 
     // If this match belongs to a club, share the full club matches page
     if (clubId) {
@@ -877,9 +877,9 @@ const MatchJoin: React.FC = () => {
             )}
 
             {/* Ver más partidos del club */}
-            {(match as any).club_id && (
+            {match.club_id && (
               <button
-                onClick={() => navigate(`/club/${(match as any).club_id}/partidos`)}
+                onClick={() => navigate(`/club/${match.club_id}/partidos`)}
                 className="w-full py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-all"
               >
                 Ver todos los partidos del club

@@ -8,7 +8,7 @@ import ClubMatchBrowser from './ClubMatchBrowser';
 
 type MatchFilter = 'all' | 'win' | 'loss';
 import { calculateDisplayRanking, calculateMatchDelta, getPairTeamElo } from '../../utils/Elo';
-import { TournamentState } from '../../types';
+import { TournamentState, TournamentFormat } from '../../types';
 import { supabase } from '../../lib/supabase';
 
 const getAvatarColor = (name: string): string => {
@@ -33,7 +33,7 @@ interface ProcessedTournament {
   id: string;
   title: string;
   date: string;
-  format: string;
+  format: TournamentFormat;
   resultBadge?: 'champion' | 'consolation' | null;
   matches: ProcessedMatch[];
   eloChangeTotal: number;
@@ -386,7 +386,7 @@ const PlayerMatches: React.FC = () => {
         <div className="space-y-3">
           {filteredTournaments.map(t => {
             const isExpanded = expandedId === t.id;
-            const color = getFormatColor(t.format as any);
+            const color = getFormatColor(t.format);
             const dateStr = new Date(t.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
             return (
               <div key={t.id} className="rounded-2xl overflow-hidden border border-slate-800" style={{ background: '#0F172A' }}>
