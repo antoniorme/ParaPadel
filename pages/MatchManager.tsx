@@ -129,7 +129,7 @@ const MatchManager: React.FC = () => {
       }
     });
 
-    setCourtSummaries(Array.from(summaryMap.values()).filter(s => s.morning.length + s.afternoon.length > 0));
+    setCourtSummaries(Array.from(summaryMap.values()));
   }, [clubId, clubData.courts_enabled]);
 
   // ── LOAD ────────────────────────────────────────────────────
@@ -425,8 +425,8 @@ const MatchManager: React.FC = () => {
                       </span>
                     </div>
                   </div>
-                  <div style={{ marginTop: 8, fontSize: 10, fontWeight: 700, color: PP.primary, display: 'flex', alignItems: 'center', gap: 3 }}>
-                    {total} huecos · Ver <ChevronRight size={10} />
+                  <div style={{ marginTop: 8, fontSize: 10, fontWeight: 700, color: total > 0 ? PP.primary : PP.muteSoft, display: 'flex', alignItems: 'center', gap: 3 }}>
+                    {total > 0 ? `${total} huecos · Ver` : 'Completa'}{total > 0 && <ChevronRight size={10} />}
                   </div>
                 </button>
               );
