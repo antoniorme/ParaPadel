@@ -183,8 +183,8 @@ const MatchManager: React.FC = () => {
   // ── CREATE ──────────────────────────────────────────────────
 
   const handleCreate = async () => {
-    if (!form.date) {
-      toastError('Selecciona una fecha para el partido');
+    if (!form.date || !form.time) {
+      toastError('La fecha y la hora son obligatorias');
       return;
     }
     setCreating(true);
