@@ -170,6 +170,7 @@ const MatchManager: React.FC = () => {
         *,
         match_participants (
           id, player_id, team, slot_index, attendance_status, participant_type,
+          guest_name,
           player:player_id (
             id, name, nickname, global_rating, manual_rating,
             category_ratings, main_category, categories
@@ -419,14 +420,27 @@ const MatchManager: React.FC = () => {
 
   const getTeamPlayers = (m: Match, team: 'A' | 'B'): Player[] =>
     (m.match_participants || [])
-      .filter(p => p.team === team && p.player && p.attendance_status !== 'cancelled')
+      .filter((p: any) => p.team === team && p.player && p.attendance_status !== 'cancelled')
       .sort((a, b) => (a.slot_index || 0) - (b.slot_index || 0))
-      .map(p => p.player as Player);
+      .map((p: any) => p.player as Player);
+
+  // Nombres para mostrar: incluye jugadores registrados E invitados
+  const teamNames = (m: Match, team: 'A' | 'B'): string[] =>
+    (m.match_participants || [])
+      .filter((p: any) => p.team === team && p.attendance_status !== 'cancelled')
+      .sort((a: any, b: any) => (a.slot_index || 0) - (b.slot_index || 0))
+      .map((p: any) => {
+        if (p.player) return p.player.nickname ? `"${p.player.nickname}"` : p.player.name.split(' ')[0];
+        if (p.guest_name) return p.guest_name.split(' ')[0];
+        return '?';
+      });
 
   const pairLabel = (players: Player[]) => {
     if (players.length === 0) return '—';
     return players.map(p => p.nickname ? `"${p.nickname}"` : p.name.split(' ')[0]).join(' & ');
   };
+
+  const pairLabelNames = (names: string[]) => names.length === 0 ? '—' : names.join(' & ');
 
   const getResult = (m: Match) => (m.match_results || [])[0] || null;
 
@@ -723,9 +737,9 @@ const MatchManager: React.FC = () => {
 
                   {/* Teams strip */}
                   <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 12.5, fontWeight: 700, color: PP.ink, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pairLabel(teamA)}</span>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: PP.ink, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pairLabelNames(teamNames(m, 'A'))}</span>
                     <span style={{ fontSize: 10, fontWeight: 800, color: PP.muteSoft, flexShrink: 0 }}>VS</span>
-                    <span style={{ fontSize: 12.5, fontWeight: 700, color: PP.ink, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right' }}>{pairLabel(teamB)}</span>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: PP.ink, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right' }}>{pairLabelNames(teamNames(m, 'B'))}</span>
                   </div>
                 </button>
 
@@ -734,7 +748,9 @@ const MatchManager: React.FC = () => {
                   <div className="border-t border-slate-100 p-4 space-y-3">
                     <div className="grid grid-cols-2 gap-3">
                       {(['A', 'B'] as const).map(side => {
-                        const players = getTeamPlayers(m, side);
+                        const allParts = (m.match_participants || [])
+                          .filter((p: any) => p.team === side && p.attendance_status !== 'cancelled')
+                          .sort((a: any, b: any) => (a.slot_index || 0) - (b.slot_index || 0));
                         const won = result
                           ? (side === 'A' ? result.team_a_score > result.team_b_score : result.team_b_score > result.team_a_score)
                           : false;
@@ -744,22 +760,27 @@ const MatchManager: React.FC = () => {
                               Pareja {side}
                               {won && <span className="ml-1 text-emerald-600">· Ganador</span>}
                             </div>
-                            {players.length === 0 ? (
+                            {allParts.length === 0 ? (
                               <div className="text-xs text-slate-400 italic">Sin jugadores</div>
-                            ) : players.map(pl => (
-                              <div key={pl.id} className="flex items-center gap-2 mb-1">
-                                <div
-                                  className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[9px] font-black shrink-0"
-                                  style={{ background: getAvatarColor(pl.name) }}
-                                >
-                                  {pl.name[0]}
+                            ) : allParts.map((p: any) => {
+                              const name = p.player?.name || p.guest_name || '?';
+                              const isGuest = !p.player;
+                              return (
+                                <div key={p.id} className="flex items-center gap-2 mb-1">
+                                  <div
+                                    className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[9px] font-black shrink-0"
+                                    style={{ background: isGuest ? '#94a3b8' : getAvatarColor(name) }}
+                                  >
+                                    {name[0]?.toUpperCase()}
+                                  </div>
+                                  <span className="text-xs font-bold text-slate-700 truncate">{name}</span>
+                                  {isGuest
+                                    ? <span className="text-[10px] text-slate-400 ml-auto">Invitado</span>
+                                    : <span className="text-[10px] font-bold text-slate-400 ml-auto tabular-nums">{p.player.club_rating ?? 1200}</span>
+                                  }
                                 </div>
-                                <span className="text-xs font-bold text-slate-700 truncate">{pl.name}</span>
-                                <span className="text-[10px] font-bold text-slate-400 ml-auto tabular-nums">
-                                  {pl.club_rating ?? 1200}
-                                </span>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         );
                       })}
