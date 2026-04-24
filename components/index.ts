@@ -10,3 +10,8 @@ export { LevelProgressBar } from './LevelProgressBar';
 export { PlayerSelector } from './PlayerSelector';
 export { PlayerSlot } from './PlayerSlot';
 export { PosterGenerator } from './PosterGenerator';
+export { CreateMatchModal } from './CreateMatchModal';
+export type { CreateMatchPrefill } from './CreateMatchModal';
+export { InfoRow } from './InfoRow';
+export { ConfirmDialog } from './ConfirmDialog';
+export { Avatar } from './Avatar';

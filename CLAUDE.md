@@ -148,7 +148,11 @@ Si una pieza de UI se usa en más de un lugar → extraerla a `components/` y ex
 
 ### Componentes disponibles — USAR SIEMPRE en lugar de inline
 ```tsx
-import { Modal, Toast, StatCard, EmptyState, Badge, Button } from './components';
+import {
+  Modal, StatCard, EmptyState, Badge, Button,
+  CreateMatchModal, InfoRow, ConfirmDialog, Avatar,
+  PlayerSlot,
+} from './components';
 
 // Modal — NO escribir fixed inset-0 inline nunca más
 <Modal isOpen={show} onClose={() => setShow(false)} title="¿Eliminar?" 
@@ -175,8 +179,44 @@ error('Error al guardar resultado');
 // Button
 <Button variant="primary" fullWidth loading={saving}>Guardar</Button>
 
+// CreateMatchModal — modal de crear partido con slots de jugadores
+// Usado en MatchManager y ClubCalendar. NO reimplementar inline.
+// prefill.lockSlot=true → fija fecha/hora/pista desde el calendario
+// shareWhatsApp=true   → abre WhatsApp al crear
+<CreateMatchModal
+  isOpen={showCreate}
+  onClose={() => setShowCreate(false)}
+  onCreated={() => loadData()}
+/>
+<CreateMatchModal
+  isOpen={showCreate}
+  onClose={() => setShowCreate(false)}
+  onCreated={() => loadDayData()}
+  prefill={{ date: dateStr, time: '10:00', courtNumber: 1, courtName: 'Pista 1', lockSlot: true }}
+  shareWhatsApp
+/>
+
+// ConfirmDialog — modal de confirmación sí/no
+// Para borrar/confirmar acciones. NO usar Modal inline para esto.
+<ConfirmDialog
+  isOpen={!!deleteId}
+  onClose={() => setDeleteId(null)}
+  onConfirm={handleDelete}
+  title="¿Eliminar partido?"
+  body="Esta acción no se puede deshacer."
+  confirmLabel="Eliminar"
+  variant="danger"
+  loading={deleting}
+/>
+
+// InfoRow — fila icono + etiqueta + valor
+// NUNCA reimplementar inline.
+<InfoRow icon={<Phone size={14}/>} label="Teléfono" value={player.phone} />
+
+// Avatar — círculo con iniciales y color determinista por nombre
+<Avatar name="Juan García" size={32} />
+
 // PlayerSlot — slot de jugador con trigger compacto + dropdown Buscar/Crear
-// Usa PlayerSelector internamente. SIEMPRE usar esto en lugar de <select> o inline PlayerSelector
 <PlayerSlot
   slotNumber={1}
   selectedId={form.p1}
@@ -187,6 +227,69 @@ error('Error al guardar resultado');
   formatName={formatPlayerName}
 />
 ```
+
+---
+
+## Reglas de negocio
+
+Estas reglas definen el comportamiento esperado de la aplicación. Cualquier código nuevo debe respetarlas. Si una petición las contradice → preguntar antes de implementar.
+
+### Partidos Abiertos
+
+| # | Regla |
+|---|---|
+| 1 | Un partido tiene **exactamente 4 slots** — no 3, no 5 |
+| 2 | Slots 1-2 = **Equipo A**, Slots 3-4 = **Equipo B** |
+| 3 | Los jugadores **NO son obligatorios al crear** — partido vacío es el caso normal (se comparte por WhatsApp) |
+| 4 | **Fecha y hora SÍ son obligatorias** para crear un partido |
+| 5 | Duración fija: **90 minutos** por partido |
+| 6 | No se puede reservar una pista ya ocupada en ese slot (**anti-solapamiento**) |
+| 7 | Cada slot puede ser: jugador registrado, invitado con nombre, o vacío |
+| 8 | Al borrar un partido, **se borra también** la reserva de pista vinculada |
+
+### Mini Torneos
+
+| # | Regla |
+|---|---|
+| 9 | Formatos válidos: **8, 10, 12 o 16 parejas** |
+| 10 | Flujo obligatorio: Setup → Registro → Check-in → Activo → Resultados |
+| 11 | No se puede avanzar de fase sin cumplir los requisitos del estado actual |
+| 12 | **No hay empates** — todo resultado tiene ganador |
+| 13 | Una pareja = exactamente **2 jugadores** |
+| 14 | Un jugador **no puede estar en dos parejas** del mismo torneo |
+
+### ELO / Ranking
+
+| # | Regla |
+|---|---|
+| 15 | El ELO se calcula con la lógica de `utils/Elo.ts` — **nunca tocar sin tests** |
+| 16 | Rating inicial (manual): escala **1–10**, paso 0.5 |
+| 17 | El ELO sólo se actualiza al **confirmar un resultado** de torneo |
+
+### Calendario de Pistas
+
+| # | Regla |
+|---|---|
+| 18 | `court_reservations` es la **única fuente de verdad** para ocupación de pistas |
+| 19 | Toda reserva tiene `source`: `admin`, `player`, o `match` |
+| 20 | Estados válidos: `confirmed`, `pending`, `cancelled` |
+| 21 | Cancelar una reserva vinculada a partido **cancela también el partido** |
+
+### Jugadores / Identidad
+
+| # | Regla |
+|---|---|
+| 22 | Tipos de participante: `registered_player`, `claimable_guest`, `placeholder_guest` |
+| 23 | Un invitado (`claimable_guest`) tiene nombre pero **no tiene cuenta** — puede reclamar su perfil |
+| 24 | El **nombre** es el único campo obligatorio al crear un jugador |
+
+### Roles
+
+| # | Regla |
+|---|---|
+| 25 | Roles: `superadmin` → `admin` → `player` → `pending` |
+| 26 | El rol se determina **siempre desde Supabase** — nunca hardcodeado |
+| 27 | `pending` = sin acceso hasta verificación manual por el admin |
 
 ---
 

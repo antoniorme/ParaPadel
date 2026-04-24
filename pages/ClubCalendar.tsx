@@ -3,16 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { useHistory } from '../store/HistoryContext';
 import { useAuth } from '../store/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Modal, useToast } from '../components';
+import { Modal, useToast, CreateMatchModal, InfoRow } from '../components';
+import type { CreateMatchPrefill } from '../components';
 import { CourtConfig, CourtBlock, CourtReservation, ReservationStatus } from '../types';
 import {
     ChevronLeft, ChevronRight, Plus, Settings, Check, X,
     Phone, MessageCircle, Clock, User, Trash2, RefreshCw,
     Calendar, Lock, Wrench, AlertTriangle, Edit2, CalendarDays,
-    Repeat, Ban, Swords, BarChart2
+    Repeat, Ban, Swords
 } from 'lucide-react';
-import { MATCH_LEVELS } from '../utils/categories';
-import { generateClubMatchesText, openWhatsApp } from '../utils/whatsapp';
 import { THEME, PP } from '../utils/theme';
 
 // ─── CONSTANTES ───────────────────────────────────────────────────────────────
@@ -158,10 +157,8 @@ const ClubCalendar: React.FC = () => {
     const [slotChoiceData, setSlotChoiceData] = useState<{ courtNumber: number; startTime: string } | null>(null);
 
     // Modal de partido abierto desde pista
-    const [showOpenMatchModal, setShowOpenMatchModal] = useState(false);
-    const [openMatchSlot, setOpenMatchSlot] = useState<{ courtNumber: number; startTime: string } | null>(null);
-    const [openMatchLevel, setOpenMatchLevel] = useState('');
-    const [openMatchNotes, setOpenMatchNotes] = useState('');
+    const [showCreateMatch, setShowCreateMatch] = useState(false);
+    const [createMatchPrefill, setCreateMatchPrefill] = useState<CreateMatchPrefill | undefined>(undefined);
 
     // Modales de reserva / bloqueo
     const [selectedSlot, setSelectedSlot] = useState<{ courtNumber: number; startTime: string } | null>(null);
@@ -367,59 +364,6 @@ const ClubCalendar: React.FC = () => {
         success('Slot recurrente eliminado'); setSelectedRecurring(null); loadRecurringData();
     };
 
-    const handleCreateOpenMatch = async () => {
-        if (!openMatchSlot || !clubData.id) return;
-        setSaving(true);
-        const scheduledAt = buildTimestamp(dateStr, openMatchSlot.startTime);
-        const { data: matchData, error } = await supabase.from('free_matches').insert({
-            club_id: clubData.id,
-            scheduled_at: scheduledAt,
-            court: courts.find(c => c.court_number === openMatchSlot.courtNumber)?.court_name || `Pista ${openMatchSlot.courtNumber}`,
-            level: openMatchLevel || null,
-            notes: openMatchNotes || null,
-            max_players: 4,
-            status: 'open',
-        }).select('id, share_token').single();
-        setSaving(false);
-        if (error || !matchData) { showError('Error al crear el partido'); return; }
-
-        // Bloquear el slot en court_reservations (fuente única de verdad para pistas)
-        const endAt = buildTimestamp(dateStr, minsToTime(timeToMins(openMatchSlot!.startTime) + 90));
-        await supabase.from('court_reservations').insert({
-            club_id: clubData.id,
-            court_number: openMatchSlot!.courtNumber,
-            start_at: scheduledAt,
-            end_at: endAt,
-            status: 'confirmed',
-            source: 'admin',
-            notes: `match:${matchData.id}`,
-        });
-
-        success('Partido abierto creado');
-        setShowOpenMatchModal(false);
-        setOpenMatchSlot(null);
-        setOpenMatchLevel('');
-        setOpenMatchNotes('');
-        loadDayData(); // Refrescar el calendario para mostrar el slot bloqueado
-        // Ofrecer WhatsApp con todos los partidos del club
-        if (clubData.name && clubData.id && matchData) {
-            const { data: allOpen } = await supabase
-                .from('free_matches')
-                .select('id, scheduled_at, level, court, max_players, match_participants(id, attendance_status)')
-                .eq('club_id', clubData.id).eq('status', 'open')
-                .gte('scheduled_at', new Date().toISOString());
-            if (allOpen && allOpen.length > 0) {
-                const text = generateClubMatchesText(clubData.name, clubData.id, allOpen.map((m: any) => ({
-                    scheduled_at: m.scheduled_at,
-                    level: m.level,
-                    court: m.court,
-                    max_players: m.max_players || 4,
-                    spots_taken: (m.match_participants || []).filter((p: any) => ['joined','confirmed'].includes(p.attendance_status)).length,
-                })));
-                openWhatsApp(text);
-            }
-        }
-    };
 
     // ─── DRAG & DROP ──────────────────────────────────────────────────────────
 
@@ -997,8 +941,14 @@ const ClubCalendar: React.FC = () => {
                         </button>
                         <button
                             onClick={() => {
-                                setOpenMatchSlot({ courtNumber: slotChoiceData.courtNumber, startTime: slotChoiceData.startTime });
-                                setShowOpenMatchModal(true);
+                                setCreateMatchPrefill({
+                                    date: dateStr,
+                                    time: slotChoiceData.startTime,
+                                    courtNumber: slotChoiceData.courtNumber,
+                                    courtName: courts.find(c => c.court_number === slotChoiceData.courtNumber)?.court_name || `Pista ${slotChoiceData.courtNumber}`,
+                                    lockSlot: true,
+                                });
+                                setShowCreateMatch(true);
                                 setSlotChoiceData(null);
                             }}
                             className="w-full flex items-center gap-3 p-4 bg-violet-50 hover:bg-violet-100 rounded-2xl transition-all border border-violet-100"
@@ -1054,74 +1004,13 @@ const ClubCalendar: React.FC = () => {
             </Modal>
 
             {/* CREAR PARTIDO ABIERTO DESDE PISTA */}
-            <Modal
-                isOpen={showOpenMatchModal}
-                onClose={() => { setShowOpenMatchModal(false); setOpenMatchSlot(null); }}
-                title="Partido abierto"
-                icon={<Swords size={22} />}
-                iconColor="brand"
-                size="sm"
-                actions={[
-                    { label: 'Cancelar', onClick: () => { setShowOpenMatchModal(false); setOpenMatchSlot(null); }, variant: 'secondary' },
-                    { label: 'Crear y compartir', onClick: handleCreateOpenMatch, variant: 'primary', loading: saving },
-                ]}
-            >
-                {openMatchSlot && (
-                    <div className="space-y-4">
-                        <div className="bg-violet-50 border border-violet-100 rounded-xl p-3 flex items-center gap-3">
-                            <Swords size={18} className="text-violet-600 shrink-0" />
-                            <div>
-                                <div className="text-xs font-bold text-violet-600 uppercase">
-                                    Pista {openMatchSlot.courtNumber} · {openMatchSlot.startTime} · {selectedDuration} min
-                                </div>
-                                <div className="font-black text-slate-800 text-sm">
-                                    {openMatchSlot.startTime} — {minsToTime(timeToMins(openMatchSlot.startTime) + selectedDuration)}
-                                </div>
-                            </div>
-                        </div>
-                        {/* Duración */}
-                        <div>
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">Duración</label>
-                            <div className="flex gap-2">
-                                {([60, 90] as const).map(m => (
-                                    <button key={m} type="button" onClick={() => setSelectedDuration(m)}
-                                        className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all ${selectedDuration === m ? 'text-white border-transparent' : 'bg-white text-slate-500 border-slate-200'}`}
-                                        style={selectedDuration === m ? { backgroundColor: THEME.cta } : {}}>
-                                        {m} min
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                        {/* Nivel */}
-                        <div>
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">
-                                <BarChart2 size={11} className="inline mr-1" />Nivel del partido
-                            </label>
-                            <select
-                                value={openMatchLevel}
-                                onChange={e => setOpenMatchLevel(e.target.value)}
-                                className="w-full border border-slate-200 rounded-xl p-3 text-sm font-medium focus:border-violet-400 outline-none bg-white"
-                            >
-                                <option value="">Cualquier nivel (Abierto)</option>
-                                {MATCH_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-                            </select>
-                        </div>
-                        {/* Notas */}
-                        <div>
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">Notas (opcional)</label>
-                            <input
-                                value={openMatchNotes}
-                                onChange={e => setOpenMatchNotes(e.target.value)}
-                                className="w-full border border-slate-200 rounded-xl p-3 text-sm font-medium focus:border-violet-400 outline-none"
-                                placeholder="Ej: Partido amistoso de tarde"
-                            />
-                        </div>
-                        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-xs text-emerald-700 font-medium">
-                            Al crear, se abrirá WhatsApp con todos los partidos abiertos del club para que puedas compartirlos de una vez.
-                        </div>
-                    </div>
-                )}
-            </Modal>
+            <CreateMatchModal
+                isOpen={showCreateMatch}
+                onClose={() => { setShowCreateMatch(false); setCreateMatchPrefill(undefined); }}
+                onCreated={() => loadDayData()}
+                prefill={createMatchPrefill}
+                shareWhatsApp
+            />
         </div>
     );
 };
@@ -1135,13 +1024,6 @@ const LegendDot: React.FC<{ color: string; label: string }> = ({ color, label })
     </div>
 );
 
-const InfoRow: React.FC<{ icon: React.ReactNode; label: string; value: string }> = ({ icon, label, value }) => (
-    <div className="flex items-center gap-2 text-sm">
-        <span className="text-slate-400 shrink-0">{icon}</span>
-        <span className="text-slate-400 text-xs w-20 shrink-0">{label}</span>
-        <span className="font-bold text-slate-800 truncate">{value}</span>
-    </div>
-);
 
 // ─── COLUMNA DE PISTA ─────────────────────────────────────────────────────────
 

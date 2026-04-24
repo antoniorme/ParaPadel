@@ -2,17 +2,16 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { useHistory } from '../store/HistoryContext';
 import { useToast } from '../components/Toast';
-import { Modal, Button, EmptyState, PlayerSelector } from '../components';
+import { Modal, Button, EmptyState, CreateMatchModal } from '../components';
 import { THEME, PP } from '../utils/theme';
 import { calculateMatchDelta } from '../utils/Elo';
 import { generateClubMatchesText, openWhatsApp } from '../utils/whatsapp';
 import { supabase } from '../lib/supabase';
 import { Player, Match, MatchParticipant } from '../types';
-import { MATCH_LEVELS } from '../utils/categories';
 import {
   Swords, Plus, CheckCircle2, Clock, Trash2,
   ChevronDown, ChevronUp, Zap, MessageCircle,
-  LayoutGrid, ChevronRight, Flag, ShieldCheck, Sun, Sunset, X, Search,
+  LayoutGrid, ChevronRight, Flag, ShieldCheck, Sun, Sunset, X,
 } from 'lucide-react';
 
 // ── HELPERS CALENDARIO ────────────────────────────────────────────────────────
@@ -60,27 +59,6 @@ const MatchManager: React.FC = () => {
 
   // Create modal
   const [showCreate, setShowCreate] = useState(false);
-  const [creating, setCreating] = useState(false);
-  // Cada slot: nombre libre (invitado) + playerId opcional (si buscan/crean)
-  const [form, setForm] = useState({
-    date: new Date().toISOString().split('T')[0],
-    time: '',
-    court: '',
-    courtNumber: 0,
-    level: '',
-    slots: [
-      { name: '', playerId: '' },
-      { name: '', playerId: '' },
-      { name: '', playerId: '' },
-      { name: '', playerId: '' },
-    ] as { name: string; playerId: string }[],
-    notes: '',
-  });
-  const [openSlot, setOpenSlot] = useState<number | null>(null);
-  const [slotTab, setSlotTab] = useState<'search' | 'new'>('search');
-
-  // Available courts for the select
-  const [availableCourts, setAvailableCourts] = useState<{ courtNumber: number; courtName: string }[]>([]);
 
   // Score modal
   const [scoreMatch, setScoreMatch] = useState<Match | null>(null);
@@ -122,13 +100,6 @@ const MatchManager: React.FC = () => {
     if (!courts) return;
     const todayDow = new Date().getDay();
     const nowMins = new Date().getHours() * 60 + new Date().getMinutes();
-
-    // Populate courts list for the select (all active courts, not just those with free slots)
-    setAvailableCourts(
-      (courts as any[])
-        .filter(c => c.active_days.includes(todayDow))
-        .map(c => ({ courtNumber: c.court_number, courtName: c.court_name }))
-    );
 
     const summaryMap = new Map<number, CourtSummary>();
 
@@ -201,98 +172,6 @@ const MatchManager: React.FC = () => {
   useEffect(() => { loadMatches(); }, [loadMatches]);
   useEffect(() => { loadTodaySlots(); }, [loadTodaySlots]);
 
-  // ── CREATE ──────────────────────────────────────────────────
-
-  const handleCreate = async () => {
-    if (!form.date || !form.time) {
-      toastError('La fecha y la hora son obligatorias');
-      return;
-    }
-    setCreating(true);
-
-    // Timestamps correctos con zona horaria (igual que buildTimestamp en ClubCalendar)
-    const startDate = new Date(`${form.date}T${form.time}:00`);
-    const endDate = new Date(startDate.getTime() + 90 * 60 * 1000);
-    const scheduledAt = startDate.toISOString();
-    const startAt = startDate.toISOString();
-    const endAt = endDate.toISOString();
-
-    // Check solapamiento antes de crear
-    if (form.courtNumber) {
-      const { data: overlap } = await supabase
-        .from('court_reservations')
-        .select('id')
-        .eq('club_id', clubId)
-        .eq('court_number', form.courtNumber)
-        .not('status', 'in', '("rejected","cancelled")')
-        .lt('start_at', endAt)
-        .gt('end_at', startAt)
-        .limit(1);
-      if (overlap && overlap.length > 0) {
-        toastError('Esa pista ya está ocupada en ese horario');
-        setCreating(false);
-        return;
-      }
-    }
-
-    // 1. Crear el partido
-    const { data: matchData, error: matchErr } = await supabase
-      .from('free_matches')
-      .insert({
-        club_id: clubId,
-        scheduled_at: scheduledAt,
-        court: form.court || null,
-        level: form.level || null,
-        notes: form.notes || null,
-        max_players: 4,
-        status: 'open',
-      })
-      .select('id')
-      .single();
-
-    if (matchErr || !matchData) {
-      toastError('Error al crear el partido');
-      setCreating(false);
-      return;
-    }
-
-    // 2. Insertar participantes
-    const participants = form.slots
-      .map((s, i) => {
-        if (!s.name.trim() && !s.playerId) return null;
-        return s.playerId
-          ? { match_id: matchData.id, player_id: s.playerId, slot_index: i + 1, team: i < 2 ? 'A' : 'B', participant_type: 'registered_player', joined_via: 'manual', attendance_status: 'joined' }
-          : { match_id: matchData.id, guest_name: s.name.trim(), slot_index: i + 1, team: i < 2 ? 'A' : 'B', participant_type: 'claimable_guest', joined_via: 'manual', attendance_status: 'joined' };
-      })
-      .filter(Boolean);
-
-    if (participants.length > 0) {
-      const { error: partErr } = await supabase.from('match_participants').insert(participants);
-      if (partErr) toastError('Partido creado pero hubo un error con los jugadores');
-    }
-
-    // 3. Bloquear slot en el calendario (court_reservations = fuente única de verdad)
-    if (form.courtNumber) {
-      await supabase.from('court_reservations').insert({
-        club_id: clubId,
-        court_number: form.courtNumber,
-        start_at: startAt,
-        end_at: endAt,
-        status: 'confirmed',
-        source: 'admin',
-        notes: `match:${matchData.id}`,
-      });
-    }
-
-    success('Partido creado');
-
-    setCreating(false);
-    setShowCreate(false);
-    setForm({ date: new Date().toISOString().split('T')[0], time: '', court: '', courtNumber: 0, level: '', slots: [{name:'',playerId:''},{name:'',playerId:''},{name:'',playerId:''},{name:'',playerId:''}], notes: '' });
-    setOpenSlot(null);
-    loadMatches();
-    loadTodaySlots();
-  };
 
   // ── CLUB RATING HELPER ──────────────────────────────────────
 
@@ -443,20 +322,6 @@ const MatchManager: React.FC = () => {
   const pairLabelNames = (names: string[]) => names.length === 0 ? '—' : names.join(' & ');
 
   const getResult = (m: Match) => (m.match_results || [])[0] || null;
-
-  const eloPreview = () => {
-    const p1a = allPlayers.find(p => p.id === form.p1a);
-    const p2a = allPlayers.find(p => p.id === form.p2a);
-    const p1b = allPlayers.find(p => p.id === form.p1b);
-    const p2b = allPlayers.find(p => p.id === form.p2b);
-    if (!p1a || !p1b) return null;
-    const cr = (p: Player) => p.club_rating ?? 1200;
-    const eloA = p2a ? (cr(p1a) + cr(p2a)) / 2 : cr(p1a);
-    const eloB = p2b ? (cr(p1b) + cr(p2b)) / 2 : cr(p1b);
-    const delta = Math.abs(calculateMatchDelta(eloA, eloB, 1, 0));
-    return { eloA: Math.round(eloA), eloB: Math.round(eloB), delta };
-  };
-  const preview = eloPreview();
 
   const filtered = matches.filter(m =>
     tab === 'pending' ? m.status !== 'finished' && m.status !== 'cancelled' : m.status === 'finished'
@@ -837,179 +702,11 @@ const MatchManager: React.FC = () => {
       )}
 
       {/* ── CREATE MODAL ─────────────────────────────────────── */}
-      <Modal
+      <CreateMatchModal
         isOpen={showCreate}
         onClose={() => setShowCreate(false)}
-        title="Nuevo partido"
-        icon={<Swords size={22} />}
-        iconColor="info"
-        actions={[
-          { label: 'Cancelar', onClick: () => setShowCreate(false), variant: 'secondary' },
-          { label: 'Crear partido', onClick: handleCreate, variant: 'primary', loading: creating },
-        ]}
-      >
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Fecha</label>
-              <input
-                type="date"
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:border-indigo-400"
-                value={form.date}
-                onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Hora</label>
-              <input
-                type="time"
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:border-indigo-400"
-                value={form.time}
-                onChange={e => setForm(f => ({ ...f, time: e.target.value }))}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Pista</label>
-              {availableCourts.length > 0 ? (
-                <select
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:border-indigo-400 bg-white"
-                  value={form.courtNumber || ''}
-                  onChange={e => {
-                    const cn = parseInt(e.target.value);
-                    const c = availableCourts.find(x => x.courtNumber === cn);
-                    setForm(f => ({ ...f, courtNumber: cn || 0, court: c?.courtName || '' }));
-                  }}
-                >
-                  <option value="">— Sin pista —</option>
-                  {availableCourts.map(c => (
-                    <option key={c.courtNumber} value={c.courtNumber}>{c.courtName}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:border-indigo-400"
-                  placeholder="Ej. Pista 2"
-                  value={form.court}
-                  onChange={e => setForm(f => ({ ...f, court: e.target.value, courtNumber: 0 }))}
-                />
-              )}
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Nivel</label>
-              <select
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:border-indigo-400 bg-white"
-                value={form.level}
-                onChange={e => setForm(f => ({ ...f, level: e.target.value }))}
-              >
-                <option value="">Abierto (cualquier nivel)</option>
-                {MATCH_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Jugadores 1-4 */}
-          <div style={{ borderTop: `1px solid ${PP.hair}`, paddingTop: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 800, color: PP.mute, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Jugadores</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {form.slots.map((slot, i) => {
-                const linked = slot.playerId ? allPlayers.find(p => p.id === slot.playerId) : null;
-                const isOpen = openSlot === i;
-                return (
-                  <div key={i} style={{ position: 'relative' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {/* Número */}
-                      <span style={{ fontSize: 13, fontWeight: 800, color: PP.muteSoft, minWidth: 14, textAlign: 'center', flexShrink: 0 }}>{i + 1}</span>
-                      {/* Input de nombre */}
-                      <input
-                        style={{
-                          flex: 1, padding: '8px 11px', borderRadius: 10,
-                          border: `1.5px solid ${slot.name || slot.playerId ? PP.primary : PP.hair}`,
-                          background: linked ? PP.primaryTint : PP.bg,
-                          fontFamily: PP.font, fontSize: 13, fontWeight: 600,
-                          color: PP.ink, outline: 'none', minWidth: 0,
-                        }}
-                        placeholder="Nombre del jugador"
-                        value={slot.name}
-                        onChange={e => setForm(f => ({ ...f, slots: f.slots.map((s, j) => j === i ? { name: e.target.value, playerId: '' } : s) }))}
-                      />
-                      {/* Buscar */}
-                      <button
-                        type="button"
-                        onClick={() => { setSlotTab('search'); setOpenSlot(isOpen && slotTab === 'search' ? null : i); }}
-                        style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '7px 9px', borderRadius: 8, border: `1px solid ${PP.hair}`, background: PP.card, fontSize: 11, fontWeight: 700, color: PP.ink2, cursor: 'pointer', flexShrink: 0, fontFamily: PP.font }}
-                      >
-                        <Search size={11}/> Buscar
-                      </button>
-                      {/* Crear */}
-                      <button
-                        type="button"
-                        onClick={() => { setSlotTab('new'); setOpenSlot(isOpen && slotTab === 'new' ? null : i); }}
-                        style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '7px 9px', borderRadius: 8, border: 0, background: PP.primary, fontSize: 11, fontWeight: 700, color: '#fff', cursor: 'pointer', flexShrink: 0, fontFamily: PP.font }}
-                      >
-                        <Plus size={11}/>
-                      </button>
-                    </div>
-                    {/* Dropdown PlayerSelector */}
-                    {isOpen && (
-                      <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 22, right: 0, zIndex: 500, background: PP.card, borderRadius: 14, boxShadow: '0 8px 32px rgba(0,0,0,0.15)', border: `1px solid ${PP.hair}`, overflow: 'hidden' }}>
-                        <PlayerSelector
-                          label=""
-                          selectedId={slot.playerId}
-                          onSelect={id => {
-                            const p = allPlayers.find(x => x.id === id);
-                            setForm(f => ({ ...f, slots: f.slots.map((s, j) => j === i ? { name: p ? formatPlayerName(p) : '', playerId: id } : s) }));
-                            setOpenSlot(null);
-                          }}
-                          otherSelectedId=""
-                          players={allPlayers.filter(p => !form.slots.some((s, j) => j !== i && s.playerId === p.id))}
-                          onAddPlayer={async (p) => {
-                            const id = await addPlayerToDB(p);
-                            if (id) {
-                              setForm(f => ({ ...f, slots: f.slots.map((s, j) => j === i ? { name: p.name || '', playerId: id } : s) }));
-                              setOpenSlot(null);
-                            }
-                            return id;
-                          }}
-                          formatName={formatPlayerName}
-                          initialTab={slotTab}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {preview && (
-            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3">
-              <div className="text-xs font-bold text-indigo-600 mb-1 flex items-center gap-1">
-                <Zap size={12} /> ELO en juego
-              </div>
-              <div className="text-xs text-indigo-700">
-                Si gana Pareja A: <strong>+{preview.delta} / -{preview.delta}</strong> pts
-              </div>
-              <div className="text-xs text-indigo-500">
-                Rating club A: {preview.eloA} vs B: {preview.eloB}
-              </div>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Notas (opcional)</label>
-            <textarea
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm text-slate-900 outline-none focus:border-indigo-400 resize-none"
-              rows={2}
-              placeholder="Partido amistoso, eliminatoria..."
-              value={form.notes}
-              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-            />
-          </div>
-        </div>
-      </Modal>
+        onCreated={() => { loadMatches(); loadTodaySlots(); }}
+      />
 
       {/* ── SCORE MODAL ──────────────────────────────────────── */}
       <Modal
