@@ -8,4 +8,5 @@ export { Layout } from './Layout';
 export { PlayerLayout } from './PlayerLayout';
 export { LevelProgressBar } from './LevelProgressBar';
 export { PlayerSelector } from './PlayerSelector';
+export { PlayerSlot } from './PlayerSlot';
 export { PosterGenerator } from './PosterGenerator';

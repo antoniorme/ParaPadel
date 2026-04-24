@@ -141,6 +141,11 @@ El rol se determina **siempre desde Supabase** (tabla `superadmins`, `clubs`, `p
 
 Ver design system completo en `parapadel-design-system.html`
 
+### Regla de componentes — SIEMPRE reutilizar, nunca duplicar
+Si existe un componente para algo, **usarlo**. No reinventar inline.
+Antes de escribir JSX para un selector de jugadores, un modal, un estado vacío, etc. → revisar `components/index.ts`.
+Si una pieza de UI se usa en más de un lugar → extraerla a `components/` y exportarla desde el barrel.
+
 ### Componentes disponibles — USAR SIEMPRE en lugar de inline
 ```tsx
 import { Modal, Toast, StatCard, EmptyState, Badge, Button } from './components';
@@ -169,6 +174,18 @@ error('Error al guardar resultado');
 
 // Button
 <Button variant="primary" fullWidth loading={saving}>Guardar</Button>
+
+// PlayerSlot — slot de jugador con trigger compacto + dropdown Buscar/Crear
+// Usa PlayerSelector internamente. SIEMPRE usar esto en lugar de <select> o inline PlayerSelector
+<PlayerSlot
+  slotNumber={1}
+  selectedId={form.p1}
+  onSelect={id => setForm(f => ({ ...f, p1: id }))}
+  excludeIds={[form.p2, form.p3]}
+  players={allPlayers}
+  onAddPlayer={addPlayerToDB}
+  formatName={formatPlayerName}
+/>
 ```
 
 ---

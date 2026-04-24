@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useTournament } from '../store/TournamentContext';
 import { useHistory } from '../store/HistoryContext';
 import { useToast } from '../components/Toast';
-import { Modal, Button, EmptyState } from '../components';
+import { Modal, Button, EmptyState, PlayerSlot } from '../components';
 import { THEME, PP } from '../utils/theme';
 import { calculateMatchDelta } from '../utils/Elo';
 import { generateClubMatchesText, openWhatsApp } from '../utils/whatsapp';
@@ -48,7 +48,7 @@ const fmtDate = (iso: string) => {
 // ── COMPONENT ─────────────────────────────────────────────────────────────────
 
 const MatchManager: React.FC = () => {
-  const { state, formatPlayerName } = useTournament();
+  const { state, formatPlayerName, addPlayerToDB } = useTournament();
   const { clubData } = useHistory();
   const { success, error: toastError } = useToast();
 
@@ -62,7 +62,6 @@ const MatchManager: React.FC = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
-    title: '',
     date: new Date().toISOString().split('T')[0],
     time: '',
     court: '',
@@ -235,7 +234,7 @@ const MatchManager: React.FC = () => {
         scheduled_at: scheduledAt,
         court: form.court || null,
         level: form.level || null,
-        notes: form.title ? `${form.title}${form.notes ? ' · ' + form.notes : ''}` : (form.notes || null),
+        notes: form.notes || null,
         max_players: 4,
         status: 'open',
       })
@@ -278,7 +277,7 @@ const MatchManager: React.FC = () => {
 
     setCreating(false);
     setShowCreate(false);
-    setForm({ title: '', date: new Date().toISOString().split('T')[0], time: '', court: '', courtNumber: 0, level: '', p1a: '', p2a: '', p1b: '', p2b: '', notes: '' });
+    setForm({ date: new Date().toISOString().split('T')[0], time: '', court: '', courtNumber: 0, level: '', p1a: '', p2a: '', p1b: '', p2b: '', notes: '' });
     loadMatches();
     loadTodaySlots();
   };
@@ -818,18 +817,6 @@ const MatchManager: React.FC = () => {
         ]}
       >
         <div className="space-y-4">
-          {/* Nombre — primer campo, autoFocus */}
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Nombre del partido</label>
-            <input
-              autoFocus
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 outline-none focus:border-indigo-400"
-              placeholder="Ej. Partido amistoso, Senior masculino…"
-              value={form.title}
-              onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-            />
-          </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Fecha</label>
@@ -891,36 +878,25 @@ const MatchManager: React.FC = () => {
             </div>
           </div>
 
-          {/* Equipos — grid 2 col compacto */}
-          <div style={{ borderTop: `1px solid ${PP.hair}`, paddingTop: 14 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              {([
-                { key: 'p1a', label: 'Pareja A · J1 *', exclude: form.p2a },
-                { key: 'p2a', label: 'Pareja A · J2', exclude: form.p1a },
-                { key: 'p1b', label: 'Pareja B · J1 *', exclude: form.p2b },
-                { key: 'p2b', label: 'Pareja B · J2', exclude: form.p1b },
-              ] as const).map(({ key, label, exclude }) => (
-                <div key={key}>
-                  <label style={{ fontSize: 10, fontWeight: 800, color: PP.mute, textTransform: 'uppercase', letterSpacing: 0.8, display: 'block', marginBottom: 4 }}>{label}</label>
-                  <select
-                    value={form[key]}
-                    onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                    style={{
-                      width: '100%', padding: '9px 10px', borderRadius: 10,
-                      border: `1.5px solid ${form[key] ? PP.primary : PP.hair}`,
-                      background: PP.bg, fontFamily: PP.font, fontSize: 13, fontWeight: 600,
-                      color: form[key] ? PP.ink : PP.mute, outline: 'none', cursor: 'pointer',
-                    }}
-                  >
-                    <option value="">— Sin jugador —</option>
-                    {allPlayers
-                      .filter(p => !exclude || p.id !== exclude)
-                      .map(p => <option key={p.id} value={p.id}>{formatPlayerName(p)}</option>)
-                    }
-                  </select>
-                </div>
-              ))}
-            </div>
+          {/* Jugadores 1-4 */}
+          <div style={{ borderTop: `1px solid ${PP.hair}`, paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {([
+              { key: 'p1a' as const, num: 1, excludes: [form.p2a, form.p1b, form.p2b] },
+              { key: 'p1b' as const, num: 2, excludes: [form.p1a, form.p2a, form.p2b] },
+              { key: 'p2a' as const, num: 3, excludes: [form.p1a, form.p1b, form.p2b] },
+              { key: 'p2b' as const, num: 4, excludes: [form.p1a, form.p2a, form.p1b] },
+            ]).map(({ key, num, excludes }) => (
+              <PlayerSlot
+                key={key}
+                slotNumber={num}
+                selectedId={form[key]}
+                onSelect={id => setForm(f => ({ ...f, [key]: id }))}
+                excludeIds={excludes.filter(Boolean)}
+                players={allPlayers}
+                onAddPlayer={addPlayerToDB}
+                formatName={formatPlayerName}
+              />
+            ))}
           </div>
 
           {preview && (

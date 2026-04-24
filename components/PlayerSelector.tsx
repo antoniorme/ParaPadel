@@ -13,10 +13,11 @@ interface PlayerSelectorProps {
     players: Player[];
     onAddPlayer: (p: Partial<Player>) => Promise<string | null>;
     formatName: (p?: Player) => string;
+    initialTab?: 'search' | 'new';
 }
 
-export const PlayerSelector: React.FC<PlayerSelectorProps> = ({ label, selectedId, onSelect, otherSelectedId, players, onAddPlayer, formatName }) => {
-    const [tab, setTab] = useState<'search' | 'new'>('search');
+export const PlayerSelector: React.FC<PlayerSelectorProps> = ({ label, selectedId, onSelect, otherSelectedId, players, onAddPlayer, formatName, initialTab }) => {
+    const [tab, setTab] = useState<'search' | 'new'>(initialTab ?? 'search');
     const [searchQuery, setSearchQuery] = useState('');
     
     // Form State
