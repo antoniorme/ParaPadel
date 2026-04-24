@@ -396,11 +396,17 @@ const MatchManager: React.FC = () => {
         <div style={{ background: PP.card, border: `1px solid ${PP.hair}`, borderRadius: 16, boxShadow: PP.shadow, overflow: 'hidden' }}>
           <div style={{ padding: '10px 16px', borderBottom: `1px solid ${PP.hair}`, display: 'flex', alignItems: 'center', gap: 10 }}>
             {/* Fecha grande */}
-            <span style={{ fontSize: 15, fontWeight: 800, color: PP.ink, letterSpacing: -0.3 }}>
-              {slotsDate === toLocalDateStr(new Date()) ? 'Hoy' :
-               slotsDate === toLocalDateStr(new Date(Date.now() + 86400000)) ? 'Mañana' :
-               new Date(`${slotsDate}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+              <span style={{ fontSize: 15, fontWeight: 800, color: PP.ink, letterSpacing: -0.3 }}>
+                {new Date(`${slotsDate}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}
+              </span>
+              {slotsDate === toLocalDateStr(new Date()) && (
+                <span style={{ fontSize: 10, fontWeight: 700, color: PP.primary, background: PP.primaryTint, borderRadius: 5, padding: '1px 6px' }}>Hoy</span>
+              )}
+              {slotsDate === toLocalDateStr(new Date(Date.now() + 86400000)) && (
+                <span style={{ fontSize: 10, fontWeight: 700, color: PP.muteSoft, background: PP.hair, borderRadius: 5, padding: '1px 6px' }}>Mañana</span>
+              )}
+            </div>
             {/* Selector prev/next */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <button
