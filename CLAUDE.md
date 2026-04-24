@@ -116,6 +116,7 @@ El rol se determina **siempre desde Supabase** (tabla `superadmins`, `clubs`, `p
 
 ### Partidos Abiertos (ruta `/partidos`)
 - **Flujo core:** el club crea un partido SIN jugadores → lo comparte por WhatsApp → los jugadores se unen por enlace público `/m/:shareToken`
+- **Fecha y hora son obligatorias** al crear — sin ellas no se puede reservar pista ni calcular el slot
 - **NUNCA validar que haya jugadores al crear** — un partido vacío (`status: 'open'`) es el caso normal
 - Los jugadores se añaden después via `match_participants` (joined_via: 'link' o 'manual')
 - ELO de club (`club_rating`) se procesa al guardar resultado
