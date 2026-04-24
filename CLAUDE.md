@@ -114,6 +114,13 @@ El rol se determina **siempre desde Supabase** (tabla `superadmins`, `clubs`, `p
 - Fondo: indigo-500
 - Estado en `LeagueContext.tsx`
 
+### Partidos Abiertos (ruta `/partidos`)
+- **Flujo core:** el club crea un partido SIN jugadores → lo comparte por WhatsApp → los jugadores se unen por enlace público `/m/:shareToken`
+- **NUNCA validar que haya jugadores al crear** — un partido vacío (`status: 'open'`) es el caso normal
+- Los jugadores se añaden después via `match_participants` (joined_via: 'link' o 'manual')
+- ELO de club (`club_rating`) se procesa al guardar resultado
+- Módulo independiente: `pages/MatchManager.tsx` + tablas `free_matches`, `match_participants`, `match_results`
+
 ### App Jugador (ruta `/p/*`)
 - Mobile-first, frame de móvil en desktop
 - Layout propio: `PlayerLayout.tsx`

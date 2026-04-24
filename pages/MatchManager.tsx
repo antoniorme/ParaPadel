@@ -183,8 +183,8 @@ const MatchManager: React.FC = () => {
   // ── CREATE ──────────────────────────────────────────────────
 
   const handleCreate = async () => {
-    if (!form.date || !form.p1a || !form.p1b) {
-      toastError('Selecciona al menos un jugador por pareja y una fecha');
+    if (!form.date) {
+      toastError('Selecciona una fecha para el partido');
       return;
     }
     setCreating(true);
@@ -214,23 +214,20 @@ const MatchManager: React.FC = () => {
       return;
     }
 
-    // 2. Insertar participantes
+    // 2. Insertar participantes (solo los que tienen jugador asignado)
     const participants = [
-      { match_id: matchData.id, player_id: form.p1a, team: 'A', slot_index: 1 },
-      ...(form.p2a ? [{ match_id: matchData.id, player_id: form.p2a, team: 'A', slot_index: 2 }] : []),
-      { match_id: matchData.id, player_id: form.p1b, team: 'B', slot_index: 3 },
-      ...(form.p2b ? [{ match_id: matchData.id, player_id: form.p2b, team: 'B', slot_index: 4 }] : []),
-    ].map(p => ({ ...p, participant_type: 'registered_player', joined_via: 'manual' }));
+      form.p1a ? { match_id: matchData.id, player_id: form.p1a, team: 'A', slot_index: 1 } : null,
+      form.p2a ? { match_id: matchData.id, player_id: form.p2a, team: 'A', slot_index: 2 } : null,
+      form.p1b ? { match_id: matchData.id, player_id: form.p1b, team: 'B', slot_index: 3 } : null,
+      form.p2b ? { match_id: matchData.id, player_id: form.p2b, team: 'B', slot_index: 4 } : null,
+    ].filter(Boolean).map(p => ({ ...p, participant_type: 'registered_player', joined_via: 'manual' }));
 
-    const { error: partErr } = await supabase
-      .from('match_participants')
-      .insert(participants);
-
-    if (partErr) {
-      toastError('Partido creado pero hubo un error con los jugadores');
-    } else {
-      success('Partido creado');
+    if (participants.length > 0) {
+      const { error: partErr } = await supabase.from('match_participants').insert(participants);
+      if (partErr) toastError('Partido creado pero hubo un error con los jugadores');
     }
+
+    success('Partido creado');
 
     setCreating(false);
     setShowCreate(false);
