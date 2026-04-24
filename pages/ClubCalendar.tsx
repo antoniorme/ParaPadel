@@ -284,11 +284,22 @@ const ClubCalendar: React.FC = () => {
         success('Reserva confirmada'); setSelectedReservation(null); loadDayData();
     };
     const handleRejectReservation = async (id: string) => {
+        const res = reservations.find(r => r.id === id);
         await supabase.from('court_reservations').update({ status: 'rejected' }).eq('id', id);
+        if (res?.notes?.startsWith('match:')) {
+            const matchId = res.notes.replace('match:', '');
+            await supabase.from('free_matches').update({ status: 'cancelled' }).eq('id', matchId);
+        }
         success('Reserva rechazada'); setSelectedReservation(null); loadDayData();
     };
     const handleCancelReservation = async (id: string) => {
+        const res = reservations.find(r => r.id === id);
         await supabase.from('court_reservations').update({ status: 'cancelled' }).eq('id', id);
+        // Si esta reserva está vinculada a un partido, cancelarlo también
+        if (res?.notes?.startsWith('match:')) {
+            const matchId = res.notes.replace('match:', '');
+            await supabase.from('free_matches').update({ status: 'cancelled' }).eq('id', matchId);
+        }
         success('Reserva cancelada'); setSelectedReservation(null); loadDayData();
     };
 
@@ -370,12 +381,26 @@ const ClubCalendar: React.FC = () => {
             status: 'open',
         }).select('id, share_token').single();
         setSaving(false);
-        if (error) { showError('Error al crear el partido'); return; }
+        if (error || !matchData) { showError('Error al crear el partido'); return; }
+
+        // Bloquear el slot en court_reservations (fuente única de verdad para pistas)
+        const endAt = buildTimestamp(dateStr, minsToTime(timeToMins(openMatchSlot!.startTime) + 90));
+        await supabase.from('court_reservations').insert({
+            club_id: clubData.id,
+            court_number: openMatchSlot!.courtNumber,
+            start_at: scheduledAt,
+            end_at: endAt,
+            status: 'confirmed',
+            source: 'admin',
+            notes: `match:${matchData.id}`,
+        });
+
         success('Partido abierto creado');
         setShowOpenMatchModal(false);
         setOpenMatchSlot(null);
         setOpenMatchLevel('');
         setOpenMatchNotes('');
+        loadDayData(); // Refrescar el calendario para mostrar el slot bloqueado
         // Ofrecer WhatsApp con todos los partidos del club
         if (clubData.name && clubData.id && matchData) {
             const { data: allOpen } = await supabase
@@ -1210,17 +1235,30 @@ const CourtColumn: React.FC<CourtColumnProps> = ({
                 const top = slotTop(res.start_at, openTime, dateStr);
                 if (top < 0) return null;
                 const h = slotHeight(res.start_at, res.end_at) - 2;
+                const isMatch = res.notes?.startsWith('match:');
                 const style = STATUS_STYLES[res.status];
                 return (
                     <div key={res.id} draggable
                         onDragStart={e => onDragStart(e, res)} onDragEnd={() => {}}
                         onClick={() => onReservationClick(res)}
-                        className={`absolute left-0.5 right-0.5 rounded-lg border-l-4 px-2 py-1 cursor-pointer hover:brightness-95 transition-all overflow-hidden ${style.bg} ${style.border} ${draggingId === res.id ? 'opacity-40' : ''}`}
-                        style={{ top: top + 1, height: h }}>
-                        <div className={`text-[9px] font-black uppercase ${style.text}`}>{style.label}</div>
-                        <div className="text-xs font-bold text-slate-800 truncate leading-tight">{res.player_name}</div>
-                        {res.partner_name && <div className="text-[9px] text-slate-500 truncate">+ {res.partner_name}</div>}
-                        <div className={`text-[9px] font-bold ${style.text} opacity-70`}>{extractTime(res.start_at)}–{extractTime(res.end_at)}</div>
+                        className={`absolute left-0.5 right-0.5 rounded-lg border-l-4 px-2 py-1 cursor-pointer hover:brightness-95 transition-all overflow-hidden ${isMatch ? 'bg-violet-50 border-violet-500' : `${style.bg} ${style.border}`} ${draggingId === res.id ? 'opacity-40' : ''}`}
+                        style={{ top: top + 1, height: h }}
+                    >
+                        {isMatch ? (
+                            <>
+                                <div className="flex items-center gap-1 text-[9px] font-black uppercase text-violet-700">
+                                    <Swords size={8}/> Partido
+                                </div>
+                                <div className="text-[9px] font-bold text-violet-500 opacity-80">{extractTime(res.start_at)}–{extractTime(res.end_at)}</div>
+                            </>
+                        ) : (
+                            <>
+                                <div className={`text-[9px] font-black uppercase ${style.text}`}>{style.label}</div>
+                                <div className="text-xs font-bold text-slate-800 truncate leading-tight">{res.player_name}</div>
+                                {res.partner_name && <div className="text-[9px] text-slate-500 truncate">+ {res.partner_name}</div>}
+                                <div className={`text-[9px] font-bold ${style.text} opacity-70`}>{extractTime(res.start_at)}–{extractTime(res.end_at)}</div>
+                            </>
+                        )}
                     </div>
                 );
             })}
