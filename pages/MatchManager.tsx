@@ -394,32 +394,23 @@ const MatchManager: React.FC = () => {
       {/* Pistas — selector de fecha + cards */}
       {clubData.courts_enabled && courtSummaries.length > 0 && (
         <div style={{ background: PP.card, border: `1px solid ${PP.hair}`, borderRadius: 16, boxShadow: PP.shadow, overflow: 'hidden' }}>
-          <div style={{ padding: '10px 16px', borderBottom: `1px solid ${PP.hair}`, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <LayoutGrid size={14} style={{ color: PP.muteSoft }} />
-            <span style={{ fontSize: 11, fontWeight: 800, color: PP.mute, textTransform: 'uppercase', letterSpacing: 1, flex: 1 }}>Pistas · 1h30</span>
-            {/* Selector de fecha */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ padding: '10px 16px', borderBottom: `1px solid ${PP.hair}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Fecha grande */}
+            <span style={{ fontSize: 15, fontWeight: 800, color: PP.ink, letterSpacing: -0.3 }}>
+              {slotsDate === toLocalDateStr(new Date()) ? 'Hoy' :
+               slotsDate === toLocalDateStr(new Date(Date.now() + 86400000)) ? 'Mañana' :
+               new Date(`${slotsDate}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}
+            </span>
+            {/* Selector prev/next */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <button
-                onClick={() => {
-                  const d = new Date(`${slotsDate}T12:00:00`);
-                  d.setDate(d.getDate() - 1);
-                  setSlotsDate(toLocalDateStr(d));
-                }}
+                onClick={() => { const d = new Date(`${slotsDate}T12:00:00`); d.setDate(d.getDate() - 1); setSlotsDate(toLocalDateStr(d)); }}
                 style={{ background: 'none', border: `1px solid ${PP.hair}`, borderRadius: 6, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: PP.muteSoft }}
               >
                 <ChevronDown size={13} style={{ transform: 'rotate(90deg)' }} />
               </button>
-              <span style={{ fontSize: 11, fontWeight: 700, color: PP.ink2, minWidth: 72, textAlign: 'center' }}>
-                {slotsDate === toLocalDateStr(new Date()) ? 'Hoy' :
-                 slotsDate === toLocalDateStr(new Date(Date.now() + 86400000)) ? 'Mañana' :
-                 new Date(`${slotsDate}T12:00:00`).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
-              </span>
               <button
-                onClick={() => {
-                  const d = new Date(`${slotsDate}T12:00:00`);
-                  d.setDate(d.getDate() + 1);
-                  setSlotsDate(toLocalDateStr(d));
-                }}
+                onClick={() => { const d = new Date(`${slotsDate}T12:00:00`); d.setDate(d.getDate() + 1); setSlotsDate(toLocalDateStr(d)); }}
                 style={{ background: 'none', border: `1px solid ${PP.hair}`, borderRadius: 6, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: PP.muteSoft }}
               >
                 <ChevronDown size={13} style={{ transform: 'rotate(-90deg)' }} />
