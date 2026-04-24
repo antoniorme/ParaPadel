@@ -227,12 +227,39 @@ const MatchManager: React.FC = () => {
       if (partErr) toastError('Partido creado pero hubo un error con los jugadores');
     }
 
+    // 3. Bloquear slot en el calendario si tiene pista + hora asignadas
+    if (form.court && form.time) {
+      const { data: courtRow } = await supabase
+        .from('court_availability')
+        .select('court_number')
+        .eq('club_id', clubId)
+        .eq('court_name', form.court)
+        .maybeSingle();
+
+      if (courtRow) {
+        const startAt = `${form.date}T${form.time}:00`;
+        const endDate = new Date(`${form.date}T${form.time}:00`);
+        endDate.setMinutes(endDate.getMinutes() + 90);
+        const endAt = endDate.toISOString().slice(0, 19);
+        await supabase.from('court_reservations').insert({
+          club_id: clubId,
+          court_number: courtRow.court_number,
+          start_at: startAt,
+          end_at: endAt,
+          status: 'confirmed',
+          source: 'admin',
+          notes: `match:${matchData.id}`,
+        });
+      }
+    }
+
     success('Partido creado');
 
     setCreating(false);
     setShowCreate(false);
     setForm({ date: new Date().toISOString().split('T')[0], time: '', court: '', level: '', p1a: '', p2a: '', p1b: '', p2b: '', notes: '' });
     loadMatches();
+    loadTodaySlots();
   };
 
   // ── CLUB RATING HELPER ──────────────────────────────────────
@@ -314,12 +341,16 @@ const MatchManager: React.FC = () => {
   const handleDelete = async () => {
     if (!deleteId) return;
     setDeleting(true);
-    const { error } = await supabase.from('free_matches').delete().eq('id', deleteId);
+    const [{ error }] = await Promise.all([
+      supabase.from('free_matches').delete().eq('id', deleteId),
+      supabase.from('court_reservations').delete().eq('club_id', clubId).eq('notes', `match:${deleteId}`),
+    ]);
     setDeleting(false);
     if (error) { toastError('Error al eliminar'); return; }
     success('Partido eliminado');
     setDeleteId(null);
     loadMatches();
+    loadTodaySlots();
   };
 
   // ── RESOLVE DISPUTE ─────────────────────────────────────────
