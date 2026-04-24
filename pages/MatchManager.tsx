@@ -78,16 +78,18 @@ const MatchManager: React.FC = () => {
   const allPlayers: Player[] = state.players;
   const clubId = clubData?.id || state.players[0]?.user_id;
 
-  // Free slots de hoy (si courts_enabled)
+  // Free slots por fecha (si courts_enabled)
   const [courtSummaries, setCourtSummaries] = useState<CourtSummary[]>([]);
   const [courtDetail, setCourtDetail] = useState<CourtSummary | null>(null);
+  const [slotsDate, setSlotsDate] = useState(toLocalDateStr(new Date()));
 
   const [createPrefill, setCreatePrefill] = useState<CreateMatchPrefill | undefined>(undefined);
 
   const loadTodaySlots = useCallback(async () => {
     if (!clubId || !clubData.courts_enabled) return;
-    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
-    const todayEnd   = new Date(); todayEnd.setHours(23,59,59,999);
+    const dateObj = new Date(`${slotsDate}T00:00:00`);
+    const todayStart = new Date(dateObj); todayStart.setHours(0,0,0,0);
+    const todayEnd   = new Date(dateObj); todayEnd.setHours(23,59,59,999);
 
     const [{ data: courts }, { data: reservations }, { data: blocks }] = await Promise.all([
       supabase.from('court_availability').select('court_number, court_name, open_time, close_time, active_days, is_active')
@@ -101,8 +103,9 @@ const MatchManager: React.FC = () => {
     ]);
 
     if (!courts) return;
-    const todayDow = new Date().getDay();
-    const nowMins = new Date().getHours() * 60 + new Date().getMinutes();
+    const todayDow = new Date(`${slotsDate}T12:00:00`).getDay();
+    const isToday = slotsDate === toLocalDateStr(new Date());
+    const nowMins = isToday ? new Date().getHours() * 60 + new Date().getMinutes() : 0;
 
     const summaryMap = new Map<number, CourtSummary>();
 
@@ -130,7 +133,7 @@ const MatchManager: React.FC = () => {
     });
 
     setCourtSummaries(Array.from(summaryMap.values()));
-  }, [clubId, clubData.courts_enabled]);
+  }, [clubId, clubData.courts_enabled, slotsDate]);
 
   // ── LOAD ────────────────────────────────────────────────────
 
@@ -388,12 +391,40 @@ const MatchManager: React.FC = () => {
         </div>
       </div>
 
-      {/* Pistas libres hoy — horizontal cards */}
+      {/* Pistas — selector de fecha + cards */}
       {clubData.courts_enabled && courtSummaries.length > 0 && (
         <div style={{ background: PP.card, border: `1px solid ${PP.hair}`, borderRadius: 16, boxShadow: PP.shadow, overflow: 'hidden' }}>
           <div style={{ padding: '10px 16px', borderBottom: `1px solid ${PP.hair}`, display: 'flex', alignItems: 'center', gap: 8 }}>
             <LayoutGrid size={14} style={{ color: PP.muteSoft }} />
-            <span style={{ fontSize: 11, fontWeight: 800, color: PP.mute, textTransform: 'uppercase', letterSpacing: 1 }}>Pistas libres hoy · 1h30</span>
+            <span style={{ fontSize: 11, fontWeight: 800, color: PP.mute, textTransform: 'uppercase', letterSpacing: 1, flex: 1 }}>Pistas · 1h30</span>
+            {/* Selector de fecha */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <button
+                onClick={() => {
+                  const d = new Date(`${slotsDate}T12:00:00`);
+                  d.setDate(d.getDate() - 1);
+                  setSlotsDate(toLocalDateStr(d));
+                }}
+                style={{ background: 'none', border: `1px solid ${PP.hair}`, borderRadius: 6, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: PP.muteSoft }}
+              >
+                <ChevronDown size={13} style={{ transform: 'rotate(90deg)' }} />
+              </button>
+              <span style={{ fontSize: 11, fontWeight: 700, color: PP.ink2, minWidth: 72, textAlign: 'center' }}>
+                {slotsDate === toLocalDateStr(new Date()) ? 'Hoy' :
+                 slotsDate === toLocalDateStr(new Date(Date.now() + 86400000)) ? 'Mañana' :
+                 new Date(`${slotsDate}T12:00:00`).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+              </span>
+              <button
+                onClick={() => {
+                  const d = new Date(`${slotsDate}T12:00:00`);
+                  d.setDate(d.getDate() + 1);
+                  setSlotsDate(toLocalDateStr(d));
+                }}
+                style={{ background: 'none', border: `1px solid ${PP.hair}`, borderRadius: 6, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: PP.muteSoft }}
+              >
+                <ChevronDown size={13} style={{ transform: 'rotate(-90deg)' }} />
+              </button>
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 10, padding: '12px 14px', overflowX: 'auto' }}>
             {courtSummaries.map(cs => {
@@ -460,7 +491,7 @@ const MatchManager: React.FC = () => {
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {courtDetail.morning.map((s, i) => (
-                      <button key={i} onClick={() => { setCreatePrefill({ date: toLocalDateStr(new Date()), time: s.startTime, courtName: s.courtName, courtNumber: s.courtNumber }); setCourtDetail(null); setShowCreate(true); }}
+                      <button key={i} onClick={() => { setCreatePrefill({ date: slotsDate, time: s.startTime, courtName: s.courtName, courtNumber: s.courtNumber }); setCourtDetail(null); setShowCreate(true); }}
                         style={{ padding: '7px 14px', borderRadius: 10, border: `1.5px solid ${PP.hair}`, background: PP.bg, fontSize: 13, fontWeight: 700, color: PP.ink, cursor: 'pointer', transition: 'background 0.12s' }}
                         onMouseEnter={e => (e.currentTarget.style.background = PP.primaryTint)}
                         onMouseLeave={e => (e.currentTarget.style.background = PP.bg)}
@@ -479,7 +510,7 @@ const MatchManager: React.FC = () => {
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {courtDetail.afternoon.map((s, i) => (
-                      <button key={i} onClick={() => { setCreatePrefill({ date: toLocalDateStr(new Date()), time: s.startTime, courtName: s.courtName, courtNumber: s.courtNumber }); setCourtDetail(null); setShowCreate(true); }}
+                      <button key={i} onClick={() => { setCreatePrefill({ date: slotsDate, time: s.startTime, courtName: s.courtName, courtNumber: s.courtNumber }); setCourtDetail(null); setShowCreate(true); }}
                         style={{ padding: '7px 14px', borderRadius: 10, border: `1.5px solid ${PP.hair}`, background: PP.bg, fontSize: 13, fontWeight: 700, color: PP.ink, cursor: 'pointer', transition: 'background 0.12s' }}
                         onMouseEnter={e => (e.currentTarget.style.background = PP.primaryTint)}
                         onMouseLeave={e => (e.currentTarget.style.background = PP.bg)}
