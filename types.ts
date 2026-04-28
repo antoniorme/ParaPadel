@@ -263,6 +263,7 @@ export interface ClubData {
     show_players?: boolean; // NEW
     show_history?: boolean; // NEW
     courts_enabled?: boolean; // Módulo calendario de pistas
+    lite_join_enabled?: boolean; // Partidos Lite (/ml/ links)
 }
 
 export interface PastTournament {

@@ -53,6 +53,7 @@ import PlayerAppProfile from './pages/player/PlayerProfile';
 import PlayerNotifications from './pages/player/PlayerNotifications';
 import PlayerPublicProfile from './pages/public/PlayerPublicProfile';
 import MatchJoin from './pages/public/MatchJoin';
+import MatchJoinLite from './pages/public/MatchJoinLite';
 import ClubMatchesPage from './pages/public/ClubMatchesPage';
 import PlayerOnboarding from './pages/player/PlayerOnboarding';
 import MatchManager from './pages/MatchManager';
@@ -145,6 +146,7 @@ const AppRoutes = () => {
         <Route path="/jugador/:playerId" element={<PlayerPublicProfile />} />
         {/* Ficha pública de partido — no requiere auth */}
         <Route path="/m/:shareToken" element={<MatchJoin />} />
+        <Route path="/ml/:shareToken" element={<MatchJoinLite />} />
         {/* Partidos abiertos de un club — no requiere auth */}
         <Route path="/club/:clubId/partidos" element={<ClubMatchesPage />} />
 

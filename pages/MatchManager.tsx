@@ -720,6 +720,17 @@ const MatchManager: React.FC = () => {
                           <CheckCircle2 size={14} /> Añadir resultado
                         </Button>
                       )}
+                      {clubData?.lite_join_enabled && m.share_token && (
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            const url = `${window.location.origin}/ml/${m.share_token}`;
+                            openWhatsApp(`🎾 ¡Partido abierto!\n👉 ${url}`);
+                          }}
+                        >
+                          <MessageCircle size={14} />
+                        </Button>
+                      )}
                       <Button variant="danger" onClick={() => setDeleteId(m.id)}>
                         <Trash2 size={14} />
                       </Button>

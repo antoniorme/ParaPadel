@@ -214,6 +214,7 @@ export const HistoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         show_players: data.show_players !== false, // Default true
                         show_history: data.show_history !== false, // Default true
                         courts_enabled: data.courts_enabled === true,
+                        lite_join_enabled: data.lite_join_enabled === true,
                         mapsUrl: data.maps_url
                     };
                     setClubData(mapped);

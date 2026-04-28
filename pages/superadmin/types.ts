@@ -10,6 +10,7 @@ export interface Club {
     show_players?: boolean;
     show_history?: boolean;
     courts_enabled?: boolean;
+    lite_join_enabled?: boolean;
     created_at: string;
 }
 
